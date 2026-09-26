@@ -88,6 +88,10 @@
 
 :root,
 html[data-mode="dark"] {
+  color-scheme: dark;
+  --scrollbar-thumb: oklch(0.38 0.01 260 / 0.7);
+  --scrollbar-thumb-hover: oklch(0.55 0.01 260 / 0.9);
+  --scrollbar-track: transparent;
   --background: oklch(0.13 0.01 260);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.18 0.01 260);
@@ -117,6 +121,10 @@ html[data-mode="dark"] {
 }
 
 html[data-mode="light"] {
+  color-scheme: light;
+  --scrollbar-thumb: oklch(0.78 0.01 260 / 0.7);
+  --scrollbar-thumb-hover: oklch(0.6 0.01 260 / 0.9);
+  --scrollbar-track: transparent;
   --background: oklch(0.99 0.002 260);
   --foreground: oklch(0.21 0.01 260);
   --card: oklch(1 0 0);
@@ -227,4 +235,72 @@ html[data-theme="rose"] {
   html {
     @apply font-sans;
   }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track, transparent);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, oklch(0.38 0.01 260 / 0.7));
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover, oklch(0.55 0.01 260 / 0.9));
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, oklch(0.38 0.01 260 / 0.7)) transparent;
+}
+
+/* Custom Scrollbar Utility Classes */
+.scrollbar-none,
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+
+.scrollbar-custom,
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, oklch(0.38 0.01 260 / 0.7)) transparent;
+}
+
+.scrollbar-custom::-webkit-scrollbar,
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-track,
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb,
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, oklch(0.38 0.01 260 / 0.7));
+  border-radius: 9999px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb:hover,
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover, oklch(0.55 0.01 260 / 0.9));
 }

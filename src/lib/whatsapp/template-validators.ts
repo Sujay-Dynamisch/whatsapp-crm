@@ -16,6 +16,7 @@
  */
 
 import type {
+  CarouselCard,
   MessageTemplate,
   TemplateButton,
   TemplateSampleValues,
@@ -38,6 +39,8 @@ export interface TemplatePayload {
   name: string;
   category: MessageTemplate['category'];
   language: string;
+  template_type?: MessageTemplate['template_type'];
+  carousel?: CarouselCard[];
   header_type?: MessageTemplate['header_type'];
   header_content?: string;
   header_media_url?: string;
@@ -87,6 +90,17 @@ function assertContiguous(indices: number[], where: string): void {
   }
 }
 
+export function validateVariableDensity(text: string, locationName: string = 'Body text'): void {
+  const vars = extractVariableIndices(text);
+  if (vars.length === 0) return;
+  const staticText = text.replace(/\{\{\d+\}\}/g, '').trim();
+  if (staticText.length === 0) {
+    throw new Error(
+      `${locationName} consists only of variables without any static text. Add surrounding static text to pass Meta review.`,
+    );
+  }
+}
+
 export function validateBody(bodyText: string): number[] {
   if (!bodyText.trim()) throw new Error('Body text is required.');
   if (bodyText.length > TEMPLATE_LIMITS.bodyMaxLength) {
@@ -96,6 +110,7 @@ export function validateBody(bodyText: string): number[] {
   }
   const indices = extractVariableIndices(bodyText);
   assertContiguous(indices, 'Body');
+  validateVariableDensity(bodyText, 'Body text');
   return indices;
 }
 
@@ -313,6 +328,49 @@ export function validateSampleValues(
   }
 }
 
+export function validateCarouselCards(cards: CarouselCard[] | undefined): void {
+  if (!cards || cards.length < 2) {
+    throw new Error('Carousel templates require at least 2 cards (Meta rule).');
+  }
+  if (cards.length > 10) {
+    throw new Error('Carousel templates support at most 10 cards (Meta rule).');
+  }
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    if (card.body_text?.trim()) {
+      if (card.body_text.length > 160) {
+        throw new Error(
+          `Carousel card #${i + 1} body text exceeds 160 chars (got ${card.body_text.length}).`,
+        );
+      }
+      const indices = extractVariableIndices(card.body_text);
+      assertContiguous(indices, `Carousel card #${i + 1} body`);
+      validateVariableDensity(card.body_text, `Carousel card #${i + 1} description`);
+      const bodySample = card.sample_values?.body ?? [];
+      if (indices.length > 0 && bodySample.length !== indices.length) {
+        throw new Error(
+          `Carousel card #${i + 1} body has ${indices.length} variable(s) — supply exactly ${indices.length} sample value(s) (got ${bodySample.length}).`,
+        );
+      }
+      for (let sIdx = 0; sIdx < bodySample.length; sIdx++) {
+        if (!bodySample[sIdx] || !bodySample[sIdx].trim()) {
+          throw new Error(
+            `Carousel card #${i + 1} body sample value #${sIdx + 1} is empty.`,
+          );
+        }
+      }
+    }
+    if (card.buttons?.length) {
+      if (card.buttons.length > 2) {
+        throw new Error(
+          `Carousel card #${i + 1} can have at most 2 buttons (Meta rule).`,
+        );
+      }
+      validateButtons(card.buttons);
+    }
+  }
+}
+
 /**
  * Run every validator. Throws on the first failure with a specific,
  * field-level message. Returns the variable counts so callers can
@@ -326,6 +384,20 @@ export function validateTemplatePayload(payload: TemplatePayload): {
   if (!payload.language?.trim()) {
     throw new Error('Language is required.');
   }
+
+  if (payload.template_type === 'carousel') {
+    validateCarouselCards(payload.carousel);
+    const bodyVars = payload.body_text ? extractVariableIndices(payload.body_text) : [];
+    if (payload.body_text) {
+      assertContiguous(bodyVars, 'Top-level body');
+    }
+    validateFooter(payload.footer_text);
+    return {
+      bodyVarCount: bodyVars.length,
+      headerVarCount: 0,
+    };
+  }
+
   const bodyVars = validateBody(payload.body_text);
   validateFooter(payload.footer_text);
   const headerResult = validateHeader(payload);
@@ -335,4 +407,26 @@ export function validateTemplatePayload(payload: TemplatePayload): {
     bodyVarCount: bodyVars.length,
     headerVarCount: headerResult.variableCount,
   };
+}
+
+export function isCarouselMetaComponent(component: unknown): boolean {
+  return (
+    typeof component === 'object' &&
+    component !== null &&
+    (component as { type?: string }).type === 'CAROUSEL'
+  );
+}
+
+export function isCarouselTemplate(
+  template: Partial<MessageTemplate> & { components?: unknown[] },
+): boolean {
+  if (template.template_type === 'carousel') return true;
+  if (Array.isArray(template.carousel) && template.carousel.length >= 2) return true;
+  if (Array.isArray(template.raw_components)) {
+    return template.raw_components.some(isCarouselMetaComponent);
+  }
+  if (Array.isArray(template.components)) {
+    return template.components.some(isCarouselMetaComponent);
+  }
+  return false;
 }

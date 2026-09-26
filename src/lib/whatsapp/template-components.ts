@@ -10,19 +10,72 @@
  *   https://developers.facebook.com/docs/whatsapp/business-management-api/message-templates/components
  */
 
-import type { TemplatePayload } from './template-validators';
+import { extractVariableIndices, type TemplatePayload } from './template-validators';
 import type { TemplateButton } from '@/types';
 
+export interface MetaCarouselCardPayload {
+  components: MetaComponent[];
+}
+
 export interface MetaComponent {
-  type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
-  format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+  type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS' | 'CAROUSEL';
+  format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'PRODUCT_CORNER';
   text?: string;
   buttons?: MetaButtonPayload[];
+  cards?: MetaCarouselCardPayload[];
   example?: {
     header_text?: string[];
     header_url?: string[];
     header_handle?: string[];
     body_text?: string[][];
+  };
+}
+
+function buildCarouselComponent(payload: TemplatePayload): MetaComponent | null {
+  if (!payload.carousel || payload.carousel.length < 2) return null;
+
+  const cardsPayload: MetaCarouselCardPayload[] = payload.carousel.map((card) => {
+    const cardComponents: MetaComponent[] = [];
+    const headerFormat = card.header_format ?? 'IMAGE';
+    const headerComp: MetaComponent = {
+      type: 'HEADER',
+      format: headerFormat,
+    };
+    const handle = card.header_handle || card.header_media_url;
+    if (headerFormat !== 'PRODUCT_CORNER' && handle) {
+      headerComp.example = { header_handle: [handle] };
+    }
+    cardComponents.push(headerComp);
+
+    if (card.body_text?.trim()) {
+      const bodyComp: MetaComponent = {
+        type: 'BODY',
+        text: card.body_text,
+      };
+      const vars = extractVariableIndices(card.body_text);
+      let bodySample = card.sample_values?.body;
+      if (vars.length > 0) {
+        if (!bodySample || bodySample.length === 0) {
+          bodySample = vars.map((i) => `Sample${i}`);
+        }
+        bodyComp.example = { body_text: [bodySample] };
+      }
+      cardComponents.push(bodyComp);
+    }
+
+    if (card.buttons && card.buttons.length > 0) {
+      cardComponents.push({
+        type: 'BUTTONS',
+        buttons: card.buttons.map(buildButtonPayload),
+      });
+    }
+
+    return { components: cardComponents };
+  });
+
+  return {
+    type: 'CAROUSEL',
+    cards: cardsPayload,
   };
 }
 
@@ -71,11 +124,12 @@ function buildBodyComponent(payload: TemplatePayload): MetaComponent {
     type: 'BODY',
     text: payload.body_text,
   };
-  const bodySample = payload.sample_values?.body;
-  if (bodySample && bodySample.length > 0) {
-    // Meta expects body_text as a 2D array — outer is "examples",
-    // inner is the values for each variable. We submit a single
-    // example row.
+  const vars = extractVariableIndices(payload.body_text || '');
+  let bodySample = payload.sample_values?.body;
+  if (vars.length > 0) {
+    if (!bodySample || bodySample.length === 0) {
+      bodySample = vars.map((i) => `Sample${i}`);
+    }
     component.example = { body_text: [bodySample] };
   }
   return component;
@@ -96,7 +150,11 @@ function buildButtonPayload(b: TemplateButton): MetaButtonPayload {
         text: b.text,
         url: b.url,
       };
-      if (b.example) payload.example = [b.example];
+      if (b.example) {
+        payload.example = [b.example];
+      } else if (b.url && extractVariableIndices(b.url).length > 0) {
+        payload.example = ['sample'];
+      }
       return payload;
     }
     case 'PHONE_NUMBER':
@@ -132,23 +190,35 @@ const CATEGORY_TO_META: Record<
 
 /**
  * Assemble the full submit payload (name + category + language +
- * components in canonical order: HEADER → BODY → FOOTER → BUTTONS).
+ * components in canonical order).
  */
 export function buildMetaTemplatePayload(
   payload: TemplatePayload,
 ): MetaTemplateSubmitPayload {
   const components: MetaComponent[] = [];
-  const header = buildHeaderComponent(payload);
-  if (header) components.push(header);
-  components.push(buildBodyComponent(payload));
-  const footer = buildFooterComponent(payload);
-  if (footer) components.push(footer);
-  const buttons = buildButtonsComponent(payload);
-  if (buttons) components.push(buttons);
+  const isCarousel = payload.template_type === 'carousel' || (Array.isArray(payload.carousel) && payload.carousel.length >= 2);
+
+  if (isCarousel) {
+    // Meta Carousel Templates MUST ONLY have top-level BODY and CAROUSEL components.
+    // Top-level HEADER, FOOTER, and BUTTONS are strictly forbidden by Meta for Carousel templates.
+    components.push(buildBodyComponent(payload));
+
+    const carouselComp = buildCarouselComponent(payload);
+    if (carouselComp) components.push(carouselComp);
+  } else {
+    // Standard template
+    const header = buildHeaderComponent(payload);
+    if (header) components.push(header);
+    components.push(buildBodyComponent(payload));
+    const footer = buildFooterComponent(payload);
+    if (footer) components.push(footer);
+    const buttons = buildButtonsComponent(payload);
+    if (buttons) components.push(buttons);
+  }
 
   return {
     name: payload.name,
-    category: CATEGORY_TO_META[payload.category],
+    category: isCarousel ? 'MARKETING' : CATEGORY_TO_META[payload.category],
     language: payload.language,
     components,
   };

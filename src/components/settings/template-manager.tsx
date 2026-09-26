@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -12,6 +13,7 @@ import {
   Pencil,
   RotateCcw,
   Upload,
+  Sparkles,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -47,31 +49,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type {
-  MessageTemplate,
-  TemplateButton,
-  TemplateSampleValues,
-} from '@/types';
 import { templateStatusConfig } from '@/lib/template-status';
 import {
   extractVariableIndices,
   TEMPLATE_LIMITS,
 } from '@/lib/whatsapp/template-validators';
+import type {
+  CarouselCard,
+  MessageTemplate,
+  TemplateButton,
+  TemplateSampleValues,
+} from '@/types';
 
 const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
 const HEADER_FORMATS: HeaderFormat[] = ['none', 'text', 'image', 'video', 'document'];
 
 const categoryColors: Record<string, string> = {
-  Marketing: 'bg-purple-600/20 text-purple-400 border-purple-600/30',
-  Utility: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
-  Authentication: 'bg-amber-600/20 text-amber-400 border-amber-600/30',
+  Marketing: 'bg-muted text-foreground border-border',
+  Utility: 'bg-muted text-foreground border-border',
+  Authentication: 'bg-muted text-foreground border-border',
 };
 
 interface TemplateFormData {
   name: string;
   category: MessageTemplate['category'];
   language: string;
+  template_type: 'standard' | 'carousel';
+  carousel: CarouselCard[];
   header_format: HeaderFormat;
   header_content: string;
   header_media_url: string;
@@ -86,6 +91,8 @@ const emptyForm: TemplateFormData = {
   name: '',
   category: 'Marketing',
   language: 'en_US',
+  template_type: 'standard',
+  carousel: [],
   header_format: 'none',
   header_content: '',
   header_media_url: '',
@@ -130,6 +137,7 @@ function emptyButton(type: TemplateButton['type']): TemplateButton {
 }
 
 export function TemplateManager() {
+  const router = useRouter();
   const t = useTranslations('Settings.templates');
   const supabase = createClient();
   const { user, loading: authLoading } = useAuth();
@@ -212,6 +220,18 @@ export function TemplateManager() {
   }
 
   function buildSubmitPayload() {
+    if (form.template_type === 'carousel') {
+      return {
+        name: form.name.trim(),
+        category: form.category,
+        language: form.language.trim() || 'en_US',
+        template_type: 'carousel',
+        carousel: form.carousel,
+        body_text: form.body_text.trim(),
+        footer_text: form.footer_text.trim() || undefined,
+      };
+    }
+
     const sample_values: TemplateSampleValues = {};
     if (form.body_samples.some((v) => v.trim())) {
       sample_values.body = form.body_samples.map((v) => v.trim());
@@ -224,6 +244,7 @@ export function TemplateManager() {
       name: form.name.trim(),
       category: form.category,
       language: form.language.trim() || 'en_US',
+      template_type: 'standard',
       header_type: form.header_format === 'none' ? undefined : form.header_format,
       header_content:
         form.header_format === 'text' ? form.header_content.trim() : undefined,
@@ -240,11 +261,17 @@ export function TemplateManager() {
   }
 
   function openEdit(template: MessageTemplate) {
+    if (template.template_type === 'carousel') {
+      router.push(`/settings/templates/edit-carousel/${template.id}`);
+      return;
+    }
     setEditingId(template.id);
     setForm({
       name: template.name,
       category: template.category,
       language: template.language || 'en_US',
+      template_type: template.template_type ?? 'standard',
+      carousel: template.carousel ?? [],
       header_format: (template.header_type ?? 'none') as HeaderFormat,
       header_content: template.header_content ?? '',
       header_media_url: template.header_media_url ?? '',
@@ -523,7 +550,7 @@ export function TemplateManager() {
         title={t('title')}
         description={t('description')}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               onClick={handleSyncFromMeta}
@@ -533,9 +560,18 @@ export function TemplateManager() {
               <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
               {syncing ? t('syncing') : t('syncFromMeta')}
             </Button>
-            <Button onClick={openCreate}>
+
+            <Button variant="outline" onClick={openCreate} className="border-border bg-card text-foreground hover:bg-muted">
               <Plus className="size-4" />
-              {t('newTemplate')}
+              Standard Template
+            </Button>
+
+            <Button
+              onClick={() => router.push('/settings/templates/new-carousel')}
+              className="bg-foreground text-background hover:bg-foreground/90 font-medium gap-1.5"
+            >
+              <Sparkles className="size-4" />
+              Media Carousel Template
             </Button>
           </div>
         }
@@ -569,6 +605,11 @@ export function TemplateManager() {
                       <Badge className={`text-xs border ${status.classes}`}>
                         {status.label}
                       </Badge>
+                      {template.template_type === 'carousel' && (
+                        <Badge variant="outline" className="text-xs border-primary/40 bg-primary/10 text-primary font-medium">
+                          Carousel ({template.carousel?.length ?? 0} Cards)
+                        </Badge>
+                      )}
                       {template.language && (
                         <span className="text-xs text-muted-foreground uppercase">
                           {template.language}
@@ -765,6 +806,8 @@ export function TemplateManager() {
                 </p>
               </div>
             </div>
+
+
 
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('header')}</Label>
@@ -1089,7 +1132,7 @@ export function TemplateManager() {
             </div>
           </div>
 
-          <DialogFooter className="bg-popover border-border">
+      <DialogFooter className="bg-popover border-border">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}

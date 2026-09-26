@@ -27,6 +27,7 @@
     "flows": "Flujos",
     "aiAgents": "Agentes de IA",
     "settings": "Configuración",
+    "carousels": "Carruseles",
     "beta": "Beta",
     "unreadConversations": "{count} {count, plural, =1 {conversación sin leer} other {conversaciones sin leer}}",
     "unreadNotifications": "{count} {count, plural, =1 {notificación sin leer} other {notificaciones sin leer}}",

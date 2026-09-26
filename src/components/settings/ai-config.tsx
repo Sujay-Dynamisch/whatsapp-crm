@@ -232,9 +232,16 @@ export function AiConfig() {
 
   if (loading || profileLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-muted-foreground">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('loadFailed')} {/* Re-using label or a global one, wait, loading is better. Let's use useTranslations from overview or just hardcode Loading... actually I should add loading to aiConfig */}
-        {/* Wait, I didn't add loading to aiConfig. I'll just use loading. */}
+      <div className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-border/60 bg-card/40 p-8 text-muted-foreground shadow-xs">
+        <div className="relative flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full bg-primary/20 blur-lg animate-pulse" />
+          <div className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        </div>
+        <p className="mt-4 text-sm font-medium text-foreground">
+          {t('loadFailed')}...
+        </p>
       </div>
     );
   }

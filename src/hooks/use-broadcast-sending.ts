@@ -10,6 +10,11 @@ import {
 import { normalizeKey } from '@/lib/contacts/dedupe';
 import { Contact, MessageTemplate } from '@/types';
 
+import type {
+  SendTimeCardParams,
+  SendTimeParams,
+} from '@/lib/whatsapp/template-send-builder';
+
 export type CustomFieldOperator = 'is' | 'is_not' | 'contains';
 
 export interface CustomFieldFilter {
@@ -89,6 +94,99 @@ interface BroadcastApiResult {
 /** contactId → (customFieldId → value). */
 type CustomValueIndex = Map<string, Map<string, string>>;
 
+export function resolveSingleVariable(
+  v: VariableMapping | undefined,
+  contact: Contact,
+  customValues?: Map<string, string>,
+): string {
+  if (!v || !v.value?.trim()) return '';
+  if (v.type === 'static') return v.value;
+  if (v.type === 'field') {
+    const fieldMap: Record<string, string | undefined> = {
+      name: contact.name,
+      phone: contact.phone,
+      email: contact.email,
+      company: contact.company,
+    };
+    return fieldMap[v.value] ?? '';
+  }
+  if (v.type === 'custom_field') {
+    return customValues?.get(v.value) ?? '';
+  }
+  return '';
+}
+
+export function resolveSendTimeParams(
+  template: MessageTemplate,
+  variables: Record<string, VariableMapping>,
+  contact: Contact,
+  customValues?: Map<string, string>,
+): SendTimeParams {
+  const topBodyParams: string[] = [];
+  if (template.body_text) {
+    const matches = template.body_text.matchAll(/\{\{(\d+)\}\}/g);
+    const seen = new Set<number>();
+    for (const m of matches) {
+      const num = Number(m[1]);
+      if (Number.isFinite(num) && !seen.has(num)) {
+        seen.add(num);
+        const v = variables[`body_${num}`] ?? variables[`${num}`];
+        topBodyParams.push(resolveSingleVariable(v, contact, customValues));
+      }
+    }
+  }
+
+  const carouselCards: SendTimeCardParams[] = [];
+  if (template.carousel && Array.isArray(template.carousel)) {
+    template.carousel.forEach((card, cardIdx) => {
+      const cardBodyParams: string[] = [];
+      if (card.body_text) {
+        const matches = card.body_text.matchAll(/\{\{(\d+)\}\}/g);
+        const seen = new Set<number>();
+        for (const m of matches) {
+          const num = Number(m[1]);
+          if (Number.isFinite(num) && !seen.has(num)) {
+            seen.add(num);
+            const v =
+              variables[`card_${cardIdx}_body_${num}`] ??
+              variables[`card_${cardIdx}_${num}`] ??
+              variables[`${num}`];
+            cardBodyParams.push(resolveSingleVariable(v, contact, customValues));
+          }
+        }
+      }
+
+      const buttonParams: Record<number, string> = {};
+      if (card.buttons) {
+        card.buttons.forEach((btn, btnIdx) => {
+          if ('url' in btn && btn.url) {
+            const matches = btn.url.matchAll(/\{\{(\d+)\}\}/g);
+            for (const m of matches) {
+              const num = Number(m[1]);
+              const v = variables[`card_${cardIdx}_btn_${btnIdx}_${num}`];
+              if (v) {
+                buttonParams[btnIdx] = resolveSingleVariable(v, contact, customValues);
+                break;
+              }
+            }
+          }
+        });
+      }
+
+      carouselCards.push({
+        cardIndex: cardIdx,
+        body: cardBodyParams,
+        buttonParams: Object.keys(buttonParams).length > 0 ? buttonParams : undefined,
+      });
+    });
+  }
+
+  return {
+    body: topBodyParams.length > 0 ? topBodyParams : undefined,
+    carouselCards: carouselCards.length > 0 ? carouselCards : undefined,
+  };
+}
+
 /**
  * Per-contact resolution of custom-field placeholders. Static and
  * built-in-field mappings resolve synchronously; custom fields read
@@ -110,20 +208,7 @@ export function resolveVariables(
 
   return keys.map((key) => {
     const v = variables[key];
-    if (v.type === 'static') return v.value;
-
-    if (v.type === 'field') {
-      const fieldMap: Record<string, string | undefined> = {
-        name: contact.name,
-        phone: contact.phone,
-        email: contact.email,
-        company: contact.company,
-      };
-      return fieldMap[v.value] ?? '';
-    }
-
-    // custom_field
-    return customValues?.get(v.value) ?? '';
+    return resolveSingleVariable(v, contact, customValues);
   });
 }
 
@@ -495,13 +580,24 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
 
         const apiRecipients = batch
           .filter((r) => r.contact?.phone)
-          .map((r) => ({
-            phone: r.contact!.phone as string,
-            // Read back off the row rather than re-resolved, so this
-            // pass and any later resume send identical params.
-            params: Array.isArray(r.template_params) ? r.template_params : [],
-            ...(messageParams ? { messageParams } : {}),
-          }));
+          .map((r) => {
+            const contact = r.contact!;
+            const customVals = customValueIndex.get(contact.id);
+            const resolvedParams: SendTimeParams = resolveSendTimeParams(
+              payload.template,
+              payload.variables,
+              contact,
+              customVals,
+            );
+            if (isMediaHeader && headerMediaUrl) {
+              resolvedParams.headerMediaUrl = headerMediaUrl;
+            }
+            return {
+              phone: contact.phone as string,
+              params: Array.isArray(r.template_params) ? r.template_params : [],
+              messageParams: resolvedParams,
+            };
+          });
 
         if (apiRecipients.length === 0) continue;
 

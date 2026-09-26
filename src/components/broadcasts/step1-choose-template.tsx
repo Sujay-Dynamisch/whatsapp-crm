@@ -33,14 +33,32 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
         // Only APPROVED templates can be sent via Meta — anything else
         // would 400 at broadcast time. Hide them rather than letting
         // the user pick a template that will fail.
-        const { data, error: fetchError } = await supabase
-          .from('message_templates')
-          .select('*')
-          .eq('status', 'APPROVED')
-          .order('created_at', { ascending: false });
+        const [{ data, error: fetchError }, { data: carouselConfigs }] = await Promise.all([
+          supabase
+            .from('message_templates')
+            .select('*')
+            .eq('status', 'APPROVED')
+            .order('created_at', { ascending: false }),
+          supabase.from('carousel_configs').select('*'),
+        ]);
 
         if (fetchError) throw fetchError;
-        setTemplates(data ?? []);
+
+        const mergedTemplates = (data ?? []).map((template: MessageTemplate) => {
+          const config = (carouselConfigs ?? []).find(
+            (c: { template_id?: string | null }) => c.template_id === template.id
+          );
+          if (config && Array.isArray(config.cards) && config.cards.length > 0) {
+            return {
+              ...template,
+              template_type: 'carousel' as const,
+              carousel: config.cards,
+            };
+          }
+          return template;
+        });
+
+        setTemplates(mergedTemplates);
       } catch (err) {
         setError(err instanceof Error ? err.message : t('chooseTemplate.errorLoad'));
       } finally {
@@ -109,9 +127,11 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
                 <p className="line-clamp-3 text-xs text-muted-foreground">{template.body_text}</p>
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                   <span>{template.language ?? 'en_US'}</span>
-                  {/* Status is omitted on purpose — every template
-                      shown here is already filtered to APPROVED,
-                      so the chip carried no information. */}
+                  {template.template_type === 'carousel' && (
+                    <span className="inline-flex items-center rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                      Carousel ({template.carousel?.length ?? 0} Cards)
+                    </span>
+                  )}
                 </div>
               </button>
             );

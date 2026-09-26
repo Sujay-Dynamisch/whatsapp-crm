@@ -7,6 +7,7 @@ import {
 } from '@/lib/auth/account'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
+import { normalizeMetaTemplate, type RawMetaTemplate } from '@/lib/whatsapp/template-normalize'
 import type { TemplateButton, TemplateSampleValues } from '@/types'
 
 /**
@@ -38,9 +39,11 @@ interface MetaTemplateComponent {
   text?: string
   format?: string
   buttons?: MetaButton[]
+  cards?: { components?: MetaTemplateComponent[] }[]
   example?: {
     header_text?: string[]
     header_handle?: string[]
+    header_url?: string[]
     body_text?: string[][]
   }
 }
@@ -200,41 +203,28 @@ export async function POST() {
     const errors: { name: string; language: string; message: string }[] = []
 
     for (const t of metaTemplates) {
-      const body = (t.components ?? []).find((c) => c.type === 'BODY')
-      const header = (t.components ?? []).find((c) => c.type === 'HEADER')
-      const footer = (t.components ?? []).find((c) => c.type === 'FOOTER')
-      const buttons = (t.components ?? []).find((c) => c.type === 'BUTTONS')
-
-      const parsedButtons = parseButtons(buttons?.buttons)
-      const sampleValues = extractSampleValues(body, header)
-
-      const headerFormat = header?.format?.toUpperCase()
-      const headerType =
-        headerFormat === 'TEXT' ||
-        headerFormat === 'IMAGE' ||
-        headerFormat === 'VIDEO' ||
-        headerFormat === 'DOCUMENT'
-          ? headerFormat.toLowerCase()
-          : null
+      const normalized = normalizeMetaTemplate(t as RawMetaTemplate)
 
       const row = {
-        // Account tenancy + user audit, same split as the submit
-        // route. account_id is NOT NULL on message_templates
-        // post-017, so an INSERT without it errors.
         account_id: accountId,
         user_id: userId,
         name: t.name,
-        category: normalizeCategory(t.category),
+        category: normalized.category,
         language: t.language,
-        header_type: headerType,
-        header_content: header?.text ?? null,
-        header_handle: header?.example?.header_handle?.[0] ?? null,
-        body_text: body?.text ?? '',
-        footer_text: footer?.text ?? null,
-        buttons: parsedButtons.length ? parsedButtons : null,
-        sample_values: sampleValues,
-        status: normalizeStatus(t.status),
-        meta_template_id: t.id,
+        template_type: normalized.template_type,
+        carousel: normalized.carousel,
+        raw_components: normalized.raw_components,
+        raw_meta_data: normalized.raw_meta_data,
+        header_type: normalized.header_type,
+        header_content: normalized.header_content,
+        header_handle: normalized.header_handle,
+        header_media_url: normalized.header_media_url,
+        body_text: normalized.body_text,
+        footer_text: normalized.footer_text,
+        buttons: normalized.buttons,
+        sample_values: normalized.sample_values,
+        status: normalized.status,
+        meta_template_id: normalized.meta_template_id,
         quality_score: normalizeQualityScore(t.quality_score),
         updated_at: new Date().toISOString(),
       }

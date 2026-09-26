@@ -7,7 +7,7 @@ import {
   toErrorResponse,
 } from '@/lib/auth/account'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { submitMessageTemplate } from '@/lib/whatsapp/meta-api'
+import { submitMessageTemplate, createCarouselTemplate } from '@/lib/whatsapp/meta-api'
 import {
   validateTemplatePayload,
   type TemplatePayload,
@@ -43,6 +43,8 @@ function buildUpsertRow(
     name: payload.name,
     category: payload.category,
     language: payload.language,
+    template_type: payload.template_type ?? 'standard',
+    carousel: payload.carousel ?? null,
     header_type: payload.header_type ?? null,
     header_content: payload.header_content ?? null,
     header_media_url: payload.header_media_url ?? null,
@@ -170,7 +172,7 @@ export async function POST(request: Request) {
       // an actionable message (missing META_APP_ID, unreachable URL,
       // wrong type/size).
       try {
-        await ensureMediaHeaderHandle(payload, accessToken)
+        await ensureMediaHeaderHandle(payload, accessToken, config.app_id)
       } catch (e) {
         return NextResponse.json(
           { error: e instanceof Error ? e.message : 'Header media upload failed.' },
@@ -178,13 +180,19 @@ export async function POST(request: Request) {
         )
       }
 
-      const metaPayload = buildMetaTemplatePayload(payload)
+      const isCarousel = payload.template_type === 'carousel' || (Array.isArray(payload.carousel) && payload.carousel.length >= 2)
       try {
-        const meta = await submitMessageTemplate({
-          wabaId: config.waba_id,
-          accessToken,
-          payload: metaPayload,
-        })
+        const meta = isCarousel
+          ? await createCarouselTemplate({
+              wabaId: config.waba_id,
+              accessToken,
+              payload,
+            })
+          : await submitMessageTemplate({
+              wabaId: config.waba_id,
+              accessToken,
+              payload: buildMetaTemplatePayload(payload),
+            })
         metaTemplateId = meta.id
         metaStatus = meta.status
       } catch (e) {

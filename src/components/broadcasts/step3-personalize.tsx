@@ -67,6 +67,15 @@ const SAMPLE_CONTACT: Contact = {
   updated_at: new Date().toISOString(),
 };
 
+export interface PlaceholderInfo {
+  key: string;
+  placeholder: string;
+  scope: 'body' | 'card_body' | 'card_button';
+  label: string;
+  cardIndex?: number;
+  buttonIndex?: number;
+}
+
 export function Step3Personalize({
   template,
   variables,
@@ -128,11 +137,79 @@ export function Step3Personalize({
     };
   }, []);
 
-  const placeholders = useMemo(() => {
-    const matches = template.body_text.match(/\{\{(\d+)\}\}/g);
-    if (!matches) return [];
-    return [...new Set(matches)].sort();
-  }, [template.body_text]);
+  const placeholderInfos = useMemo<PlaceholderInfo[]>(() => {
+    const list: PlaceholderInfo[] = [];
+
+    // Top-level body_text
+    if (template.body_text) {
+      const matches = template.body_text.matchAll(/\{\{(\d+)\}\}/g);
+      const seen = new Set<number>();
+      for (const m of matches) {
+        const num = Number(m[1]);
+        if (Number.isFinite(num) && !seen.has(num)) {
+          seen.add(num);
+          const isCarousel =
+            template.template_type === 'carousel' || Boolean(template.carousel?.length);
+          list.push({
+            key: isCarousel ? `body_${num}` : `${num}`,
+            placeholder: `{{${num}}}`,
+            scope: 'body',
+            label: isCarousel ? `Top Message Body — {{${num}}}` : `{{${num}}}`,
+          });
+        }
+      }
+    }
+
+    // Carousel cards
+    if (template.carousel && Array.isArray(template.carousel)) {
+      template.carousel.forEach((card, cardIdx) => {
+        // Card body text variables
+        if (card.body_text) {
+          const matches = card.body_text.matchAll(/\{\{(\d+)\}\}/g);
+          const seen = new Set<number>();
+          for (const m of matches) {
+            const num = Number(m[1]);
+            if (Number.isFinite(num) && !seen.has(num)) {
+              seen.add(num);
+              list.push({
+                key: `card_${cardIdx}_body_${num}`,
+                placeholder: `{{${num}}}`,
+                scope: 'card_body',
+                label: `Card ${cardIdx + 1} — Body {{${num}}}`,
+                cardIndex: cardIdx,
+              });
+            }
+          }
+        }
+
+        // Card button URL variables
+        if (card.buttons) {
+          card.buttons.forEach((btn, btnIdx) => {
+            if ('url' in btn && btn.url) {
+              const matches = btn.url.matchAll(/\{\{(\d+)\}\}/g);
+              const seen = new Set<number>();
+              for (const m of matches) {
+                const num = Number(m[1]);
+                if (Number.isFinite(num) && !seen.has(num)) {
+                  seen.add(num);
+                  list.push({
+                    key: `card_${cardIdx}_btn_${btnIdx}_${num}`,
+                    placeholder: `{{${num}}}`,
+                    scope: 'card_button',
+                    label: `Card ${cardIdx + 1} — Button "${btn.text}" URL {{${num}}}`,
+                    cardIndex: cardIdx,
+                    buttonIndex: btnIdx,
+                  });
+                }
+              }
+            }
+          });
+        }
+      });
+    }
+
+    return list;
+  }, [template]);
 
   // Templates with an IMAGE/VIDEO/DOCUMENT header need a media URL at
   // send time — Meta requires the media component on every delivery and
@@ -169,15 +246,14 @@ export function Step3Personalize({
    */
   const unmappedKeys = useMemo(() => {
     const missing: string[] = [];
-    for (const placeholder of placeholders) {
-      const key = placeholder.replace(/^\{\{|\}\}$/g, '');
-      const mapping = variables[key];
+    for (const item of placeholderInfos) {
+      const mapping = variables[item.key];
       if (!mapping || !mapping.value?.trim()) {
-        missing.push(placeholder);
+        missing.push(item.label);
       }
     }
     return missing;
-  }, [placeholders, variables]);
+  }, [placeholderInfos, variables]);
 
   function updateVariable(key: string, patch: Partial<VariableMapping>) {
     const current = variables[key] ?? { type: 'static' as VariableType, value: '' };
@@ -187,44 +263,72 @@ export function Step3Personalize({
     });
   }
 
-  /**
-   * Substitute placeholders using the first real contact where
-   * possible. Placeholders keyed by "{{N}}" map to variable key "N".
-   */
-  const previewText = useMemo(() => {
+  const resolveMappingValue = (mapping?: VariableMapping) => {
+    if (!mapping || !mapping.value) return null;
     const contact = firstContact ?? SAMPLE_CONTACT;
     const customValues = firstContact
       ? firstContactCustomValues
       : new Map<string, string>();
 
-    let text = template.body_text;
-    for (const placeholder of placeholders) {
-      const key = placeholder.replace(/^\{\{|\}\}$/g, '');
-      const mapping = variables[key];
-      let replacement = placeholder;
+    if (mapping.type === 'static') {
+      return mapping.value;
+    }
+    if (mapping.type === 'field') {
+      const fieldMap: Record<string, string | undefined> = {
+        name: contact.name,
+        phone: contact.phone,
+        email: contact.email,
+        company: contact.company,
+      };
+      return fieldMap[mapping.value] ?? null;
+    }
+    if (mapping.type === 'custom_field') {
+      return customValues.get(mapping.value) ?? null;
+    }
+    return null;
+  };
 
-      if (mapping) {
-        if (mapping.type === 'static' && mapping.value) {
-          replacement = mapping.value;
-        } else if (mapping.type === 'field' && mapping.value) {
-          const fieldMap: Record<string, string | undefined> = {
-            name: contact.name,
-            phone: contact.phone,
-            email: contact.email,
-            company: contact.company,
-          };
-          replacement = fieldMap[mapping.value] ?? placeholder;
-        } else if (mapping.type === 'custom_field' && mapping.value) {
-          replacement = customValues.get(mapping.value) || placeholder;
-        }
+  const substituteTopBody = (rawText: string) => {
+    if (!rawText) return '';
+    let text = rawText;
+    const matches = rawText.matchAll(/\{\{(\d+)\}\}/g);
+    for (const m of matches) {
+      const num = Number(m[1]);
+      const placeholder = `{{${num}}}`;
+      const mapping = variables[`body_${num}`] ?? variables[`${num}`];
+      const val = resolveMappingValue(mapping);
+      if (val !== null) {
+        text = text.replaceAll(placeholder, val);
       }
-      text = text.replaceAll(placeholder, replacement);
     }
     return text;
+  };
+
+  const substituteCardBody = (rawText: string, cardIdx: number) => {
+    if (!rawText) return '';
+    let text = rawText;
+    const matches = rawText.matchAll(/\{\{(\d+)\}\}/g);
+    for (const m of matches) {
+      const num = Number(m[1]);
+      const placeholder = `{{${num}}}`;
+      const mapping =
+        variables[`card_${cardIdx}_body_${num}`] ??
+        variables[`card_${cardIdx}_${num}`] ??
+        variables[`${num}`];
+      const val = resolveMappingValue(mapping);
+      if (val !== null) {
+        text = text.replaceAll(placeholder, val);
+      }
+    }
+    return text;
+  };
+
+  const previewText = useMemo(() => {
+    return substituteTopBody(template.body_text);
   }, [
     template.body_text,
     variables,
-    placeholders,
+    placeholderInfos,
     firstContact,
     firstContactCustomValues,
   ]);
@@ -284,26 +388,25 @@ export function Step3Personalize({
         </div>
       )}
 
-      {placeholders.length === 0 && !mediaHeaderType ? (
+      {placeholderInfos.length === 0 && !mediaHeaderType ? (
         <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
           <p className="text-sm text-muted-foreground">
             {t('personalize.noPreview')}
           </p>
         </div>
-      ) : placeholders.length === 0 ? null : (
+      ) : placeholderInfos.length === 0 ? null : (
         <div className="space-y-4">
-          {placeholders.map((placeholder) => {
-            const key = placeholder.replace(/^\{\{|\}\}$/g, '');
-            const mapping = variables[key] ?? { type: 'static', value: '' };
+          {placeholderInfos.map((item) => {
+            const mapping = variables[item.key] ?? { type: 'static', value: '' };
 
             return (
               <div
-                key={placeholder}
+                key={item.key}
                 className="rounded-xl border border-border bg-card/50 p-4"
               >
                 <div className="mb-3 flex items-center gap-2">
                   <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-mono font-medium text-primary">
-                    {placeholder}
+                    {item.label}
                   </span>
                 </div>
 
@@ -315,7 +418,7 @@ export function Step3Personalize({
                     <Select
                       value={mapping.type}
                       onValueChange={(val) =>
-                        updateVariable(key, {
+                        updateVariable(item.key, {
                           type: val as VariableType,
                           value: '',
                         })
@@ -342,16 +445,16 @@ export function Step3Personalize({
                       <Input
                         value={mapping.value}
                         onChange={(e) =>
-                          updateVariable(key, { value: e.target.value })
+                          updateVariable(item.key, { value: e.target.value })
                         }
                         placeholder={t('personalize.enterValue')}
                         className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
                       />
                     ) : mapping.type === 'field' ? (
                       <Select
-                        value={mapping.value || undefined}
+                        value={mapping.value || ''}
                         onValueChange={(val) =>
-                          updateVariable(key, { value: val || '' })
+                          updateVariable(item.key, { value: val || '' })
                         }
                       >
                         <SelectTrigger className="w-full border-border bg-muted text-foreground">
@@ -367,9 +470,9 @@ export function Step3Personalize({
                       </Select>
                     ) : (
                       <Select
-                        value={mapping.value || undefined}
+                        value={mapping.value || ''}
                         onValueChange={(val) =>
-                          updateVariable(key, { value: val || '' })
+                          updateVariable(item.key, { value: val || '' })
                         }
                       >
                         <SelectTrigger className="w-full border-border bg-muted text-foreground">
@@ -411,12 +514,39 @@ export function Step3Personalize({
             <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
           )}
         </div>
-        <div className="rounded-lg bg-[#0e1a12] p-3">
+        <div className="rounded-lg bg-[#0e1a12] p-3 space-y-3">
           <div className="ml-auto max-w-[85%] rounded-lg bg-primary/30 px-3 py-2 shadow-sm">
             <p className="whitespace-pre-wrap text-sm text-primary">
-              {previewText}
+              {previewText || 'Product catalog recommendation'}
             </p>
           </div>
+          {(template.template_type === 'carousel' || Boolean(template.carousel?.length)) && template.carousel && (
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+              {template.carousel.map((card, idx) => (
+                <div key={idx} className="w-56 shrink-0 rounded-lg bg-[#18261c] border border-emerald-900/60 p-2.5 shadow-sm space-y-2 text-xs text-emerald-100">
+                  <div className="flex h-24 w-full items-center justify-center rounded bg-emerald-950/80 border border-emerald-800/40 text-emerald-400 font-mono text-[10px]">
+                    {card.header_format === 'IMAGE' && card.header_media_url ? (
+                      <img src={card.header_media_url} alt="card" className="h-full w-full object-cover rounded" />
+                    ) : (
+                      <span>PRODUCT_CORNER ({card.product_retailer_id || `SKU-00${idx + 1}`})</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-emerald-100 line-clamp-2">
+                    {substituteCardBody(card.body_text || '', idx)}
+                  </p>
+                  {card.buttons && card.buttons.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-emerald-900/50">
+                      {card.buttons.map((b, bIdx) => (
+                        <div key={bIdx} className="rounded bg-emerald-900/40 py-1 text-center text-[11px] font-medium text-emerald-300">
+                          {substituteCardBody(b.text, idx)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

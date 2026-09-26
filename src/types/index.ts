@@ -344,12 +344,51 @@ export interface TemplateSampleValues {
   header?: string[];
 }
 
+/** Media reference used ONLY during Meta Template Creation (Resumable Upload handle) */
+export interface TemplateMediaReference {
+  uploadHandle: string;
+  mediaType: 'image' | 'video' | 'document';
+  originalFilename?: string;
+  mimeType?: string;
+}
+
+/** Media reference used ONLY during Send-Time messaging (WhatsApp Media ID or public link) */
+export interface MessageMediaReference {
+  mediaId?: string;
+  mediaUrl?: string;
+  mediaType: 'image' | 'video' | 'document';
+}
+
+export type CarouselType = 'PRODUCT' | 'MEDIA';
+
+export interface CarouselCard {
+  card_index?: number;
+  carousel_type?: CarouselType;
+  header_format?: 'PRODUCT_CORNER' | 'IMAGE' | 'VIDEO';
+  header_media_url?: string;
+  header_handle?: string;
+  catalog_id?: string;
+  product_retailer_id?: string;
+  body_text?: string;
+  buttons?: TemplateButton[];
+  sample_values?: {
+    body?: string[];
+    header?: string[];
+  };
+  components?: unknown[];
+  raw_data?: Record<string, unknown>;
+}
+
 export interface MessageTemplate {
   id: string;
   user_id: string;
   name: string;
   category: 'Marketing' | 'Utility' | 'Authentication';
   language?: string;
+  template_type?: 'standard' | 'carousel';
+  carousel?: CarouselCard[];
+  raw_components?: unknown[];
+  raw_meta_data?: Record<string, unknown>;
   header_type?: 'text' | 'image' | 'video' | 'document';
   header_content?: string;
   header_handle?: string;
