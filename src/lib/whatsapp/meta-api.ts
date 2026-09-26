@@ -10,6 +10,15 @@
  */
 
 import { isBusinessScopedUserId } from './wa-identity'
+import { isCarouselTemplate, type TemplatePayload } from './template-validators'
+import { buildMetaTemplatePayload, type MetaComponent } from './template-components'
+import { normalizeMetaTemplate, type MetaTemplateComponent } from './template-normalize'
+import {
+  buildSendComponents,
+  type MetaSendCarouselCard,
+  type MetaSendComponent,
+  type SendTimeParams,
+} from './template-send-builder'
 
 const META_API_VERSION = 'v21.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
@@ -32,6 +41,8 @@ interface MetaErrorResponse {
     error_subcode?: number
     type?: string
     fbtrace_id?: string
+    error_user_title?: string
+    error_user_msg?: string
     /** WhatsApp-specific envelope — `details` is the human-readable part. */
     error_data?: { messaging_product?: string; details?: string }
   }
@@ -88,7 +99,14 @@ async function readMetaError(response: Response, fallback: string): Promise<Meta
   try {
     const data = (await response.json()) as MetaErrorResponse
     envelope = data.error
-    if (envelope?.message) message = envelope.message
+    if (envelope) {
+      const extraMsg = envelope.error_user_msg || envelope.error_data?.details
+      if (extraMsg && envelope.message && !envelope.message.includes(extraMsg)) {
+        message = `${envelope.message}: ${extraMsg}`
+      } else if (envelope.message) {
+        message = envelope.message
+      }
+    }
   } catch {
     // response body wasn't JSON — keep the fallback
   }
@@ -98,7 +116,7 @@ async function readMetaError(response: Response, fallback: string): Promise<Meta
     type: envelope?.type ?? null,
     fbtraceId: envelope?.fbtrace_id ?? null,
     httpStatus: response.status,
-    details: envelope?.error_data?.details ?? null,
+    details: (envelope?.error_user_msg || envelope?.error_data?.details) ?? null,
   })
 }
 
@@ -449,10 +467,6 @@ export async function sendMediaMessage(
 }
 
 import type { MessageTemplate } from '@/types'
-import {
-  buildSendComponents,
-  type SendTimeParams,
-} from './template-send-builder'
 
 export interface SendTemplateMessageArgs {
   phoneNumberId: string
@@ -496,6 +510,131 @@ export interface SendTemplateMessageArgs {
  *     The full components array is built from the row so media
  *     headers + URL buttons land correctly.
  */
+export interface SendCarouselTemplateArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  templateName: string
+  language?: string
+  template: MessageTemplate
+  params?: string[]
+  messageParams?: SendTimeParams
+  contextMessageId?: string
+}
+
+/**
+ * Dedicated sender for WhatsApp Carousel Templates.
+ * Guarantees sending ONE WhatsApp message with ONE CAROUSEL component
+ * containing all swipeable cards. Structured debug logging is output before sending.
+ */
+export async function sendCarouselTemplate(
+  args: SendCarouselTemplateArgs
+): Promise<MetaSendResult> {
+  const {
+    phoneNumberId,
+    accessToken,
+    to,
+    templateName,
+    language = 'en_US',
+    template,
+    params,
+    messageParams,
+    contextMessageId,
+  } = args
+
+  let templateObj = template
+  if (!templateObj.carousel || templateObj.carousel.length < 2) {
+    const rawComps = (templateObj.raw_components ?? (templateObj as unknown as { components?: MetaTemplateComponent[] }).components) as MetaTemplateComponent[] | undefined
+    if (Array.isArray(rawComps) && rawComps.length > 0) {
+      const normalized = normalizeMetaTemplate({
+        id: templateObj.meta_template_id ?? '',
+        name: templateName,
+        language,
+        status: templateObj.status ?? 'APPROVED',
+        category: templateObj.category ?? 'Marketing',
+        components: rawComps,
+      })
+      if (normalized.carousel && normalized.carousel.length >= 2) {
+        templateObj = { ...templateObj, carousel: normalized.carousel, template_type: 'carousel' }
+      }
+    }
+  }
+
+  if (!templateObj.carousel || templateObj.carousel.length < 2) {
+    throw new Error('sendCarouselTemplate requires a carousel template with at least 2 cards.')
+  }
+
+  const components = buildSendComponents(templateObj, {
+    body: messageParams?.body ?? params,
+    headerMediaUrl: messageParams?.headerMediaUrl,
+    headerMediaId: messageParams?.headerMediaId,
+    carouselCards: messageParams?.carouselCards,
+  })
+
+  const bodyComp = components.find((c: MetaSendComponent) => c.type === 'body') as { parameters?: { text: string }[] } | undefined
+  const carouselComp = components.find((c: MetaSendComponent) => c.type === 'carousel') as { cards?: MetaSendCarouselCard[] } | undefined
+
+  console.log(
+    JSON.stringify({
+      operation: 'SEND_CAROUSEL_TEMPLATE',
+      templateName,
+      recipient: to,
+      cardCount: carouselComp?.cards?.length ?? 0,
+      bodyParameterCount: bodyComp?.parameters?.length ?? 0,
+      cards: (carouselComp?.cards ?? []).map((card: MetaSendCarouselCard) => ({
+        index: card.card_index,
+        mediaType: card.components.find((c: MetaSendComponent) => c.type === 'header')?.parameters?.[0]?.type ?? 'none',
+        hasMedia: card.components.some((c: MetaSendComponent) => c.type === 'header'),
+        buttonCount: card.components.filter((c: MetaSendComponent) => c.type === 'button').length,
+      })),
+    })
+  )
+
+  const url = `${META_API_BASE}/${phoneNumberId}/messages`
+  const templatePayload: Record<string, unknown> = {
+    name: templateName,
+    language: { code: language },
+    components,
+  }
+
+  const payload: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    ...recipientFields(to),
+    type: 'template',
+    template: templatePayload,
+  }
+  if (contextMessageId) {
+    payload.context = { message_id: contextMessageId }
+  }
+
+  console.log(
+    `[SEND_CAROUSEL_TEMPLATE] Sending to ${to} for template ${templateName}:`,
+    JSON.stringify(payload, null, 2)
+  )
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    await throwMetaError(response, `Meta send error: ${response.status}`)
+  }
+
+  const data = (await response.json()) as { messages?: { id: string }[] }
+  console.log('[SEND_CAROUSEL_TEMPLATE] Meta API Response:', JSON.stringify(data, null, 2))
+  const messageId = data.messages?.[0]?.id
+  if (!messageId) {
+    throw new Error('Meta accepted the carousel template message but returned no message_id.')
+  }
+
+  return { messageId }
+}
+
 export async function sendTemplateMessage(
   args: SendTemplateMessageArgs
 ): Promise<MetaSendResult> {
@@ -510,6 +649,21 @@ export async function sendTemplateMessage(
     messageParams,
     contextMessageId,
   } = args
+
+  if (template && isCarouselTemplate(template)) {
+    return sendCarouselTemplate({
+      phoneNumberId,
+      accessToken,
+      to,
+      templateName,
+      language,
+      template,
+      params,
+      messageParams,
+      contextMessageId,
+    })
+  }
+
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
   const templatePayload: Record<string, unknown> = {
@@ -519,19 +673,17 @@ export async function sendTemplateMessage(
 
   if (template) {
     const components = buildSendComponents(template, {
-      // Legacy callers pass body values in `params`; fold them into
-      // `messageParams.body` so the new path covers them too.
       body: messageParams?.body ?? params,
       headerText: messageParams?.headerText,
       headerMediaUrl: messageParams?.headerMediaUrl,
       headerMediaId: messageParams?.headerMediaId,
       buttonParams: messageParams?.buttonParams,
+      carouselCards: messageParams?.carouselCards,
     })
     if (components.length > 0) {
       templatePayload.components = components
     }
   } else if (params && params.length > 0) {
-    // Legacy body-only path — no template row available.
     templatePayload.components = [
       {
         type: 'body',
@@ -698,6 +850,56 @@ export async function submitMessageTemplate(
     status: typeof data.status === 'string' ? data.status : 'PENDING',
     category: typeof data.category === 'string' ? data.category : undefined,
   }
+}
+
+export interface CreateCarouselTemplateArgs {
+  wabaId: string
+  accessToken: string
+  payload: TemplatePayload
+}
+
+/**
+ * Dedicated helper for creating WhatsApp Carousel Templates on Meta Graph API.
+ * Validates the carousel component structure, constructs the payload with
+ * type: "CAROUSEL", logs structured diagnostics, and POSTs to /{waba_id}/message_templates.
+ * Crucially, Meta errors are never swallowed or converted to body-only fallbacks.
+ */
+export async function createCarouselTemplate(
+  args: CreateCarouselTemplateArgs
+): Promise<SubmitMessageTemplateResult> {
+  const { wabaId, accessToken, payload } = args
+
+  if (!payload.carousel || payload.carousel.length < 2) {
+    throw new Error('Carousel templates require at least 2 cards.')
+  }
+
+  const metaPayload = buildMetaTemplatePayload(payload)
+  const hasCarousel = metaPayload.components.some((c: MetaComponent) => c.type === 'CAROUSEL')
+
+  if (!hasCarousel) {
+    throw new Error('Carousel component missing from generated template payload.')
+  }
+
+  console.log(
+    JSON.stringify({
+      operation: 'CREATE_CAROUSEL_TEMPLATE',
+      templateName: payload.name,
+      wabaId,
+      graphApiVersion: META_API_VERSION,
+      requestSummary: {
+        category: metaPayload.category,
+        language: metaPayload.language,
+        cardCount: payload.carousel.length,
+        components: metaPayload.components.map((c: MetaComponent) => c.type),
+      },
+    })
+  )
+
+  return submitMessageTemplate({
+    wabaId,
+    accessToken,
+    payload: metaPayload,
+  })
 }
 
 export interface EditMessageTemplateArgs {

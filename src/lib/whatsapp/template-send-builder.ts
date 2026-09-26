@@ -31,7 +31,18 @@
  */
 
 import type { MessageTemplate, TemplateButton } from '@/types';
-import { extractVariableIndices } from './template-validators';
+import { extractVariableIndices, isCarouselTemplate } from './template-validators';
+import { normalizeMetaTemplate, type MetaTemplateComponent } from './template-normalize';
+
+export interface SendTimeCardParams {
+  cardIndex: number;
+  catalogId?: string;
+  productRetailerId?: string;
+  headerMediaUrl?: string;
+  headerMediaId?: string;
+  body?: string[];
+  buttonParams?: Record<number, string>;
+}
 
 export interface SendTimeParams {
   /** Values for body {{1}}, {{2}}, … indexed by variable position. */
@@ -49,6 +60,13 @@ export interface SendTimeParams {
    * override at send time.
    */
   buttonParams?: Record<number, string>;
+  /** Per-card send params for carousel templates. */
+  carouselCards?: SendTimeCardParams[];
+}
+
+export interface MetaSendCarouselCard {
+  card_index: number;
+  components: MetaSendComponent[];
 }
 
 export type MetaSendComponent =
@@ -59,6 +77,10 @@ export type MetaSendComponent =
       sub_type: 'url' | 'quick_reply' | 'copy_code';
       index: string;
       parameters: MetaSendParameter[];
+    }
+  | {
+      type: 'carousel';
+      cards: MetaSendCarouselCard[];
     };
 
 type MetaSendParameter =
@@ -67,7 +89,8 @@ type MetaSendParameter =
   | { type: 'video'; video: { link?: string; id?: string } }
   | { type: 'document'; document: { link?: string; id?: string } }
   | { type: 'coupon_code'; coupon_code: string }
-  | { type: 'payload'; payload: string };
+  | { type: 'payload'; payload: string }
+  | { type: 'product'; product: { catalog_id: string; product_retailer_id: string } };
 
 function buildHeaderComponent(
   template: MessageTemplate,
@@ -77,9 +100,6 @@ function buildHeaderComponent(
   if (!headerType) return null;
 
   if (headerType === 'text') {
-    // TEXT header with {{1}} → need a value. Static text headers
-    // (no variables) just ride along inside the template itself; no
-    // header component required on send.
     const varCount = extractVariableIndices(template.header_content ?? '').length;
     if (varCount === 0) return null;
     const value = params.headerText;
@@ -94,15 +114,6 @@ function buildHeaderComponent(
     };
   }
 
-  // image / video / document — Meta requires the media component on
-  // every send. Prefer the caller's explicit override; fall back to the
-  // template's stored public URL.
-  //
-  // NOTE: `template.header_handle` is intentionally NOT used here. It's a
-  // Resumable-Upload handle that's only valid as the *creation-time*
-  // sample (`example.header_handle`); it is NOT a reusable send-time
-  // media id, and passing it as `{ id }` makes Meta reject the send. Only
-  // an explicit `headerMediaId` (a real /media upload id) is honored.
   const link = params.headerMediaUrl ?? template.header_media_url;
   const id = params.headerMediaId;
   if (!link && !id) {
@@ -135,8 +146,6 @@ function buildBodyComponent(
       `Body has ${varCount} variable(s) but only ${body.length} value(s) were supplied.`,
     );
   }
-  // Trim to the variable count — extra values are dropped silently so
-  // a legacy caller that passes too many doesn't error out.
   const values = body.slice(0, varCount);
   return {
     type: 'body',
@@ -152,9 +161,6 @@ function buttonNeedsSendParam(
     case 'URL':
       return extractVariableIndices(button.url).length > 0;
     case 'COPY_CODE':
-      // We always emit a button param for COPY_CODE so the customer
-      // gets a real code (either the caller's override or the
-      // template's example as a default).
       return true;
     case 'QUICK_REPLY':
     case 'PHONE_NUMBER':
@@ -166,14 +172,21 @@ function buildButtonComponent(
   button: TemplateButton,
   index: number,
   override: string | undefined,
+  bodyParams?: string[],
 ): MetaSendComponent | null {
   if (!buttonNeedsSendParam(button, override)) return null;
 
   switch (button.type) {
     case 'URL': {
-      // Each URL button is its own component with sub_type=url and
-      // the button's index in the template's buttons array.
-      if (!override || !override.trim()) {
+      let value = override;
+      if (!value || !value.trim()) {
+        const varIndices = extractVariableIndices(button.url);
+        if (varIndices.length > 0 && bodyParams) {
+          const varNum = varIndices[0];
+          value = bodyParams[varNum - 1];
+        }
+      }
+      if (!value || !value.trim()) {
         throw new Error(
           `URL button #${index + 1} uses {{1}} — requires a buttonParams[${index}] value.`,
         );
@@ -182,7 +195,7 @@ function buildButtonComponent(
         type: 'button',
         sub_type: 'url',
         index: String(index),
-        parameters: [{ type: 'text', text: override }],
+        parameters: [{ type: 'text', text: value }],
       };
     }
     case 'COPY_CODE': {
@@ -195,8 +208,6 @@ function buildButtonComponent(
       };
     }
     case 'QUICK_REPLY': {
-      // Only included when the caller explicitly overrides the
-      // payload (rare — usually QR buttons use their default text).
       return {
         type: 'button',
         sub_type: 'quick_reply',
@@ -205,8 +216,6 @@ function buildButtonComponent(
       };
     }
     case 'PHONE_NUMBER':
-      // PHONE_NUMBER buttons never accept send-time params per Meta —
-      // return null even if an override snuck through.
       return null;
   }
 }
@@ -221,6 +230,132 @@ export function buildSendComponents(
   params: SendTimeParams = {},
 ): MetaSendComponent[] {
   const out: MetaSendComponent[] = [];
+
+  const isCarousel = isCarouselTemplate(template);
+  let carouselCards = template.carousel;
+  if (isCarousel && (!carouselCards || carouselCards.length < 2)) {
+    const rawComps = (template.raw_components ?? (template as unknown as { components?: MetaTemplateComponent[] }).components) as unknown as MetaTemplateComponent[];
+    if (Array.isArray(rawComps) && rawComps.length > 0) {
+      const normalized = normalizeMetaTemplate({
+        id: template.meta_template_id ?? '',
+        name: template.name ?? '',
+        language: template.language ?? 'en_US',
+        status: template.status ?? 'APPROVED',
+        category: template.category ?? 'Marketing',
+        components: rawComps,
+      });
+      if (normalized.carousel && normalized.carousel.length >= 2) {
+        carouselCards = normalized.carousel;
+      }
+    }
+  }
+
+  if (isCarousel && carouselCards && carouselCards.length >= 2) {
+    if (template.body_text) {
+      const body = buildBodyComponent(template, params);
+      if (body) out.push(body);
+    }
+
+    const carouselCardsPayload: MetaSendCarouselCard[] = carouselCards.map((card, i) => {
+      const cardOverride = params.carouselCards?.find((c) => c.cardIndex === i);
+      const catalogId = cardOverride?.catalogId ?? card.catalog_id;
+      const retailerId = cardOverride?.productRetailerId ?? card.product_retailer_id;
+      const cardComponents: MetaSendComponent[] = [];
+
+      const isVideo = card.header_format === 'VIDEO';
+      const isProduct = card.header_format === 'PRODUCT_CORNER' || Boolean(retailerId);
+
+      if (isProduct && retailerId) {
+        const prodObj: { product_retailer_id: string; catalog_id?: string } = {
+          product_retailer_id: retailerId,
+        };
+        if (catalogId) prodObj.catalog_id = catalogId;
+        cardComponents.push({
+          type: 'header',
+          parameters: [
+            {
+              type: 'product',
+              product: prodObj as { catalog_id: string; product_retailer_id: string },
+            },
+          ],
+        });
+      } else {
+        // Media card carousel header (IMAGE or VIDEO)
+        const mediaUrl =
+          cardOverride?.headerMediaUrl?.trim() ||
+          card.header_media_url?.trim() ||
+          params.headerMediaUrl?.trim() ||
+          template.header_media_url?.trim() ||
+          'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800';
+        const mediaId = cardOverride?.headerMediaId;
+        const mediaPayload: { link?: string; id?: string } = mediaId ? { id: mediaId } : { link: mediaUrl };
+
+        cardComponents.push({
+          type: 'header',
+          parameters: [
+            isVideo
+              ? { type: 'video', video: mediaPayload }
+              : { type: 'image', image: mediaPayload },
+          ],
+        });
+      }
+
+      if (card.body_text) {
+        const varIndices = extractVariableIndices(card.body_text);
+        if (varIndices.length > 0) {
+          const providedBody = cardOverride?.body ?? [];
+          const sampleBody = card.sample_values?.body ?? [];
+          const values: string[] = [];
+          for (let vIdx = 0; vIdx < varIndices.length; vIdx++) {
+            const varNum = varIndices[vIdx];
+            const valFromOverride = providedBody[vIdx];
+            const valFromParams = params.body?.[varNum - 1];
+            const valFromSample = sampleBody[vIdx];
+            values.push(valFromOverride || valFromParams || valFromSample || `Sample ${vIdx + 1}`);
+          }
+          cardComponents.push({
+            type: 'body',
+            parameters: values.map((val) => ({ type: 'text', text: String(val) })),
+          });
+        }
+      }
+
+      if (card.buttons?.length) {
+        card.buttons.forEach((btn, btnIdx) => {
+          const btnOverride = cardOverride?.buttonParams?.[btnIdx];
+          if (btn.type === 'QUICK_REPLY') {
+            cardComponents.push({
+              type: 'button',
+              sub_type: 'quick_reply',
+              index: String(btnIdx),
+              parameters: [
+                {
+                  type: 'payload',
+                  payload: btnOverride?.trim() || btn.text || `card_${i}_btn_${btnIdx}`,
+                },
+              ],
+            });
+          } else {
+            const btnComp = buildButtonComponent(btn, btnIdx, btnOverride, params.body);
+            if (btnComp) cardComponents.push(btnComp);
+          }
+        });
+      }
+
+      return {
+        card_index: i,
+        components: cardComponents,
+      };
+    });
+
+    out.push({
+      type: 'carousel',
+      cards: carouselCardsPayload,
+    });
+
+    return out;
+  }
+
   const header = buildHeaderComponent(template, params);
   if (header) out.push(header);
   const body = buildBodyComponent(template, params);
@@ -228,7 +363,7 @@ export function buildSendComponents(
   if (template.buttons?.length) {
     template.buttons.forEach((btn, i) => {
       const override = params.buttonParams?.[i];
-      const component = buildButtonComponent(btn, i, override);
+      const component = buildButtonComponent(btn, i, override, params.body);
       if (component) out.push(component);
     });
   }

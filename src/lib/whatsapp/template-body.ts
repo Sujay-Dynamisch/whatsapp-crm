@@ -17,7 +17,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
-import type { MessageTemplate } from '@/types';
+import type { MessageTemplate, CarouselCard } from '@/types';
 
 /**
  * Substitute positional `{{1}}`, `{{2}}`… placeholders in a template
@@ -141,6 +141,23 @@ export async function resolveTemplateRow(
 
   if (!isMessageTemplate(chosen)) {
     return { row: null, malformed: true, language: fallbackLanguage };
+  }
+
+  if (chosen.id && chosen.template_type === 'carousel' && !chosen.carousel) {
+    try {
+      const builder = db
+        .from('carousel_configs')
+        .select('cards')
+        .eq('template_id', chosen.id);
+      const { data: config } = typeof (builder as { maybeSingle?: unknown }).maybeSingle === 'function'
+        ? await (builder as unknown as { maybeSingle: () => Promise<{ data: { cards: CarouselCard[] } | null }> }).maybeSingle()
+        : await builder;
+      if (config && Array.isArray((config as { cards?: CarouselCard[] }).cards) && (config as { cards: CarouselCard[] }).cards.length > 0) {
+        chosen.carousel = (config as { cards: CarouselCard[] }).cards;
+      }
+    } catch {
+      // Ignore fallback check errors
+    }
   }
 
   return {
