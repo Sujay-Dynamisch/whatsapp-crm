@@ -8,6 +8,7 @@ import {
   batchRetryDelayMs,
 } from '@/lib/broadcast-retry';
 import { normalizeKey } from '@/lib/contacts/dedupe';
+import { getUnsubscribedContactIds } from '@/lib/contacts/unsubscribe';
 import { Contact, MessageTemplate } from '@/types';
 
 import type {
@@ -287,7 +288,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     }
 
     // Apply exclude tags (works across all contact-derived audience
-    // types). CSV contacts are synthetic so exclusion doesn't apply.
+    // types).
     if (audience.excludeTagIds && audience.excludeTagIds.length > 0) {
       const { data: excludeRows } = await supabase
         .from('contact_tags')
@@ -295,6 +296,14 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         .in('tag_id', audience.excludeTagIds);
       const excludedIds = new Set((excludeRows ?? []).map((r) => r.contact_id));
       contacts = contacts.filter((c) => !excludedIds.has(c.id));
+    }
+
+    // Always exclude contacts carrying the 'unsubscribe' tag
+    if (accountId) {
+      const unsubscribedIds = await getUnsubscribedContactIds(supabase, accountId);
+      if (unsubscribedIds.size > 0) {
+        contacts = contacts.filter((c) => !unsubscribedIds.has(c.id));
+      }
     }
 
     return contacts;

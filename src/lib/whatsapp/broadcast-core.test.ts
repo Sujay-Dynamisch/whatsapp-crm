@@ -73,10 +73,11 @@ function makeDb(rpcResult: { data: unknown; error: unknown }) {
           }),
         };
       }
-      if (table === 'message_templates') {
+      if (table === 'message_templates' || table === 'tags' || table === 'contact_tags') {
         const chain: Record<string, unknown> = {
           select: () => chain,
           eq: () => chain,
+          ilike: () => chain,
           maybeSingle: () => Promise.resolve({ data: null, error: null }),
         };
         return chain;

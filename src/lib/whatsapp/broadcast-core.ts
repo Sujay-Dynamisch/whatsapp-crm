@@ -28,6 +28,7 @@ import {
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import type { MessageTemplate } from '@/types';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
+import { getUnsubscribedContactIds } from '@/lib/contacts/unsubscribe';
 
 /** Thrown by createBroadcast on a caller-visible failure; route maps it. */
 export class BroadcastError extends Error {
@@ -166,13 +167,18 @@ export async function createBroadcast(
     });
   }
 
+  // Fetch unsubscribed contacts for this account
+  const unsubscribedSet = await getUnsubscribedContactIds(db, accountId);
+
   // Collapse recipients that resolved to the SAME contact (the caller
-  // listed a phone twice, or two numbers fuzzy-matched to one contact).
-  // Keep the first occurrence so the contact is messaged once and its
-  // params aren't silently overwritten by a later duplicate — and so
-  // the row↔params pairing below (keyed by contact_id) is unambiguous.
+  // listed a phone twice, or two numbers fuzzy-matched to one contact),
+  // and exclude unsubscribed contacts.
   const seenContact = new Set<string>();
   const deduped = resolved.filter((r) => {
+    if (unsubscribedSet.has(r.contactId)) {
+      rejected++;
+      return false;
+    }
     if (seenContact.has(r.contactId)) return false;
     seenContact.add(r.contactId);
     return true;
