@@ -9,6 +9,7 @@ function fakeDb(rows: unknown[]): SupabaseClient {
     from: () => chain,
     select: () => chain,
     eq: () => chain,
+    in: () => chain,
     order: () => chain,
     limit: () => Promise.resolve({ data: rows, error: null }),
   }
