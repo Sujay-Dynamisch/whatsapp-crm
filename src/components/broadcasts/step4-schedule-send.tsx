@@ -33,6 +33,10 @@ interface Step4Props {
   onBack: () => void;
   isProcessing: boolean;
   progress: number;
+  processedCount?: number;
+  totalCount?: number;
+  sentCount?: number;
+  failedCount?: number;
 }
 
 export function Step4ScheduleSend({
@@ -45,6 +49,10 @@ export function Step4ScheduleSend({
   onBack,
   isProcessing,
   progress,
+  processedCount = 0,
+  totalCount = 0,
+  sentCount = 0,
+  failedCount = 0,
 }: Step4Props) {
   const t = useTranslations('Broadcasts.wizard');
   const [showConfirm, setShowConfirm] = useState(false);
@@ -144,22 +152,48 @@ export function Step4ScheduleSend({
         </div>
       </div>
 
-      {/* Processing overlay */}
+      {/* Processing overlay with live numbers */}
       {isProcessing && (
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              <p className="text-sm font-medium text-foreground">{t('scheduleSend.sending')}</p>
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {progress < 30 ? t('scheduleSend.preparing') : t('scheduleSend.sending')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {totalCount > 0
+                    ? `${processedCount} of ${totalCount} contacts processed (${sentCount} sent, ${failedCount} failed)`
+                    : `${progress}% completed`}
+                </p>
+              </div>
             </div>
-            <span className="text-xs font-medium text-primary">{progress}%</span>
+            <span className="text-sm font-bold text-primary">{progress}%</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-muted">
+
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-1.5 rounded-full bg-primary transition-all duration-300"
+              className="h-2 rounded-full bg-primary transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
+
+          {totalCount > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-primary/10 pt-2.5 text-xs">
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                ✓ {sentCount} Successful
+              </span>
+              {failedCount > 0 && (
+                <span className="font-medium text-destructive">
+                  ✕ {failedCount} Failed
+                </span>
+              )}
+              <span className="text-muted-foreground">
+                Total: {totalCount} contacts
+              </span>
+            </div>
+          )}
         </div>
       )}
 

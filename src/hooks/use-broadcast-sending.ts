@@ -63,6 +63,10 @@ interface UseBroadcastSendingReturn {
   createAndSendBroadcast: (payload: BroadcastPayload) => Promise<string>;
   isProcessing: boolean;
   progress: number;
+  processedCount: number;
+  totalCount: number;
+  sentCount: number;
+  failedCount: number;
 }
 
 /**
@@ -224,9 +228,9 @@ async function fetchCustomValueIndex(
   const index: CustomValueIndex = new Map();
   if (contactIds.length === 0) return index;
 
-  // Supabase PostgREST caps the .in(...) IN-clause roughly at 1000
-  // values. Page through to stay safe.
-  const PAGE = 500;
+  // Supabase PostgREST URL query params hang when .in(...) exceeds
+  // ~2KB (around 50 UUIDs). Page in chunks of 50 to ensure fast, reliable requests.
+  const PAGE = 50;
   for (let i = 0; i < contactIds.length; i += PAGE) {
     const slice = contactIds.slice(i, i + PAGE);
     const { data } = await supabase
@@ -247,6 +251,10 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
   const { accountId } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [sentCount, setSentCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
 
   async function resolveAudience(audience: AudienceConfig): Promise<Contact[]> {
     const supabase = createClient();
@@ -274,12 +282,16 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         const uniqueContactIds = [
           ...new Set(contactTags.map((ct) => ct.contact_id)),
         ];
-        const { data, error } = await supabase
-          .from('contacts')
-          .select('*')
-          .in('id', uniqueContactIds);
-        if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
-        contacts = data ?? [];
+        const PAGE = 50;
+        for (let i = 0; i < uniqueContactIds.length; i += PAGE) {
+          const chunk = uniqueContactIds.slice(i, i + PAGE);
+          const { data, error } = await supabase
+            .from('contacts')
+            .select('*')
+            .in('id', chunk);
+          if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
+          if (data) contacts.push(...data);
+        }
       }
     } else if (audience.type === 'custom_field' && audience.customField) {
       contacts = await resolveCustomFieldAudience(supabase, audience.customField);
@@ -430,17 +442,27 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     const contactIds = [...new Set((matches ?? []).map((m) => m.contact_id))];
     if (contactIds.length === 0) return [];
 
-    const { data, error } = await supabase
-      .from('contacts')
-      .select('*')
-      .in('id', contactIds);
-    if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
-    return data ?? [];
+    const contacts: Contact[] = [];
+    const PAGE = 50;
+    for (let i = 0; i < contactIds.length; i += PAGE) {
+      const chunk = contactIds.slice(i, i + PAGE);
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .in('id', chunk);
+      if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
+      if (data) contacts.push(...data);
+    }
+    return contacts;
   }
 
   async function createAndSendBroadcast(payload: BroadcastPayload): Promise<string> {
     setIsProcessing(true);
     setProgress(0);
+    setProcessedCount(0);
+    setTotalCount(0);
+    setSentCount(0);
+    setFailedCount(0);
 
     const supabase = createClient();
 
@@ -468,6 +490,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       if (contacts.length === 0) {
         throw new Error('No contacts found for this audience.');
       }
+      setTotalCount(contacts.length);
 
       // ── Step 2: Create broadcast row ──────────────────────────────
       setProgress(10);
@@ -539,11 +562,6 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           .from('broadcast_recipients')
           .insert(batch);
         if (recipientError) {
-          // Previous impl logged and marched on — the broadcast then ran
-          // with an incomplete recipient set, so webhook status updates
-          // couldn't find some rows and the aggregate counts drifted.
-          // Flip the broadcast to failed so the user sees the problem
-          // immediately, then throw to abort the send loop.
           await supabase
             .from('broadcasts')
             .update({
@@ -552,9 +570,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             })
             .eq('id', broadcast.id);
           throw new Error(
-            `Failed to insert recipient batch ${i / INSERT_BATCH_SIZE + 1}: ${recipientError.message}`,
+            `Failed to insert recipient batch ${Math.floor(i / INSERT_BATCH_SIZE) + 1}: ${recipientError.message}`,
           );
         }
+        const insertProgress = 20 + Math.round(((i + batch.length) / recipientRows.length) * 10);
+        setProgress(insertProgress);
       }
 
       // ── Step 4: Fetch recipients back (joined contact) ────────────
@@ -568,8 +588,10 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         throw new Error('Failed to fetch broadcast recipients');
       }
 
-      let failedCount = 0;
+      let totalFailed = 0;
+      let totalSent = 0;
       const totalRecipients = recipients.length;
+      setTotalCount(totalRecipients);
 
       // Media-header templates (image/video/document) require a media
       // URL on every send. Collected in the personalize step and applied
@@ -581,8 +603,6 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         headerType === 'video' ||
         headerType === 'document';
       const headerMediaUrl = payload.headerMediaUrl?.trim();
-      const messageParams =
-        isMediaHeader && headerMediaUrl ? { headerMediaUrl } : undefined;
 
       for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
         const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
@@ -644,35 +664,39 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             resultsByPhone.set(r.phone, r);
           }
 
-          for (const recipient of batch) {
+          // Update recipient statuses in parallel for performance
+          let batchSent = 0;
+          let batchFailed = 0;
+          const nowIso = new Date().toISOString();
+          const recipientUpdates = batch.map((recipient) => {
             const phone = recipient.contact?.phone;
             const result = phone ? resultsByPhone.get(phone) : undefined;
 
             if (!result) {
-              failedCount++;
-              await supabase
+              batchFailed++;
+              return supabase
                 .from('broadcast_recipients')
                 .update({
                   status: 'failed',
                   error_message: 'No phone number on contact',
                 })
                 .eq('id', recipient.id);
-              continue;
             }
 
             if (result.status === 'sent') {
-              await supabase
+              batchSent++;
+              return supabase
                 .from('broadcast_recipients')
                 .update({
                   status: 'sent',
-                  sent_at: new Date().toISOString(),
+                  sent_at: nowIso,
                   whatsapp_message_id: result.whatsapp_message_id ?? null,
                   error_message: null,
                 })
                 .eq('id', recipient.id);
             } else {
-              failedCount++;
-              await supabase
+              batchFailed++;
+              return supabase
                 .from('broadcast_recipients')
                 .update({
                   status: 'failed',
@@ -680,10 +704,17 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
                 })
                 .eq('id', recipient.id);
             }
-          }
+          });
+
+          await Promise.all(recipientUpdates);
+          totalSent += batchSent;
+          totalFailed += batchFailed;
+          setSentCount(totalSent);
+          setFailedCount(totalFailed);
+          setProcessedCount(Math.min(i + batch.length, totalRecipients));
         } catch (err) {
           for (const recipient of batch) {
-            failedCount++;
+            totalFailed++;
             await supabase
               .from('broadcast_recipients')
               .update({
@@ -692,6 +723,8 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
               })
               .eq('id', recipient.id);
           }
+          setFailedCount(totalFailed);
+          setProcessedCount(Math.min(i + batch.length, totalRecipients));
         }
 
         const progressPct =
@@ -707,7 +740,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       // Aggregate counts are maintained by the DB trigger (migration
       // 003); we only flip the final status here.
       setProgress(95);
-      const finalStatus = failedCount === totalRecipients ? 'failed' : 'sent';
+      const finalStatus = totalFailed === totalRecipients ? 'failed' : 'sent';
       await supabase
         .from('broadcasts')
         .update({ status: finalStatus })
@@ -720,5 +753,13 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     }
   }
 
-  return { createAndSendBroadcast, isProcessing, progress };
+  return {
+    createAndSendBroadcast,
+    isProcessing,
+    progress,
+    processedCount,
+    totalCount,
+    sentCount,
+    failedCount,
+  };
 }
