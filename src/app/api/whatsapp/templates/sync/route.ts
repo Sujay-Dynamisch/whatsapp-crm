@@ -198,6 +198,13 @@ export async function POST() {
       nextUrl = metaBody.paging?.next ?? null
     }
 
+    const syncedMetaIds = new Set(
+      metaTemplates.map((t) => t.id).filter(Boolean),
+    )
+    const syncedNameLangs = new Set(
+      metaTemplates.map((t) => `${t.name}:${t.language}`),
+    )
+
     let inserted = 0
     let updated = 0
     const errors: { name: string; language: string; message: string }[] = []
@@ -229,13 +236,13 @@ export async function POST() {
         updated_at: new Date().toISOString(),
       }
 
-      const { data: existing, error: lookupErr } = await supabase
+      // Query without maybeSingle() to handle duplicate rows gracefully
+      const { data: existingRows, error: lookupErr } = await supabase
         .from('message_templates')
         .select('id')
         .eq('account_id', accountId)
         .eq('name', t.name)
         .eq('language', t.language)
-        .maybeSingle()
 
       if (lookupErr) {
         errors.push({
@@ -246,11 +253,12 @@ export async function POST() {
         continue
       }
 
-      if (existing?.id) {
+      if (existingRows && existingRows.length > 0) {
+        const primaryId = existingRows[0].id
         const { error: updErr } = await supabase
           .from('message_templates')
           .update(row)
-          .eq('id', existing.id)
+          .eq('id', primaryId)
         if (updErr) {
           errors.push({
             name: t.name,
@@ -259,6 +267,14 @@ export async function POST() {
           })
         } else {
           updated++
+          // Clean up duplicate rows if multiple rows exist for same name & language
+          if (existingRows.length > 1) {
+            const duplicateIds = existingRows.slice(1).map((r) => r.id)
+            await supabase
+              .from('message_templates')
+              .delete()
+              .in('id', duplicateIds)
+          }
         }
       } else {
         const { error: insErr } = await supabase
@@ -276,11 +292,41 @@ export async function POST() {
       }
     }
 
+    // Delete local templates that were submitted to Meta (or non-DRAFT)
+    // but no longer exist on Meta (e.g. deleted in Meta Manager).
+    let deletedStale = 0
+    const { data: localTemplates } = await supabase
+      .from('message_templates')
+      .select('id, meta_template_id, name, language, status')
+      .eq('account_id', accountId)
+
+    if (localTemplates) {
+      const staleIdsToDelete = localTemplates
+        .filter(
+          (row) =>
+            (row.meta_template_id || row.status !== 'DRAFT') &&
+            (!row.meta_template_id || !syncedMetaIds.has(row.meta_template_id)) &&
+            !syncedNameLangs.has(`${row.name}:${row.language}`),
+        )
+        .map((row) => row.id)
+
+      if (staleIdsToDelete.length > 0) {
+        const { error: delStaleErr } = await supabase
+          .from('message_templates')
+          .delete()
+          .in('id', staleIdsToDelete)
+        if (!delStaleErr) {
+          deletedStale = staleIdsToDelete.length
+        }
+      }
+    }
+
     return NextResponse.json({
       success: errors.length === 0,
       total: metaTemplates.length,
       inserted,
       updated,
+      deleted_stale: deletedStale,
       errors,
       truncated: pageCount >= PAGE_CAP && nextUrl !== null,
     })
