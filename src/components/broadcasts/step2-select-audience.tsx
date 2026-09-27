@@ -188,13 +188,27 @@ export function Step2SelectAudience({
         return;
       }
 
+      // Fetch unsubscribe tag id to always exclude unsubscribed contacts
+      const { data: unsubTag } = await supabase
+        .from('tags')
+        .select('id')
+        .ilike('name', 'unsubscribe')
+        .maybeSingle();
+
+      const combinedExcludeTagIds = Array.from(
+        new Set([
+          ...(audience.excludeTagIds ?? []),
+          ...(unsubTag ? [unsubTag.id] : []),
+        ])
+      );
+
       // Apply exclude tags
       let excludeSet: Set<string> | null = null;
-      if (audience.excludeTagIds && audience.excludeTagIds.length > 0) {
+      if (combinedExcludeTagIds.length > 0) {
         const { data: excludeRows } = await supabase
           .from('contact_tags')
           .select('contact_id')
-          .in('tag_id', audience.excludeTagIds);
+          .in('tag_id', combinedExcludeTagIds);
         excludeSet = new Set((excludeRows ?? []).map((r) => r.contact_id));
       }
 
@@ -525,12 +539,17 @@ export function Step2SelectAudience({
             <span className="text-xs text-muted-foreground">{t('selectAudience.calculating')}</span>
           </div>
         ) : estimatedCount !== null ? (
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            <span className="text-sm text-foreground">
-              {estimatedCount.toLocaleString()}
-            </span>
-            <span className="text-xs text-muted-foreground">estimated recipients</span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-sm text-foreground font-semibold">
+                {estimatedCount.toLocaleString()}
+              </span>
+              <span className="text-xs text-muted-foreground">estimated recipients</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              ⚡ Contacts with the <span className="font-semibold text-red-400">unsubscribe</span> tag are automatically excluded from broadcasts.
+            </p>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">

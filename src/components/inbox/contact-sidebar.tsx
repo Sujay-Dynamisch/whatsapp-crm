@@ -15,7 +15,13 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  Ban,
+  UserX,
+  UserCheck,
+  Loader2,
 } from "lucide-react";
+import { isContactUnsubscribed, tagContactAsUnsubscribed, removeUnsubscribeTag } from "@/lib/contacts/unsubscribe";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
@@ -37,6 +43,9 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
+  const [togglingUnsubscribe, setTogglingUnsubscribe] = useState(false);
+
+  const unsubscribed = isContactUnsubscribed({ ...contact, tags });
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -73,6 +82,26 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
       setTags(mapped);
     }
   }, [contact]);
+
+  const handleToggleUnsubscribe = useCallback(async () => {
+    if (!contact || !accountId) return;
+    setTogglingUnsubscribe(true);
+    const supabase = createClient();
+    try {
+      if (unsubscribed) {
+        await removeUnsubscribeTag(supabase, accountId, contact.id);
+        toast.success("Client resubscribed to WhatsApp messaging");
+      } else {
+        await tagContactAsUnsubscribed(supabase, accountId, contact.id);
+        toast.success("Client marked as unsubscribed (opted out of bulk messaging)");
+      }
+      await fetchContactData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update unsubscribe status");
+    } finally {
+      setTogglingUnsubscribe(false);
+    }
+  }, [contact, accountId, unsubscribed, fetchContactData]);
 
   // Load on contact change. setContactData/setTags run inside async
   // Supabase callbacks, not synchronously in the effect body.
@@ -138,6 +167,50 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     <div className="flex h-full w-70 flex-col border-l border-border bg-card">
       <ScrollArea className="flex-1">
         <div className="p-4">
+          {/* Unsubscribed Banner / Controls */}
+          {unsubscribed ? (
+            <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-red-400">
+                <Ban className="h-4 w-4 shrink-0" />
+                <span>Unsubscribed Client</span>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground leading-tight">
+                Opted out of WhatsApp bulk messaging.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleToggleUnsubscribe}
+                disabled={togglingUnsubscribe}
+                className="mt-2.5 h-7 w-full border-red-500/40 text-xs font-medium text-red-300 hover:bg-red-500/20 hover:text-red-200"
+              >
+                {togglingUnsubscribe ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <UserCheck className="mr-1.5 h-3 w-3" />
+                )}
+                Resubscribe Client
+              </Button>
+            </div>
+          ) : (
+            <div className="mb-4">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleToggleUnsubscribe}
+                disabled={togglingUnsubscribe}
+                className="w-full border-border text-xs text-muted-foreground hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/5"
+              >
+                {togglingUnsubscribe ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <UserX className="mr-1.5 h-3.5 w-3.5 text-red-400" />
+                )}
+                Mark as Unsubscribed
+              </Button>
+            </div>
+          )}
+
           {/* Contact Info */}
           <div className="flex flex-col items-center text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">

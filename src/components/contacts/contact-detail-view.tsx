@@ -39,10 +39,14 @@ import {
   X,
   DollarSign,
   LayoutTemplate,
+  Ban,
+  UserX,
+  UserCheck,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { contactHandle } from '@/lib/whatsapp/wa-identity';
 import { parseInternationalPhone } from '@/lib/whatsapp/phone-utils';
+import { tagContactAsUnsubscribed, removeUnsubscribeTag } from '@/lib/contacts/unsubscribe';
 
 interface ContactDetailViewProps {
   open: boolean;
@@ -258,6 +262,32 @@ export function ContactDetailView({
     setSavingTags(false);
   }
 
+  const isUnsubscribed = Boolean(
+    allTags.find(
+      (t) => contactTagIds.includes(t.id) && t.name.toLowerCase() === 'unsubscribe'
+    )
+  );
+
+  async function handleToggleUnsubscribe() {
+    if (!contactId || !accountId) return;
+    setSavingTags(true);
+    try {
+      if (isUnsubscribed) {
+        await removeUnsubscribeTag(supabase, accountId, contactId);
+        toast.success('Client resubscribed to WhatsApp messaging');
+      } else {
+        await tagContactAsUnsubscribed(supabase, accountId, contactId);
+        toast.success('Client marked as unsubscribed (opted out of bulk messaging)');
+      }
+      await fetchTags();
+      onUpdated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('toastUpdateFailed'));
+    } finally {
+      setSavingTags(false);
+    }
+  }
+
   async function addNote() {
     if (!contactId || !newNote.trim()) return;
     setSavingNote(true);
@@ -410,9 +440,17 @@ export function ContactDetailView({
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <SheetTitle className="text-popover-foreground truncate">
-                    {contact.name || t('unnamed')}
-                  </SheetTitle>
+                  <div className="flex items-center gap-2">
+                    <SheetTitle className="text-popover-foreground truncate">
+                      {contact.name || t('unnamed')}
+                    </SheetTitle>
+                    {isUnsubscribed && (
+                      <span className="inline-flex items-center gap-1 rounded bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-400 border border-red-500/30">
+                        <Ban className="size-3" />
+                        Unsubscribed
+                      </span>
+                    )}
+                  </div>
                   <SheetDescription className="text-muted-foreground text-xs mt-0.5">
                     {t('contactDetailsDesc')}
                   </SheetDescription>
@@ -444,7 +482,7 @@ export function ContactDetailView({
                   </div>
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button
                   size="sm"
                   onClick={() => setTemplatePickerOpen(true)}
@@ -457,6 +495,31 @@ export function ContactDetailView({
                     <LayoutTemplate className="size-4" />
                   )}
                   {t('sendTemplateBtn')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleToggleUnsubscribe}
+                  disabled={savingTags}
+                  className={
+                    isUnsubscribed
+                      ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
+                      : "border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40"
+                  }
+                >
+                  {savingTags ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : isUnsubscribed ? (
+                    <>
+                      <UserCheck className="size-3.5 mr-1" />
+                      Resubscribe Client
+                    </>
+                  ) : (
+                    <>
+                      <UserX className="size-3.5 mr-1" />
+                      Mark Unsubscribed
+                    </>
+                  )}
                 </Button>
               </div>
             </SheetHeader>

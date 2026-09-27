@@ -27,7 +27,9 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Ban,
 } from "lucide-react";
+import { isContactUnsubscribed } from "@/lib/contacts/unsubscribe";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
@@ -1082,6 +1084,18 @@ export function MessageThread({
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Unsubscribed Notice Banner */}
+      {isContactUnsubscribed(contact) && (
+        <div className="flex items-center justify-between gap-2 border-b border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+          <div className="flex items-center gap-2">
+            <Ban className="h-4 w-4 shrink-0 text-red-400" />
+            <span>
+              <strong>Client Unsubscribed:</strong> This contact opted out of bulk WhatsApp messaging (STOP). Manual agent replies are allowed, but broadcasts are automatically excluded.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">

@@ -22,6 +22,7 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
+import { isUnsubscribeText, tagContactAsUnsubscribed } from '@/lib/contacts/unsubscribe'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -904,6 +905,16 @@ async function processMessage(
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
   const inboundText = contentText ?? message.text?.body ?? ''
+
+  // Unsubscribe detection: if customer replies STOP / opt-out, tag contact as 'unsubscribe'
+  if (inboundText.trim() && isUnsubscribeText(inboundText)) {
+    await tagContactAsUnsubscribed(
+      supabaseAdmin(),
+      accountId,
+      contactRecord.id,
+      configOwnerUserId
+    ).catch((err) => console.error('[webhook] Failed to tag contact as unsubscribed:', err))
+  }
   const automationTriggers: (
     | 'new_contact_created'
     | 'first_inbound_message'
