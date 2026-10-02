@@ -19,6 +19,7 @@ import {
   Radio,
   Settings,
   Shield,
+  ShieldCheck,
   ShoppingBag,
   User,
   UserCog,
@@ -29,6 +30,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
+import { isSystemAdmin } from "@/lib/auth/admin";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -118,7 +120,8 @@ import { useTranslations } from "next-intl";
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
-  const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const { user, profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const isSysAdmin = isSystemAdmin(user?.email, profile?.role);
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
   // Only surface the account-name strip when it actually carries
@@ -278,6 +281,28 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <div className="my-4 border-t border-border" />
 
           <ul className="flex flex-col gap-1">
+            {isSysAdmin && (
+              <li>
+                <Link
+                  href="/admin"
+                  onClick={onClose}
+                  className={cn(
+                    "flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all lg:py-2 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 shadow-sm",
+                    pathname.startsWith("/admin")
+                      ? "bg-emerald-500/25 text-emerald-300 font-semibold border-emerald-500/50"
+                      : "text-emerald-400"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                    <span>Admin Portal</span>
+                  </div>
+                  <span className="rounded bg-emerald-500/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300 border border-emerald-500/30">
+                    Admin
+                  </span>
+                </Link>
+              </li>
+            )}
             {bottomNavItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
@@ -367,6 +392,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               sideOffset={6}
               className="min-w-56 bg-popover text-popover-foreground ring-border"
             >
+              {isSysAdmin && (
+                <>
+                  <DropdownMenuItem
+                    render={
+                      <Link
+                        href="/admin"
+                        onClick={onClose}
+                        className="text-emerald-400 focus:bg-emerald-500/10 focus:text-emerald-300 font-medium"
+                      />
+                    }
+                  >
+                    <ShieldCheck className="size-4 text-emerald-400" />
+                    Admin Portal
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-border" />
+                </>
+              )}
               <DropdownMenuItem
                 render={
                   <Link
