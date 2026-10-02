@@ -42,12 +42,21 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Auth pages - redirect to dashboard if already logged in.
+  // Root page - redirect admin to /admin and regular users to /dashboard
+  if (request.nextUrl.pathname === '/') {
+    const url = request.nextUrl.clone()
+    if (user?.email?.toLowerCase() === 'admin@gmail.com') {
+      url.pathname = '/admin'
+    } else {
+      url.pathname = '/dashboard'
+    }
+    return withRefreshedCookies(NextResponse.redirect(url))
+  }
+
+  // Auth pages - redirect to admin or dashboard if already logged in.
   // Exception: when an invite token is in the query string we
   // send the already-signed-in user to /join/<token> instead so
-  // they can accept the invitation in one click. Without this,
-  // a forwarded invite link to someone who's already signed in
-  // would silently drop them on /dashboard.
+  // they can accept the invitation in one click.
   if (user && (
     request.nextUrl.pathname === '/login' ||
     request.nextUrl.pathname === '/signup' ||
@@ -62,6 +71,9 @@ export async function middleware(request: NextRequest) {
     ) {
       url.pathname = `/join/${encodeURIComponent(inviteToken)}`
       url.search = ''
+    } else if (user.email?.toLowerCase() === 'admin@gmail.com') {
+      url.pathname = '/admin'
+      url.search = ''
     } else {
       url.pathname = '/dashboard'
       url.search = ''
@@ -70,16 +82,21 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected pages - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings']
+  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings', '/admin']
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return withRefreshedCookies(NextResponse.redirect(url))
   }
 
-  // API routes that need auth (not webhooks)
-  if (!user && request.nextUrl.pathname.startsWith('/api/whatsapp/') &&
-      !request.nextUrl.pathname.includes('/webhook')) {
+  // API routes that need auth (not webhooks or public bootstrap)
+  if (
+    !user &&
+    (
+      (request.nextUrl.pathname.startsWith('/api/whatsapp/') && !request.nextUrl.pathname.includes('/webhook')) ||
+      (request.nextUrl.pathname.startsWith('/api/admin/') && !request.nextUrl.pathname.startsWith('/api/admin/bootstrap'))
+    )
+  ) {
     return withRefreshedCookies(
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )
