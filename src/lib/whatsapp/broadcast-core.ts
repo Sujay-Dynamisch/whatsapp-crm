@@ -27,6 +27,7 @@ import {
 } from '@/lib/whatsapp/phone-utils';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import type { MessageTemplate } from '@/types';
+import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
 import { getUnsubscribedContactIds } from '@/lib/contacts/unsubscribe';
 
@@ -60,6 +61,12 @@ interface PlannedRecipient {
   recipientRowId: string;
   phone: string;
   params: string[];
+  /**
+   * Structured send params frozen on the recipient row (migration 043)
+   * — header media URL, carousel/button values. Absent for API
+   * broadcasts and rows that predate the column.
+   */
+  messageParams?: SendTimeParams;
 }
 
 export interface BroadcastPlan {
@@ -283,6 +290,7 @@ export async function deliverBroadcast(
           language: plan.templateLanguage,
           template: plan.templateRow ?? undefined,
           params: recipient.params,
+          messageParams: recipient.messageParams,
         });
         sentMessageId = result.messageId;
         lastError = null;

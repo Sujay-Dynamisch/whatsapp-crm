@@ -65,6 +65,29 @@ export async function POST(
       ? body.scope
       : 'pending';
 
+    // A broadcast waiting on its Cloud Scheduler/Tasks trigger
+    // (migration 043) has every recipient 'pending' by design — resuming
+    // it here would send early. Cancel or reschedule it instead.
+    const { data: scheduleRow } = await supabase
+      .from('broadcasts')
+      .select('schedule_status')
+      .eq('id', id)
+      .eq('account_id', accountId)
+      .maybeSingle();
+    if (
+      scheduleRow?.schedule_status === 'scheduled' ||
+      scheduleRow?.schedule_status === 'queued'
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'This broadcast is scheduled. Cancel or reschedule it instead of resuming.',
+          code: 'scheduled',
+        },
+        { status: 409 }
+      );
+    }
+
     // Claim BEFORE planning. Two clicks on Resume, or a click while an
     // earlier pass is still running, would otherwise both build a plan
     // from the same 'pending' rows and message everyone twice — and a

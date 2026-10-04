@@ -57,6 +57,31 @@ interface BroadcastPayload {
    * falls back to the template's stored URL only when this is empty.
    */
   headerMediaUrl?: string;
+  /**
+   * When set, the broadcast is planned (row + pending recipients with
+   * frozen params) and handed to the server-side scheduler instead of
+   * being sent from this tab. See lib/broadcast-scheduling.
+   */
+  schedule?: {
+    /** Wall-clock "YYYY-MM-DDTHH:mm" in `timezone`. */
+    localDatetime: string;
+    timezone: string;
+  };
+}
+
+/**
+ * The broadcast row and its recipients were saved, but the scheduling
+ * call failed. Carries the id so the caller can take the user to the
+ * broadcast, where scheduling can be retried — re-running the wizard
+ * would plan a duplicate campaign.
+ */
+export class BroadcastScheduleError extends Error {
+  readonly broadcastId: string;
+  constructor(broadcastId: string, message: string) {
+    super(message);
+    this.name = 'BroadcastScheduleError';
+    this.broadcastId = broadcastId;
+  }
 }
 
 interface UseBroadcastSendingReturn {
@@ -509,7 +534,17 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             customField: payload.audience.customField,
             excludeTagIds: payload.audience.excludeTagIds,
           },
-          status: 'sending',
+          // Migration-043 columns are written only for scheduled sends, so
+          // "Send now" keeps working on a database without that migration.
+          ...(payload.schedule
+            ? {
+                template_id: payload.template.id ?? null,
+                timezone: payload.schedule.timezone,
+              }
+            : {}),
+          // A scheduled campaign stays 'scheduled' until the server
+          // claims it at send time.
+          status: payload.schedule ? 'scheduled' : 'sending',
           total_recipients: contacts.length,
           sent_count: 0,
           delivered_count: 0,
@@ -549,11 +584,34 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           ),
         ]),
       );
+      // Structured params (header media, carousel/button values) are
+      // frozen too (migration 043) — a scheduled send runs entirely
+      // server-side and has no other way to learn them.
+      const frozenHeaderType = payload.template.header_type;
+      const frozenHeaderMediaUrl = payload.headerMediaUrl?.trim();
+      const freezeMessageParams = (contact: Contact): SendTimeParams => {
+        const p = resolveSendTimeParams(
+          payload.template,
+          payload.variables,
+          contact,
+          customValueIndex.get(contact.id),
+        );
+        if (
+          frozenHeaderMediaUrl &&
+          (frozenHeaderType === 'image' ||
+            frozenHeaderType === 'video' ||
+            frozenHeaderType === 'document')
+        ) {
+          p.headerMediaUrl = frozenHeaderMediaUrl;
+        }
+        return p;
+      };
       const recipientRows = contacts.map((contact) => ({
         broadcast_id: broadcast.id,
         contact_id: contact.id,
         status: 'pending' as const,
         template_params: paramsByContact.get(contact.id) ?? [],
+        ...(payload.schedule ? { message_params: freezeMessageParams(contact) } : {}),
       }));
 
       for (let i = 0; i < recipientRows.length; i += INSERT_BATCH_SIZE) {
@@ -575,6 +633,30 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         }
         const insertProgress = 20 + Math.round(((i + batch.length) / recipientRows.length) * 10);
         setProgress(insertProgress);
+      }
+
+      // ── Scheduled: hand off to the server and stop here ───────────
+      // Cloud Scheduler/Tasks deliver at the chosen time; nothing in
+      // this tab needs to stay open.
+      if (payload.schedule) {
+        setProgress(60);
+        const res = await fetch(`/api/whatsapp/broadcast/${broadcast.id}/schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            local_datetime: payload.schedule.localDatetime,
+            timezone: payload.schedule.timezone,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new BroadcastScheduleError(
+            broadcast.id,
+            data?.error || `Scheduling failed (HTTP ${res.status})`,
+          );
+        }
+        setProgress(100);
+        return broadcast.id;
       }
 
       // ── Step 4: Fetch recipients back (joined contact) ────────────

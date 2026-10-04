@@ -449,7 +449,22 @@ export interface Deal {
   assignee?: Profile;
 }
 
-export type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed';
+export type BroadcastStatus =
+  | 'draft'
+  | 'scheduled'
+  | 'sending'
+  | 'sent'
+  | 'failed'
+  | 'cancelled';
+
+/** Scheduling-layer pipeline state (migration 043). NULL for immediate sends. */
+export type BroadcastScheduleStatus =
+  | 'scheduled'
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 export type RecipientStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'replied' | 'failed';
 
 export interface Broadcast {
@@ -474,6 +489,29 @@ export interface Broadcast {
    * send. Added in migration 038.
    */
   delivery_locked_at?: string | null;
+  /** Scheduling (migration 043). */
+  timezone?: string;
+  template_id?: string | null;
+  schedule_status?: BroadcastScheduleStatus | null;
+  schedule_version?: number;
+  scheduler_job_id?: string | null;
+  cloud_task_id?: string | null;
+  queued_at?: string | null;
+  execution_started_at?: string | null;
+  completed_at?: string | null;
+  failed_at?: string | null;
+  cancelled_at?: string | null;
+  execution_attempts?: number;
+  last_error?: string | null;
+  last_error_at?: string | null;
+  execution_result?: {
+    total: number;
+    sent: number;
+    failed: number;
+    pending: number;
+    passes: number;
+    updated_at: string;
+  } | null;
   created_at: string;
 }
 

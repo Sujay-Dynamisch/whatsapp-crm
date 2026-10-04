@@ -1,0 +1,17 @@
+{
+  "name": "wacrm-broadcast-scheduler",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloud Functions that arm and execute WACRM scheduled broadcasts (Cloud Scheduler → Cloud Tasks → WhatsApp).",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "bundle": "node build.mjs",
+    "gcp-build": ""
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

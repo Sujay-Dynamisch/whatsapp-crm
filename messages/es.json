@@ -670,7 +670,8 @@
       "delivered": "Entregado",
       "read": "Leído",
       "replied": "Respondido",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "cancelled": "Cancelada"
     },
     "detail": {
       "backToBroadcasts": "Volver a difusiones",
@@ -718,7 +719,29 @@
       "retryFailed": "Reintentar fallidos ({count})",
       "toastResumeStarted": "Enviando a {count} destinatarios en segundo plano.",
       "toastResumeStartedCapped": "Enviando a {count} destinatarios en segundo plano. Otros {remaining} necesitarán otra ejecución.",
-      "toastResumeFailed": "No se pudo reanudar: {error}"
+      "toastResumeFailed": "No se pudo reanudar: {error}",
+      "schedule": {
+        "title": "Envío programado",
+        "sendsAt": "Se envía {when} ({timezone})",
+        "stateUnscheduled": "Aún no está programada. Elige una hora para programarla.",
+        "stateScheduled": "En espera. Se pondrá en cola 2 minutos antes de la hora programada.",
+        "stateQueued": "En cola para enviarse a la hora exacta.",
+        "stateProcessing": "Enviando…",
+        "stateCompleted": "Completada.",
+        "stateFailed": "Falló: {error}",
+        "stateCancelled": "Cancelada. Reprográmala para enviarla más tarde.",
+        "result": "{sent} enviados · {failed} fallidos · {pending} pendientes",
+        "schedule": "Programar",
+        "reschedule": "Reprogramar",
+        "cancelSchedule": "Cancelar programación",
+        "retry": "Reintentar ahora",
+        "save": "Guardar",
+        "close": "Cerrar",
+        "toastRescheduled": "Programada para {when}",
+        "toastCancelled": "Programación cancelada",
+        "toastRetried": "Reintento en cola para {count} destinatarios",
+        "toastFailed": "Error en la programación: {error}"
+      }
     },
     "new": {
       "title": "Nueva difusión",
@@ -733,7 +756,9 @@
       "toastNotSignedIn": "No has iniciado sesión.",
       "toastNotLinked": "Tu perfil no está vinculado a una cuenta.",
       "toastFailedDraft": "Error al guardar el borrador: {error}",
-      "toastDraftSaved": "Borrador guardado"
+      "toastDraftSaved": "Borrador guardado",
+      "toastScheduled": "Difusión programada para {when}",
+      "toastScheduleFailed": "La difusión se guardó pero no se programó: {error}"
     },
     "wizard": {
       "next": "Siguiente",
@@ -841,7 +866,16 @@
         "estimatedReach": "Alcance estimado",
         "language": "Idioma",
         "confirmTitle": "Confirmar difusión",
-        "confirmDesc": "Estás a punto de enviar esta difusión a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b>. Esta acción no se puede deshacer."
+        "confirmDesc": "Estás a punto de enviar esta difusión a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b>. Esta acción no se puede deshacer.",
+        "modeNow": "Enviar ahora",
+        "modeSchedule": "Programar",
+        "scheduleAt": "Enviar el",
+        "timezone": "Zona horaria",
+        "scheduleHint": "Se enviará desde el servidor a esta hora. Puedes cerrar esta pestaña.",
+        "schedulePastError": "Elige una hora en el futuro.",
+        "scheduleBtn": "Programar difusión",
+        "confirmScheduleTitle": "Confirmar programación",
+        "confirmScheduleDesc": "Esta difusión se enviará a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b> el <b>{when}</b>."
       }
     }
   },

@@ -75,6 +75,24 @@ BEGIN
       'messages.error_code/error_title/error_details are missing — migration 042 did not apply';
   END IF;
 
+  -- Scheduled broadcasts (043). Every Google-side trigger is guarded by
+  -- schedule_version; without the column every guarded UPDATE is a
+  -- PostgREST error, and without 'cancelled' in the status CHECK every
+  -- cancel fails.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'broadcasts'
+      AND column_name IN ('schedule_status', 'schedule_version', 'timezone', 'execution_result')
+  ) <> 4 THEN
+    RAISE EXCEPTION 'broadcasts scheduling columns are missing — migration 043 did not apply';
+  END IF;
+  IF pg_get_constraintdef(
+       (SELECT oid FROM pg_constraint
+        WHERE conname = 'broadcasts_status_check' AND conrelid = 'public.broadcasts'::regclass)
+     ) NOT LIKE '%cancelled%' THEN
+    RAISE EXCEPTION 'broadcasts_status_check does not allow cancelled — migration 043 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

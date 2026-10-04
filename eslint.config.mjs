@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Vendored minified opus-recorder encoder worker (served statically).
     "public/opus/**",
+    // Generated Cloud Function bundles (cloud-functions/*/build.mjs).
+    "cloud-functions/*/dist/**",
+    "cloud-functions/*/node_modules/**",
   ]),
 ]);
 
