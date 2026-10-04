@@ -14,8 +14,41 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Users, Save, CalendarClock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import {
+  DEFAULT_BROADCAST_TIMEZONE,
+  utcToZonedLocal,
+  zonedLocalToUtc,
+} from '@/lib/broadcast-scheduling/time';
+
+/** Offered in the picker; the browser's own zone is added when missing. */
+const COMMON_TIMEZONES = [
+  'Asia/Kolkata',
+  'Asia/Dubai',
+  'Asia/Singapore',
+  'Asia/Jakarta',
+  'Asia/Tokyo',
+  'Asia/Seoul',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Madrid',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'America/Mexico_City',
+  'America/Sao_Paulo',
+  'Australia/Sydney',
+  'UTC',
+];
+
+function browserTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
 
 interface AudienceConfig {
   type: string;
@@ -29,6 +62,8 @@ interface Step4Props {
   template: MessageTemplate;
   audience: AudienceConfig;
   onSend: () => void;
+  /** Present when server-side scheduling is offered. */
+  onSchedule?: (localDatetime: string, timezone: string) => void;
   onSaveDraft?: () => void;
   onBack: () => void;
   isProcessing: boolean;
@@ -45,6 +80,7 @@ export function Step4ScheduleSend({
   template,
   audience,
   onSend,
+  onSchedule,
   onSaveDraft,
   onBack,
   isProcessing,
@@ -58,6 +94,32 @@ export function Step4ScheduleSend({
   const [showConfirm, setShowConfirm] = useState(false);
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
   const [loadingReach, setLoadingReach] = useState(true);
+  const [mode, setMode] = useState<'now' | 'schedule'>('now');
+  const [timezone, setTimezone] = useState(DEFAULT_BROADCAST_TIMEZONE);
+  const [localDatetime, setLocalDatetime] = useState(() =>
+    utcToZonedLocal(new Date(Date.now() + 60 * 60 * 1000), DEFAULT_BROADCAST_TIMEZONE),
+  );
+
+  const ownZone = browserTimeZone();
+  const timezoneOptions =
+    ownZone && !COMMON_TIMEZONES.includes(ownZone)
+      ? [...COMMON_TIMEZONES, ownZone]
+      : COMMON_TIMEZONES;
+
+  const isScheduling = mode === 'schedule' && Boolean(onSchedule);
+  let scheduledInstant: Date | null = null;
+  if (isScheduling) {
+    try {
+      scheduledInstant = zonedLocalToUtc(localDatetime, timezone);
+    } catch {
+      scheduledInstant = null;
+    }
+  }
+  // Evaluated at render; the server re-validates with a small tolerance.
+  const nowMs = Date.now();
+  const scheduleInPast =
+    isScheduling && (!scheduledInstant || scheduledInstant.getTime() < nowMs);
+  const scheduledLabel = `${localDatetime.replace('T', ' ')} (${timezone})`;
 
   useEffect(() => {
     async function calculateReach() {
@@ -152,6 +214,75 @@ export function Step4ScheduleSend({
         </div>
       </div>
 
+      {/* Send now vs. schedule */}
+      {onSchedule && (
+        <div className="space-y-3 rounded-xl border border-border bg-card/50 p-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === 'now' ? 'default' : 'outline'}
+              onClick={() => setMode('now')}
+              disabled={isProcessing}
+            >
+              <Send className="h-3.5 w-3.5" />
+              {t('scheduleSend.modeNow')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === 'schedule' ? 'default' : 'outline'}
+              onClick={() => setMode('schedule')}
+              disabled={isProcessing}
+            >
+              <CalendarClock className="h-3.5 w-3.5" />
+              {t('scheduleSend.modeSchedule')}
+            </Button>
+          </div>
+
+          {mode === 'schedule' && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs text-muted-foreground">
+                  {t('scheduleSend.scheduleAt')}
+                </label>
+                <Input
+                  type="datetime-local"
+                  value={localDatetime}
+                  onChange={(e) => setLocalDatetime(e.target.value)}
+                  className="border-border bg-muted text-foreground"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-muted-foreground">
+                  {t('scheduleSend.timezone')}
+                </label>
+                <select
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="h-8 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground"
+                >
+                  {timezoneOptions.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p
+                className={`text-xs sm:col-span-2 ${
+                  scheduleInPast ? 'text-destructive' : 'text-muted-foreground'
+                }`}
+              >
+                {scheduleInPast
+                  ? t('scheduleSend.schedulePastError')
+                  : t('scheduleSend.scheduleHint')}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Processing overlay with live numbers */}
       {isProcessing && (
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
@@ -225,25 +356,38 @@ export function Step4ScheduleSend({
           <DialogTrigger
             render={
               <Button
-                disabled={!name.trim() || isProcessing}
+                disabled={!name.trim() || isProcessing || scheduleInPast}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               />
             }
           >
-            <Send className="h-4 w-4" />
-            {t('scheduleSend.sendNow')}
+            {isScheduling ? <CalendarClock className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+            {isScheduling ? t('scheduleSend.scheduleBtn') : t('scheduleSend.sendNow')}
           </DialogTrigger>
           <DialogContent className="border-border bg-popover sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-popover-foreground">{t('scheduleSend.confirmTitle')}</DialogTitle>
+              <DialogTitle className="text-popover-foreground">
+                {isScheduling
+                  ? t('scheduleSend.confirmScheduleTitle')
+                  : t('scheduleSend.confirmTitle')}
+              </DialogTitle>
               <DialogDescription className="text-muted-foreground">
-                {t.rich('scheduleSend.confirmDesc', {
-                  count: estimatedReach,
-                  template: template.name,
-                  b: (chunks) => (
-                    <span className="font-medium text-popover-foreground">{chunks}</span>
-                  ),
-                })}
+                {isScheduling
+                  ? t.rich('scheduleSend.confirmScheduleDesc', {
+                      count: estimatedReach,
+                      template: template.name,
+                      when: scheduledLabel,
+                      b: (chunks) => (
+                        <span className="font-medium text-popover-foreground">{chunks}</span>
+                      ),
+                    })
+                  : t.rich('scheduleSend.confirmDesc', {
+                      count: estimatedReach,
+                      template: template.name,
+                      b: (chunks) => (
+                        <span className="font-medium text-popover-foreground">{chunks}</span>
+                      ),
+                    })}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -257,12 +401,13 @@ export function Step4ScheduleSend({
               <Button
                 onClick={() => {
                   setShowConfirm(false);
-                  onSend();
+                  if (isScheduling && onSchedule) onSchedule(localDatetime, timezone);
+                  else onSend();
                 }}
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                <Send className="h-4 w-4" />
-                {t('scheduleSend.sendNow')}
+                {isScheduling ? <CalendarClock className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                {isScheduling ? t('scheduleSend.scheduleBtn') : t('scheduleSend.sendNow')}
               </Button>
             </DialogFooter>
           </DialogContent>

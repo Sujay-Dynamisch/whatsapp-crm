@@ -1,0 +1,7 @@
+# Only the prebuilt bundle and package.json are uploaded. `npm run bundle`
+# must run before `gcloud functions deploy` (deploy.sh does this).
+src/
+node_modules/
+build.mjs
+deploy.sh
+*.md

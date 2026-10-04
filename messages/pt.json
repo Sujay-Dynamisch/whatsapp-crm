@@ -670,7 +670,8 @@
       "delivered": "Entregue",
       "read": "Lida",
       "replied": "Respondida",
-      "unknown": "Desconhecido"
+      "unknown": "Desconhecido",
+      "cancelled": "Cancelada"
     },
     "detail": {
       "backToBroadcasts": "Voltar aos disparos",
@@ -718,7 +719,29 @@
       "retryFailed": "Tentar novamente os que falharam ({count})",
       "toastResumeStarted": "Enviando para {count} destinatários em segundo plano.",
       "toastResumeStartedCapped": "Enviando para {count} destinatários em segundo plano. Outros {remaining} precisarão de mais uma execução.",
-      "toastResumeFailed": "Não foi possível retomar: {error}"
+      "toastResumeFailed": "Não foi possível retomar: {error}",
+      "schedule": {
+        "title": "Envio agendado",
+        "sendsAt": "Envia {when} ({timezone})",
+        "stateUnscheduled": "Ainda não agendada. Escolha um horário para agendar.",
+        "stateScheduled": "Aguardando. Entra na fila 2 minutos antes do horário agendado.",
+        "stateQueued": "Na fila para envio no horário exato.",
+        "stateProcessing": "Enviando…",
+        "stateCompleted": "Concluída.",
+        "stateFailed": "Falhou: {error}",
+        "stateCancelled": "Cancelada. Reagende para enviar mais tarde.",
+        "result": "{sent} enviados · {failed} com falha · {pending} pendentes",
+        "schedule": "Agendar",
+        "reschedule": "Reagendar",
+        "cancelSchedule": "Cancelar agendamento",
+        "retry": "Tentar novamente",
+        "save": "Salvar",
+        "close": "Fechar",
+        "toastRescheduled": "Agendada para {when}",
+        "toastCancelled": "Agendamento cancelado",
+        "toastRetried": "Nova tentativa na fila para {count} destinatários",
+        "toastFailed": "Falha no agendamento: {error}"
+      }
     },
     "new": {
       "title": "Novo disparo",
@@ -733,7 +756,9 @@
       "toastNotSignedIn": "Você não está conectado.",
       "toastNotLinked": "Seu perfil não está vinculado a uma conta.",
       "toastFailedDraft": "Falha ao salvar o rascunho: {error}",
-      "toastDraftSaved": "Rascunho salvo"
+      "toastDraftSaved": "Rascunho salvo",
+      "toastScheduled": "Transmissão agendada para {when}",
+      "toastScheduleFailed": "Transmissão salva, mas não agendada: {error}"
     },
     "wizard": {
       "next": "Avançar",
@@ -841,7 +866,16 @@
         "estimatedReach": "Alcance estimado",
         "language": "Idioma",
         "confirmTitle": "Confirmar disparo",
-        "confirmDesc": "Você está prestes a enviar este disparo para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b>. Esta ação não pode ser desfeita."
+        "confirmDesc": "Você está prestes a enviar este disparo para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b>. Esta ação não pode ser desfeita.",
+        "modeNow": "Enviar agora",
+        "modeSchedule": "Agendar",
+        "scheduleAt": "Enviar em",
+        "timezone": "Fuso horário",
+        "scheduleHint": "Será enviada pelo servidor neste horário. Você pode fechar esta aba.",
+        "schedulePastError": "Escolha um horário no futuro.",
+        "scheduleBtn": "Agendar transmissão",
+        "confirmScheduleTitle": "Confirmar agendamento",
+        "confirmScheduleDesc": "Esta transmissão será enviada para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b> em <b>{when}</b>."
       }
     }
   },

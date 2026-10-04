@@ -22,6 +22,7 @@ import { BroadcastError, type BroadcastPlan } from '@/lib/whatsapp/broadcast-cor
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
+import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder';
 
 /** Which recipients a resume pass picks up. */
 export type ResumeScope = 'pending' | 'failed' | 'all';
@@ -118,6 +119,7 @@ export interface ResumePlan {
 interface RecipientRow {
   id: string;
   template_params: unknown;
+  message_params?: unknown;
   contact: { phone?: string | null } | { phone?: string | null }[] | null;
 }
 
@@ -158,7 +160,7 @@ export async function planBroadcastResume(
   const statuses = scopeStatuses(scope);
   const { data: rawRows, error: recError } = await db
     .from('broadcast_recipients')
-    .select('id, template_params, contact:contacts(phone)')
+    .select('id, template_params, message_params, contact:contacts(phone)')
     .eq('broadcast_id', broadcastId)
     .in('status', statuses)
     // Oldest first, so repeated capped passes chew through the backlog
@@ -245,6 +247,12 @@ export async function planBroadcastResume(
       params: Array.isArray(row.template_params)
         ? row.template_params.filter((p): p is string => typeof p === 'string')
         : [],
+      // Frozen by the wizard (migration 043); carries header media and
+      // carousel values the positional params can't express.
+      messageParams:
+        row.message_params && typeof row.message_params === 'object'
+          ? (row.message_params as SendTimeParams)
+          : undefined,
     })),
     rejected: 0,
   };

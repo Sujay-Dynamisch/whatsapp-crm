@@ -10,8 +10,18 @@ import { Step1ChooseTemplate } from '@/components/broadcasts/step1-choose-templa
 import { Step2SelectAudience } from '@/components/broadcasts/step2-select-audience';
 import { Step3Personalize } from '@/components/broadcasts/step3-personalize';
 import { Step4ScheduleSend } from '@/components/broadcasts/step4-schedule-send';
-import { useBroadcastSending } from '@/hooks/use-broadcast-sending';
+import {
+  BroadcastScheduleError,
+  useBroadcastSending,
+} from '@/hooks/use-broadcast-sending';
 import { Check } from 'lucide-react';
+
+/**
+ * Server-side scheduling needs the Google Cloud setup in
+ * docs/scheduled-broadcasts.md; without it the option stays hidden.
+ */
+const SCHEDULING_ENABLED =
+  process.env.NEXT_PUBLIC_BROADCAST_SCHEDULING_ENABLED === 'true';
 import { useTranslations } from 'next-intl';
 
 const steps = [
@@ -53,6 +63,41 @@ export default function NewBroadcastPage() {
   >({});
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
   const [name, setName] = useState('');
+
+  async function handleSchedule(localDatetime: string, timezone: string) {
+    if (!template) return;
+
+    try {
+      const broadcastId = await createAndSendBroadcast({
+        name,
+        template,
+        audience: {
+          type: audience.type,
+          tagIds: audience.tagIds,
+          customField: audience.customField,
+          csvContacts: audience.csvContacts,
+          excludeTagIds: audience.excludeTagIds,
+        },
+        variables,
+        headerMediaUrl,
+        schedule: { localDatetime, timezone },
+      });
+      toast.success(
+        t('toastScheduled', { when: `${localDatetime.replace('T', ' ')} (${timezone})` }),
+      );
+      router.push(`/broadcasts/${broadcastId}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Scheduling failed';
+      console.error('Broadcast scheduling failed:', err);
+      if (err instanceof BroadcastScheduleError) {
+        // Planned but not scheduled — the detail page can schedule it.
+        toast.error(t('toastScheduleFailed', { error: message }));
+        router.push(`/broadcasts/${err.broadcastId}`);
+        return;
+      }
+      toast.error(message);
+    }
+  }
 
   async function handleSend() {
     if (!template) return;
@@ -230,6 +275,7 @@ export default function NewBroadcastPage() {
               template={template}
               audience={audience}
               onSend={handleSend}
+              onSchedule={SCHEDULING_ENABLED ? handleSchedule : undefined}
               onSaveDraft={handleSaveDraft}
               onBack={() => setCurrentStep(2)}
               isProcessing={isProcessing}
