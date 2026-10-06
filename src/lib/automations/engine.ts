@@ -24,6 +24,7 @@ import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
+import { accountHasFeature } from '@/lib/features-server'
 
 // ------------------------------------------------------------
 // Public API
@@ -67,6 +68,9 @@ export interface DispatchInput {
 export async function runAutomationsForTrigger(input: DispatchInput): Promise<void> {
   try {
     const db = supabaseAdmin()
+
+    // Switched off for this account by the system admin (migration 045).
+    if (!(await accountHasFeature(db, input.accountId, 'automations'))) return
 
     // Tenant isolation. `contactId` can be caller-supplied (the manual
     // POST /api/automations/engine entrypoint reads it straight from the
@@ -147,6 +151,14 @@ export async function resumePendingExecution(pending: {
 
   if (error || !automation) {
     console.error('[automations] resume: missing automation', pending.automation_id, error)
+    await markPending(pending.id, 'failed')
+    return
+  }
+
+  // A run parked at a wait step before the admin switched automations
+  // off must not wake up and send (migration 045).
+  if (!(await accountHasFeature(db, (automation as Automation).account_id, 'automations'))) {
+    console.warn('[automations] resume skipped: automations disabled for account', pending.account_id)
     await markPending(pending.id, 'failed')
     return
   }

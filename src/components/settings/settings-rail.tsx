@@ -4,9 +4,11 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
 import {
   RAIL_GROUPS,
   SECTION_META,
+  SECTION_FEATURE,
   SETTINGS_SECTIONS,
   type SettingsSection,
 } from './settings-sections';
@@ -32,6 +34,7 @@ export function SettingsRail({
   hints?: Partial<Record<SettingsSection, ReactNode>>;
 }) {
   const t = useTranslations('Settings');
+  const { hasFeature } = useAuth();
   const activeRef = useRef<HTMLButtonElement>(null);
 
   // When horizontal (mobile), keep the active chip in view. On desktop
@@ -56,7 +59,10 @@ export function SettingsRail({
       )}
     >
       {RAIL_GROUPS.map(({ label, group }) => {
-        const items = SETTINGS_SECTIONS.filter(
+        const items = SETTINGS_SECTIONS.filter((s) => {
+          const feature = SECTION_FEATURE[s];
+          return !feature || hasFeature(feature);
+        }).filter(
           (s) => SECTION_META[s].group === group,
         );
         return (

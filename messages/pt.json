@@ -40,7 +40,8 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
-    "menuSignOut": "Sair"
+    "menuSignOut": "Sair",
+    "buttonClicks": "Cliques em botões"
   },
   "Header": {
     "dashboard": "Painel",
@@ -1887,7 +1888,9 @@
       "saveSuccess": "Assistente de IA salvo.",
       "saveFailed": "Falha ao salvar.",
       "removeSuccess": "Configuração de IA removida.",
-      "removeFailed": "Falha ao remover."
+      "removeFailed": "Falha ao remover.",
+      "freeTier": "nível gratuito",
+      "getKey": "Obter uma chave da {provider} →"
     },
     "aiKnowledge": {
       "loadFailed": "Falha ao carregar a base de conhecimento",
@@ -2061,5 +2064,62 @@
   },
   "DashboardShell": {
     "loading": "Carregando..."
+  },
+  "WindowKeepalive": {
+    "title": "Manter a janela de 24 horas aberta",
+    "description": "O WhatsApp só permite mensagens normais até 24 horas após a última mensagem do cliente. Envie uma mensagem automática pouco antes de a janela fechar, para que uma resposta do cliente a reabra por mais 24 horas.",
+    "enable": "Enviar uma mensagem antes de a janela fechar",
+    "enableDesc": "Enviada cerca de {hour} horas após a última mensagem do cliente.",
+    "message": "Mensagem de acompanhamento",
+    "lead": "Minutos antes de a janela fechar",
+    "leadDesc": "Entre 15 e 240. Padrão 60 (enviada na hora 23).",
+    "quiet": "Pular se alguém enviou mensagem nos últimos (minutos)",
+    "quietDesc": "Uma mensagem recente de um agente ou bot já serve como lembrete.",
+    "rules": "Enviada no máximo uma vez por mensagem do cliente. Nunca para conversas fechadas ou contatos com a etiqueta unsubscribe.",
+    "save": "Salvar",
+    "toastSaved": "Configurações salvas",
+    "toastFailed": "Não foi possível salvar: {error}"
+  },
+  "FeatureGate": {
+    "title": "Não disponível na sua conta",
+    "description": "{feature} não está habilitado para a sua conta. Fale com o administrador para ativá-lo.",
+    "dismiss": "Fechar"
+  },
+  "ButtonClicks": {
+    "title": "Cliques em botões",
+    "subtitle": "Quais botões os clientes tocam nos seus modelos, carrosséis e mensagens interativas.",
+    "lastDays": "Últimos {days} dias",
+    "retry": "Tentar novamente",
+    "totalClicks": "Total de cliques",
+    "uniqueContacts": "Contatos únicos",
+    "fromBroadcasts": "De transmissões",
+    "fromChats": "De conversas e bots",
+    "emptyTitle": "Nenhum clique ainda",
+    "emptyHint": "Envie um modelo com botões de resposta rápida. Os toques aparecem aqui em segundos. O WhatsApp não informa botões de link nem de telefone.",
+    "byBroadcast": "Por transmissão",
+    "byButton": "Por botão",
+    "recent": "Cliques recentes",
+    "broadcast": "Transmissão",
+    "template": "Modelo",
+    "sent": "Enviados",
+    "clicks": "Cliques",
+    "uniqueClickers": "Contatos que clicaram",
+    "clickRate": "Taxa de cliques",
+    "button": "Botão",
+    "lastClick": "Último clique",
+    "contact": "Contato",
+    "source": "Origem",
+    "time": "Hora",
+    "unknownContact": "Contato desconhecido",
+    "card": "cartão {n}",
+    "sourceBroadcast": "Transmissão",
+    "sourceInbox": "Caixa de entrada",
+    "sourceBot": "Bot / fluxo",
+    "sourceUnknown": "Desconhecido",
+    "kind": {
+      "template_quick_reply": "Botão de modelo",
+      "interactive_button": "Botão interativo",
+      "interactive_list": "Opção de lista"
+    }
   }
 }

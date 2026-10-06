@@ -59,6 +59,7 @@ import {
   type StartNodeConfig,
   type KeywordTriggerConfig,
 } from "./types";
+import { accountHasFeature } from "@/lib/features-server";
 
 // ============================================================
 // Pure helpers — extracted so engine.test.ts can exercise them
@@ -923,6 +924,12 @@ export async function dispatchInboundToFlows(
 ): Promise<DispatchInboundResult> {
   const db = supabaseAdmin();
   try {
+    // Switched off for this account by the system admin (migration
+    // 045): not consumed, so the webhook falls through to the others.
+    if (!(await accountHasFeature(db, input.accountId, "flows"))) {
+      return { consumed: false, outcome: "no_match" };
+    }
+
     const activeRun = await loadActiveRunForContact(
       db,
       input.accountId,

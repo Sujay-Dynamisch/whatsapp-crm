@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AiPlayground } from '@/components/agents/ai-playground';
 import { AiUsageCard } from '@/components/agents/ai-usage';
 import { AiConfig } from '@/components/settings/ai-config';
+import { WindowKeepaliveCard } from '@/components/agents/window-keepalive-card';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 
@@ -14,7 +15,7 @@ type Tab = 'playground' | 'setup' | 'usage';
 
 export default function AgentsPage() {
   const t = useTranslations('Agents');
-  const { accountRole } = useAuth();
+  const { accountRole, hasFeature } = useAuth();
   const canViewUsage = accountRole ? canEditSettings(accountRole) : false;
   const [tab, setTab] = useState<Tab>('playground');
   const [decided, setDecided] = useState(false);
@@ -101,6 +102,7 @@ export default function AgentsPage() {
 
           <TabsContent value="setup" className="mt-4">
             <AiConfig />
+            {hasFeature('window_keepalive') && <WindowKeepaliveCard />}
           </TabsContent>
 
           {canViewUsage && (

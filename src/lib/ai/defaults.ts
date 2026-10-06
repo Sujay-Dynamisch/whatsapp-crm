@@ -1,4 +1,5 @@
 import type { AiProvider } from './types'
+import { AI_PROVIDER_INFO, AI_PROVIDERS } from './providers/registry'
 
 // ============================================================
 // Tunables + prompt scaffold for the AI reply assistant.
@@ -10,10 +11,9 @@ import type { AiProvider } from './types'
  * BYO-key forker may want a cheaper/newer one — so these are only the
  * starting point, never a hard allow-list.
  */
-export const AI_PROVIDER_DEFAULT_MODEL: Record<AiProvider, string> = {
-  openai: 'gpt-5.4-mini',
-  anthropic: 'claude-haiku-4-5-20251001',
-}
+export const AI_PROVIDER_DEFAULT_MODEL = Object.fromEntries(
+  AI_PROVIDERS.map((p) => [p, AI_PROVIDER_INFO[p].defaultModel]),
+) as Record<AiProvider, string>
 
 /**
  * Sentinel the model is instructed to emit (in auto-reply mode) when it

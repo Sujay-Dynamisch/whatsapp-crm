@@ -13,6 +13,7 @@ import {
 } from '@/lib/flows/meta-send'
 import { sendTypingIndicator } from '@/lib/whatsapp/meta-api'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import { accountHasFeature } from '@/lib/features-server'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -60,6 +61,9 @@ export async function dispatchInboundToAiReply(
 
   try {
     const db = supabaseAdmin()
+
+    // Switched off for this account by the system admin (migration 045).
+    if (!(await accountHasFeature(db, accountId, 'ai_agents'))) return
 
     const config = await loadAiConfig(db, accountId)
     if (!config || !config.autoReplyEnabled) return

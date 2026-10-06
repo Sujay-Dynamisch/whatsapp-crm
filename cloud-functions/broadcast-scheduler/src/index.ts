@@ -10,6 +10,8 @@
 // service account holds roles/run.invoker. The optional shared-secret
 // header is defence in depth on top of that.
 //
+//   windowKeepalive     ← Cloud Scheduler (*/5 min) — 24h-window check-ins
+//
 // Plain exported (req, res) handlers — the Node runtime wraps them in
 // the Functions Framework automatically, so no runtime dependency.
 // Bundled with esbuild from the app's own src/ (see build.mjs).
@@ -32,6 +34,11 @@ import {
   isExecutePayload,
   type HandlerOutcome,
 } from '@/lib/broadcast-scheduling/execute';
+import { runWindowKeepalive } from '@/lib/conversations/window-keepalive';
+
+// Shared app modules (flows/ai admin clients used by engineSendText)
+// read the Next.js variable name.
+process.env.NEXT_PUBLIC_SUPABASE_URL ??= process.env.SUPABASE_URL;
 
 interface Req {
   method?: string;
@@ -161,6 +168,19 @@ export async function reconcileBroadcasts(req: Req, res: Res): Promise<void> {
     res.status(200).json(report);
   } catch (err) {
     console.error('[reconcileBroadcasts]', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'internal' });
+  }
+}
+
+export async function windowKeepalive(req: Req, res: Res): Promise<void> {
+  try {
+    const s = guard(req, res);
+    if (!s) return;
+    const report = await runWindowKeepalive(s.db);
+    console.log(JSON.stringify({ fn: 'windowKeepalive', ...report }));
+    res.status(200).json(report);
+  } catch (err) {
+    console.error('[windowKeepalive]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'internal' });
   }
 }

@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { featureDisabledBody, featureForPath, isFeatureEnabled } from '@/lib/features'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -100,6 +101,29 @@ export async function middleware(request: NextRequest) {
     return withRefreshedCookies(
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )
+  }
+
+  // Feature entitlements (migration 045): pages and APIs of a feature
+  // the system admin switched off for this account. Only gated paths
+  // pay for the lookup. Fails open on a lookup error — the database
+  // policies and the background workers enforce the same rule, so an
+  // outage here can't unlock writes.
+  const feature = user ? featureForPath(request.nextUrl.pathname) : null
+  if (feature) {
+    const { data: disabled, error } = await supabase.rpc('my_disabled_features')
+    if (error) {
+      console.error('[middleware] feature lookup failed:', error.message)
+    } else if (!isFeatureEnabled(disabled as string[] | null, feature)) {
+      if (request.nextUrl.pathname.startsWith('/api/')) {
+        return withRefreshedCookies(
+          NextResponse.json(featureDisabledBody(feature), { status: 403 })
+        )
+      }
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      url.search = `?feature_disabled=${feature}`
+      return withRefreshedCookies(NextResponse.redirect(url))
+    }
   }
 
   return supabaseResponse

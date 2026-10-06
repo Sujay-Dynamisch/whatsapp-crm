@@ -9,6 +9,7 @@ import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
 import { embedTexts } from '@/lib/ai/embeddings'
 import { AiError, type AiProvider } from '@/lib/ai/types'
+import { AI_PROVIDERS, isAiProvider } from '@/lib/ai/providers/registry'
 
 function bad(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
@@ -78,8 +79,8 @@ export async function POST(request: Request) {
     if (!body || typeof body !== 'object') return bad('Invalid request body')
 
     const provider = body.provider as AiProvider
-    if (provider !== 'openai' && provider !== 'anthropic') {
-      return bad('provider must be "openai" or "anthropic"')
+    if (!isAiProvider(provider)) {
+      return bad(`provider must be one of: ${AI_PROVIDERS.join(', ')}`)
     }
     const model = typeof body.model === 'string' ? body.model.trim() : ''
     if (!model) return bad('model is required')
