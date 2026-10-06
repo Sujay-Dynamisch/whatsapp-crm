@@ -34,7 +34,7 @@ const steps = [
 export default function NewBroadcastPage() {
   const router = useRouter();
   const t = useTranslations('Broadcasts.new');
-  const { accountId } = useAuth();
+  const { accountId, hasFeature } = useAuth();
   const {
     createAndSendBroadcast,
     isProcessing,
@@ -275,7 +275,11 @@ export default function NewBroadcastPage() {
               template={template}
               audience={audience}
               onSend={handleSend}
-              onSchedule={SCHEDULING_ENABLED ? handleSchedule : undefined}
+              onSchedule={
+                SCHEDULING_ENABLED && hasFeature('broadcast_scheduling')
+                  ? handleSchedule
+                  : undefined
+              }
               onSaveDraft={handleSaveDraft}
               onBack={() => setCurrentStep(2)}
               isProcessing={isProcessing}

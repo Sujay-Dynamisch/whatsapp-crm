@@ -35,6 +35,8 @@ import { hashApiKey, looksLikeApiKey } from '@/lib/api-keys/keys';
 import { hasScope, type ApiScope } from '@/lib/api-keys/scopes';
 import { forbidden, rateLimited, unauthorized } from '@/lib/api/v1/respond';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { featureDisabledBody, isFeatureEnabled, type Feature } from '@/lib/features';
+import { loadDisabledFeatures } from '@/lib/features-server';
 
 export interface ApiKeyContext {
   /** Discriminant — lets shared logic tell key auth from cookie auth. */
@@ -105,11 +107,23 @@ export async function requireApiKey(
     throw forbidden(`This API key is missing the '${scope}' scope`);
   }
 
+  // Feature entitlements (migration 045). The API as a whole is
+  // 'api_access'; broadcast endpoints additionally need 'broadcasts'.
+  const admin = supabaseAdmin();
+  const disabled = await loadDisabledFeatures(admin, row.account_id);
+  const needed: Feature[] = ['api_access'];
+  if (scope?.startsWith('broadcasts:')) needed.push('broadcasts');
+  for (const feature of needed) {
+    if (!isFeatureEnabled(disabled, feature)) {
+      throw forbidden(featureDisabledBody(feature).error);
+    }
+  }
+
   touchLastUsed(row.id);
 
   return {
     authType: 'api_key',
-    supabase: supabaseAdmin(),
+    supabase: admin,
     accountId: row.account_id,
     keyId: row.id,
     scopes: row.scopes,

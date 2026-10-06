@@ -8,6 +8,8 @@ import {
 import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults'
 import { generateOpenAi } from './providers/openai'
 import { generateAnthropic } from './providers/anthropic'
+import { generateOpenAiCompatible } from './providers/openai-compatible'
+import { AI_PROVIDER_INFO, isAiProvider } from './providers/registry'
 
 export interface GenerateArgs {
   config: AiConfig
@@ -33,19 +35,29 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
     timeoutMs,
   }
 
+  const info = isAiProvider(config.provider) ? AI_PROVIDER_INFO[config.provider] : null
+  if (!info) {
+    throw new AiError(`Unsupported AI provider: ${config.provider}`, {
+      code: 'unsupported_provider',
+      status: 400,
+    })
+  }
+
   let result: { text: string; usage: AiUsage | null }
-  switch (config.provider) {
+  switch (info.adapter) {
     case 'openai':
       result = await generateOpenAi(providerArgs)
       break
     case 'anthropic':
       result = await generateAnthropic(providerArgs)
       break
-    default:
-      throw new AiError(`Unsupported AI provider: ${config.provider}`, {
-        code: 'unsupported_provider',
-        status: 400,
+    case 'openai_compatible':
+      result = await generateOpenAiCompatible({
+        ...providerArgs,
+        baseUrl: info.baseUrl!,
+        providerLabel: info.label,
       })
+      break
   }
 
   return parseGeneration(result.text, result.usage)

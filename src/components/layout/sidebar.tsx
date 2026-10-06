@@ -17,6 +17,7 @@ import {
   LogOut,
   MessageSquare,
   Radio,
+  MousePointerClick,
   Settings,
   Shield,
   ShieldCheck,
@@ -91,6 +92,8 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /** Hidden when the system admin switched this feature off (migration 045). */
+  feature?: Feature;
 }
 
 const navItems: NavItem[] = [
@@ -98,11 +101,12 @@ const navItems: NavItem[] = [
   { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
   { href: "/notifications", labelKey: "notifications", icon: Bell },
   { href: "/contacts", labelKey: "contacts", icon: Users },
-  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
-  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
-  { href: "/automations", labelKey: "automations", icon: Zap },
-  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
-  { href: "/agents", labelKey: "aiAgents", icon: Bot },
+  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch, feature: "pipelines" },
+  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio, feature: "broadcasts" },
+  { href: "/button-clicks", labelKey: "buttonClicks", icon: MousePointerClick, feature: "button_analytics" },
+  { href: "/automations", labelKey: "automations", icon: Zap, feature: "automations" },
+  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, feature: "flows" },
+  { href: "/agents", labelKey: "aiAgents", icon: Bot, feature: "ai_agents" },
 ];
 
 const bottomNavItems = [
@@ -114,13 +118,14 @@ interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
 }
+import type { Feature } from "@/lib/features";
 
 import { useTranslations } from "next-intl";
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
-  const { user, profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const { user, profile, profileLoading, account, accountRole, signOut, hasFeature } = useAuth();
   const isSysAdmin = isSystemAdmin(user?.email, profile?.role);
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
@@ -218,7 +223,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {navItems.filter((item) => !item.feature || hasFeature(item.feature)).map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));

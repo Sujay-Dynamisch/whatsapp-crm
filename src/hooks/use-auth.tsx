@@ -20,6 +20,7 @@ import {
   isAccountRole,
   type AccountRole,
 } from "@/lib/auth/roles";
+import { isFeatureEnabled, type Feature } from "@/lib/features";
 
 interface Profile {
   id: string;
@@ -43,6 +44,8 @@ interface AccountSummary {
   /** Default deal currency (ISO-4217). NOT NULL DEFAULT 'USD' in the
    *  DB (migration 021); narrowed to DEFAULT_CURRENCY when absent. */
   default_currency: string;
+  /** Feature keys the system admin switched off (migration 045). */
+  disabled_features: string[];
 }
 
 /**
@@ -130,6 +133,12 @@ interface AuthContextValue {
   canEditSettings: boolean;
   /** True if the caller can send messages and edit operational data (agent+). */
   canSendMessages: boolean;
+  /**
+   * Whether a gated feature is enabled for this account (migration 045).
+   * True while loading so nav items don't flicker; the server enforces
+   * the real rule regardless of what the UI shows.
+   */
+  hasFeature: (feature: Feature) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -235,13 +244,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // account name lookup itself can't.
         let accountRow: AccountSummary | null = null;
         if (data.account_id) {
-          const { data: account, error: accountErr } = await supabase
-            .from("accounts")
-            // default_currency added in migration 021; narrowed to the
-            // USD fallback below for older schemas where it reads null.
-            .select("id, name, default_currency")
-            .eq("id", data.account_id)
-            .maybeSingle();
+          const loadAccount = (columns: string) =>
+            supabase
+              .from("accounts")
+              .select(columns)
+              .eq("id", data.account_id)
+              .maybeSingle<{
+                id: string;
+                name: string;
+                default_currency: string | null;
+                disabled_features?: string[] | null;
+              }>();
+          // default_currency added in migration 021; narrowed to the
+          // USD fallback below for older schemas where it reads null.
+          // disabled_features (045) is retried without, so a database
+          // that hasn't run 045 yet keeps working with everything on.
+          let { data: account, error: accountErr } = await loadAccount(
+            "id, name, default_currency, disabled_features",
+          );
+          if (accountErr && /disabled_features/.test(accountErr.message)) {
+            ({ data: account, error: accountErr } = await loadAccount(
+              "id, name, default_currency",
+            ));
+          }
           if (accountErr) {
             console.error("[AuthProvider] fetchAccount error:", {
               message: accountErr.message,
@@ -254,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id: account.id,
               name: account.name,
               default_currency: account.default_currency ?? DEFAULT_CURRENCY,
+              disabled_features: account.disabled_features ?? [],
             };
           }
         }
@@ -413,6 +439,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [profile?.account_role, profile?.account_id]);
 
+  const disabledFeatures = account?.disabled_features;
+  const hasFeature = useCallback(
+    (feature: Feature) => isFeatureEnabled(disabledFeatures, feature),
+    [disabledFeatures],
+  );
+
   // Signed out is not a broken account — the shell redirects to /login
   // before anything reads this.
   const accountStatus: AccountStatus = !user
@@ -439,6 +471,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accountStatus,
         accountStatusDetail: statusDetail,
         ...derived,
+        hasFeature,
       }}
     >
       {children}
@@ -481,6 +514,7 @@ export function useAuth(): AuthContextValue {
       canManageMembers: false,
       canEditSettings: false,
       canSendMessages: false,
+      hasFeature: () => true,
     };
   }
   return ctx;

@@ -18,8 +18,10 @@ import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel'
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
+import { FeatureUnavailable } from '@/components/layout/feature-gate';
 import {
   resolveSection,
+  SECTION_FEATURE,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
 
@@ -42,7 +44,7 @@ export default function SettingsPage() {
 function SettingsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { defaultCurrency } = useAuth();
+  const { defaultCurrency, hasFeature } = useAuth();
   const { mode } = useTheme();
   const t = useTranslations('Settings');
 
@@ -96,7 +98,13 @@ function SettingsPageInner() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
         <SettingsRail active={section} onSelect={go} hints={hints} />
-        <div className="min-w-0">{panel[section]}</div>
+        <div className="min-w-0">
+          {SECTION_FEATURE[section] && !hasFeature(SECTION_FEATURE[section]!) ? (
+            <FeatureUnavailable feature={SECTION_FEATURE[section]!} />
+          ) : (
+            panel[section]
+          )}
+        </div>
       </div>
     </div>
   );

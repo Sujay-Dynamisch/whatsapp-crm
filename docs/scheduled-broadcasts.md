@@ -177,3 +177,11 @@ The queue is `broadcast-dispatch`, configured with `--max-attempts 5 --min-backo
 - Cloud Scheduler has minute resolution. That's fine here, because the job fires early and the Cloud Task carries the exact second.
 - Cloud Tasks allows an HTTP dispatch deadline of at most 30 minutes. One pass of 500 recipients finishes well within it.
 - Each pending scheduled broadcast holds one Cloud Scheduler job until it is armed. Check your project's Cloud Scheduler job quota if you expect thousands of future-dated broadcasts at once.
+
+## 24-hour window keep-alive
+
+WhatsApp accepts normal (non-template) messages only within 24 hours of the customer's last message. The `windowKeepalive` function, run by the `conversation-window-keepalive` Scheduler job every 5 minutes, sends one check-in shortly before that window closes. If the customer replies, the window re-opens for another 24 hours.
+
+- **Settings:** Agents → Setup → *24-hour window keep-alive* (admins). There you set an on/off switch, the message text, how many minutes before the window closes to send (default 60, i.e. at hour 23), and a quiet period (default 30 minutes; the check-in is skipped if anyone messaged the customer that recently).
+- **Once per window:** at most one check-in per customer message, so it can't loop. It is never sent to closed conversations or contacts tagged `unsubscribe`, and never with less than 5 minutes of window left.
+- **How it works:** migration `044_window_keepalive.sql` adds `conversations.last_customer_message_at`, maintained by a trigger on `messages`, plus `claim_window_keepalives()`, which selects due conversations and marks them in one statement so overlapping runs can't double-send. A failed send releases its claim and is retried on the next run while the window is still open.

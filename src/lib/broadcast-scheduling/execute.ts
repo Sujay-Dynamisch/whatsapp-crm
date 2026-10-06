@@ -31,6 +31,8 @@ import {
   planBroadcastResume,
 } from '@/lib/whatsapp/broadcast-resume';
 import { getUnsubscribedContactIds } from '@/lib/contacts/unsubscribe';
+import { isFeatureEnabled } from '@/lib/features';
+import { loadDisabledFeatures } from '@/lib/features-server';
 
 import type { SchedulingConfig } from './config';
 import { schedulerJobName, type SchedulingBackend } from './gcp-backend';
@@ -262,6 +264,17 @@ export async function handleExecute(
   }
   if (!['scheduled', 'queued', 'processing'].includes(row.schedule_status ?? '')) {
     return { outcome: 'skipped', reason: `status_${row.schedule_status}` };
+  }
+
+  // Switched off by the system admin after this was scheduled
+  // (migration 045). Fail it visibly rather than sending.
+  const disabled = await loadDisabledFeatures(db, row.account_id);
+  const blocked = (['broadcasts', 'broadcast_scheduling'] as const).find(
+    (f) => !isFeatureEnabled(disabled, f)
+  );
+  if (blocked) {
+    if (!(await claim(db, row, now))) return { outcome: 'busy' };
+    return markFailed(db, row, `feature_disabled: ${blocked} is not enabled for this account`, now);
   }
 
   // A scheduled send that arrives hours late (outage, paused queue)

@@ -93,6 +93,60 @@ BEGIN
     RAISE EXCEPTION 'broadcasts_status_check does not allow cancelled — migration 043 did not apply';
   END IF;
 
+  -- 045: profiles.role grants SYSTEM admin in the admin portal. Without
+  -- this trigger any user can self-promote through PostgREST.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'enforce_profile_system_role'
+      AND tgrelid = 'public.profiles'::regclass
+  ) THEN
+    RAISE EXCEPTION 'enforce_profile_system_role trigger is missing — migration 045 did not apply';
+  END IF;
+
+  -- 045: feature entitlements — column, its write guard, and the
+  -- restrictive policies that stop direct PostgREST writes.
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'accounts' AND column_name = 'disabled_features'
+  ) THEN
+    RAISE EXCEPTION 'accounts.disabled_features is missing — migration 045 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'enforce_account_features_admin_only'
+      AND tgrelid = 'public.accounts'::regclass
+  ) THEN
+    RAISE EXCEPTION 'enforce_account_features_admin_only trigger is missing — migration 045 did not apply';
+  END IF;
+  IF (
+    SELECT COUNT(*) FROM pg_policies
+    WHERE schemaname = 'public'
+      AND policyname IN ('feature_gate_insert', 'feature_gate_update')
+      AND permissive = 'RESTRICTIVE'
+  ) <> 20 THEN
+    RAISE EXCEPTION 'feature_gate restrictive policies incomplete (expected 20) — migration 045 did not apply';
+  END IF;
+
+  -- 046: button-click analytics. The UNIQUE message_id is what stops a
+  -- replayed webhook delivery from counting a tap twice.
+  IF to_regclass('public.button_clicks') IS NULL THEN
+    RAISE EXCEPTION 'public.button_clicks is missing — migration 046 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public' AND tablename = 'button_clicks'
+      AND indexdef ILIKE '%UNIQUE%(message_id)%'
+  ) THEN
+    RAISE EXCEPTION 'button_clicks.message_id is not unique — migration 046 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'button_clicks'
+      AND policyname = 'feature_gate_select' AND permissive = 'RESTRICTIVE'
+  ) THEN
+    RAISE EXCEPTION 'button_clicks feature gate policy is missing — migration 046 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

@@ -51,6 +51,26 @@ export function toNetworkError(err: unknown): AiError {
   })
 }
 
+/**
+ * Provider error bodies come in several shapes:
+ *   { error: { message } }        OpenAI, Anthropic, Groq, OpenRouter, DeepSeek
+ *   [ { error: { message } } ]    Gemini (OpenAI-compatible endpoint)
+ *   { error: "…" }                xAI
+ *   { detail: "…" } / { message } Mistral, Cerebras
+ */
+export function extractErrorDetail(body: unknown): string {
+  const b = (Array.isArray(body) ? body[0] : body) as
+    | { error?: { message?: unknown } | string; detail?: unknown; message?: unknown }
+    | null
+    | undefined
+  if (!b || typeof b !== 'object') return ''
+  if (typeof b.error === 'string') return b.error
+  if (b.error && typeof b.error.message === 'string') return b.error.message
+  if (typeof b.detail === 'string') return b.detail
+  if (typeof b.message === 'string') return b.message
+  return ''
+}
+
 /** Build a typed AiError from a non-2xx provider response, pulling the
  *  provider's own error message out of the JSON body when present. */
 export async function providerHttpError(
@@ -59,18 +79,17 @@ export async function providerHttpError(
 ): Promise<AiError> {
   let detail = ''
   try {
-    const body = (await res.json()) as { error?: { message?: string } | string }
-    detail =
-      typeof body?.error === 'string'
-        ? body.error
-        : (body?.error?.message ?? '')
+    detail = extractErrorDetail(await res.json())
   } catch {
     // Non-JSON error body — fall back to the status line.
   }
 
   const { status } = res
+  // Gemini and xAI answer a bad key with 400 rather than 401/403;
+  // recognise them by message so "Test key" still says "invalid key".
+  const looksLikeBadKey = status === 400 && /api[ _-]?key/i.test(detail)
   const code =
-    status === 401 || status === 403
+    status === 401 || status === 403 || looksLikeBadKey
       ? 'invalid_key'
       : status === 429
         ? 'rate_limited'

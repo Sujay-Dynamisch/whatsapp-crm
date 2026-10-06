@@ -535,3 +535,31 @@ describe('reconcile', () => {
     expect(g.tasks.size).toBe(before);
   });
 });
+
+describe('account features (migration 045)', () => {
+  it.each([['broadcasts'], ['broadcast_scheduling']])(
+    'fails a scheduled send visibly when %s was switched off after scheduling',
+    async (feature) => {
+      const { g } = await scheduledAndArmed();
+      state.tables.accounts = [{ id: 'acct', disabled_features: [feature] }];
+      const payload = [...g.tasks.values()][0].payload as ExecutePayload;
+
+      const res = await handleExecute(db(), g.backend, cfg, payload, { now: AT });
+      expect(res.outcome).toBe('failed');
+      expect(row().schedule_status).toBe('failed');
+      expect(String(row().last_error)).toMatch(/^feature_disabled/);
+      expect(row().delivery_locked_at).toBeNull();
+      expect(state.sends).toHaveLength(0);
+    }
+  );
+
+  it('sends normally when unrelated features are off', async () => {
+    const { g } = await scheduledAndArmed();
+    state.tables.accounts = [{ id: 'acct', disabled_features: ['pipelines', 'flows'] }];
+    const payload = [...g.tasks.values()][0].payload as ExecutePayload;
+    expect(await handleExecute(db(), g.backend, cfg, payload, { now: AT })).toMatchObject({
+      outcome: 'completed',
+      sent: 3,
+    });
+  });
+});

@@ -17,6 +17,7 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { recordButtonClick } from '@/lib/whatsapp/button-clicks'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -857,6 +858,18 @@ async function processMessage(
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
+
+  // Button-click analytics (migration 046). Past the idempotency check
+  // above, so a replayed delivery never counts twice; never throws.
+  await recordButtonClick(supabaseAdmin(), {
+    accountId,
+    contactId: contactRecord.id,
+    conversationId: conversation.id,
+    messageRowId: insertedRows[0].id as string,
+    waMessageId: message.id,
+    message,
+    clickedAt: new Date(parseInt(message.timestamp) * 1000),
+  })
 
   // ============================================================
   // Flow runner dispatch.

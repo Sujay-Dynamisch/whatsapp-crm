@@ -19,6 +19,13 @@ vi.mock("@/lib/api-keys/store", () => ({
   touchLastUsed: (id: string) => touchLastUsed(id),
 }));
 
+// Account feature entitlements (migration 045) — all on unless a test
+// switches some off.
+const disabledFeatures = vi.fn<() => Promise<string[]>>(async () => []);
+vi.mock("@/lib/features-server", () => ({
+  loadDisabledFeatures: () => disabledFeatures(),
+}));
+
 // Import AFTER the mocks are registered.
 const { requireApiKey } = await import("./api-context");
 
@@ -128,5 +135,37 @@ describe("requireApiKey", () => {
       "rate_limited",
       429,
     );
+  });
+});
+
+describe("requireApiKey — account feature entitlements (migration 045)", () => {
+  beforeEach(() => disabledFeatures.mockResolvedValue([]));
+
+  it("403s every API call when the admin switched off API access", async () => {
+    findActiveKeyByHash.mockResolvedValue(row());
+    disabledFeatures.mockResolvedValue(["api_access"]);
+    await expectApiError(requireApiKey(reqWith(`Bearer ${KEY}`)), "forbidden", 403);
+    expect(touchLastUsed).not.toHaveBeenCalled();
+  });
+
+  it("403s broadcast endpoints when broadcasts are off, but not other endpoints", async () => {
+    findActiveKeyByHash.mockResolvedValue(
+      row({ scopes: ["broadcasts:send", "contacts:read"] }),
+    );
+    disabledFeatures.mockResolvedValue(["broadcasts"]);
+    await expectApiError(
+      requireApiKey(reqWith(`Bearer ${KEY}`), "broadcasts:send"),
+      "forbidden",
+      403,
+    );
+    const ctx = await requireApiKey(reqWith(`Bearer ${KEY}`), "contacts:read");
+    expect(ctx.accountId).toBe("acct-1");
+  });
+
+  it("is unaffected by unrelated disabled features", async () => {
+    findActiveKeyByHash.mockResolvedValue(row());
+    disabledFeatures.mockResolvedValue(["pipelines", "flows"]);
+    const ctx = await requireApiKey(reqWith(`Bearer ${KEY}`), "messages:send");
+    expect(ctx.accountId).toBe("acct-1");
   });
 });

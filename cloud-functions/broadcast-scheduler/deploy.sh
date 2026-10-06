@@ -110,13 +110,15 @@ echo "==> Deploying functions"
 deploy armBroadcast 60s 256Mi
 deploy executeBroadcast 1800s 512Mi
 deploy reconcileBroadcasts 300s 256Mi
+deploy windowKeepalive 300s 256Mi
 
 ARM_URL="$(url_of armBroadcast)"
 EXEC_URL="$(url_of executeBroadcast)"
 RECONCILE_URL="$(url_of reconcileBroadcasts)"
+KEEPALIVE_URL="$(url_of windowKeepalive)"
 
 # First deploy didn't know its own URLs yet — patch them in.
-for fn in armBroadcast executeBroadcast reconcileBroadcasts; do
+for fn in armBroadcast executeBroadcast reconcileBroadcasts windowKeepalive; do
   svc="$(gc functions describe "$fn" --region "$REGION" --format 'value(serviceConfig.service)' | sed 's#.*/##')"
   gc run services update "$svc" --region "$REGION" --quiet \
     --update-env-vars "BROADCAST_ARM_FUNCTION_URL=${ARM_URL},BROADCAST_EXECUTE_FUNCTION_URL=${EXEC_URL}" >/dev/null
@@ -125,19 +127,26 @@ for fn in armBroadcast executeBroadcast reconcileBroadcasts; do
     --member "serviceAccount:${INVOKER_SA}" >/dev/null
 done
 
-echo "==> Reconciler schedule (every 5 minutes)"
 SECRET_VALUE="$(gc secrets versions access latest --secret wacrm-broadcast-scheduler-secret)"
-RECONCILE_FLAGS=(--location "$REGION" --schedule "*/5 * * * *" --time-zone "Etc/UTC"
-  --uri "$RECONCILE_URL" --http-method POST --message-body '{}'
-  --oidc-service-account-email "$INVOKER_SA" --oidc-token-audience "$RECONCILE_URL"
-  --attempt-deadline 300s)
-if gc scheduler jobs describe broadcast-reconcile --location "$REGION" >/dev/null 2>&1; then
-  gc scheduler jobs update http broadcast-reconcile "${RECONCILE_FLAGS[@]}" \
-    --update-headers "Content-Type=application/json,x-broadcast-scheduler-secret=${SECRET_VALUE}"
-else
-  gc scheduler jobs create http broadcast-reconcile "${RECONCILE_FLAGS[@]}" \
-    --headers "Content-Type=application/json,x-broadcast-scheduler-secret=${SECRET_VALUE}"
-fi
+every5min() { # job-name target-url
+  local flags=(--location "$REGION" --schedule "*/5 * * * *" --time-zone "Etc/UTC"
+    --uri "$2" --http-method POST --message-body '{}'
+    --oidc-service-account-email "$INVOKER_SA" --oidc-token-audience "$2"
+    --attempt-deadline 300s)
+  if gc scheduler jobs describe "$1" --location "$REGION" >/dev/null 2>&1; then
+    gc scheduler jobs update http "$1" "${flags[@]}" \
+      --update-headers "Content-Type=application/json,x-broadcast-scheduler-secret=${SECRET_VALUE}"
+  else
+    gc scheduler jobs create http "$1" "${flags[@]}" \
+      --headers "Content-Type=application/json,x-broadcast-scheduler-secret=${SECRET_VALUE}"
+  fi
+}
+
+echo "==> Reconciler schedule (every 5 minutes)"
+every5min broadcast-reconcile "$RECONCILE_URL"
+
+echo "==> 24h-window keep-alive schedule (every 5 minutes)"
+every5min conversation-window-keepalive "$KEEPALIVE_URL"
 
 cat <<EOF
 

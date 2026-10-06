@@ -6,7 +6,8 @@
 // whether the account is on OpenAI or Anthropic.
 // ============================================================
 
-export type AiProvider = 'openai' | 'anthropic'
+export type { AiProviderId as AiProvider } from './providers/registry'
+import type { AiProviderId as AiProvider } from './providers/registry'
 
 /**
  * Account AI setup, decrypted and ready to use. Produced by

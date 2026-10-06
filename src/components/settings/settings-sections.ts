@@ -12,6 +12,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
+import type { Feature } from '@/lib/features';
 
 /**
  * Settings information architecture for the redesigned page.
@@ -82,3 +83,13 @@ export function resolveSection(raw: string | null): SettingsSection {
   if (isSection(raw)) return raw;
   return DEFAULT_SECTION;
 }
+
+/**
+ * Sections that belong to a gateable feature (migration 045) — hidden
+ * from the rail and replaced by a notice when the system admin
+ * switched that feature off.
+ */
+export const SECTION_FEATURE: Partial<Record<SettingsSection, Feature>> = {
+  deals: 'pipelines',
+  api: 'api_access',
+};

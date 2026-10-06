@@ -28,6 +28,7 @@ import { SettingsPanelHead } from './settings-panel-head';
 import { AiKnowledgeCard } from './ai-knowledge';
 import { AI_PROVIDER_DEFAULT_MODEL } from '@/lib/ai/defaults';
 import type { AiProvider } from '@/lib/ai/types';
+import { AI_PROVIDER_INFO, AI_PROVIDERS } from '@/lib/ai/providers/registry';
 import type { AccountMember } from '@/types';
 import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
 import { useTranslations } from 'next-intl';
@@ -38,15 +39,11 @@ const MASKED_KEY = '••••••••••••••••';
 // unassigned" choice gets a sentinel that maps to null in the payload.
 const HANDOFF_QUEUE = '__queue__';
 
-const PROVIDER_LABEL: Record<AiProvider, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic (Claude)',
-};
-
-const KEY_PLACEHOLDER: Record<AiProvider, string> = {
-  openai: 'sk-...',
-  anthropic: 'sk-ant-...',
-};
+// Free-tier providers first, so they're easy to find.
+const PROVIDER_ORDER: AiProvider[] = [
+  ...AI_PROVIDERS.filter((p) => AI_PROVIDER_INFO[p].freeTier),
+  ...AI_PROVIDERS.filter((p) => !AI_PROVIDER_INFO[p].freeTier),
+];
 
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
@@ -129,9 +126,7 @@ export function AiConfig() {
   const handleProviderChange = (next: AiProvider) => {
     setProvider(next);
     const isDefaultModel =
-      model === AI_PROVIDER_DEFAULT_MODEL.openai ||
-      model === AI_PROVIDER_DEFAULT_MODEL.anthropic ||
-      model.trim() === '';
+      Object.values(AI_PROVIDER_DEFAULT_MODEL).includes(model) || model.trim() === '';
     if (isDefaultModel) setModel(AI_PROVIDER_DEFAULT_MODEL[next]);
   };
 
@@ -284,10 +279,12 @@ export function AiConfig() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="openai">{PROVIDER_LABEL.openai}</SelectItem>
-                    <SelectItem value="anthropic">
-                      {PROVIDER_LABEL.anthropic}
-                    </SelectItem>
+                    {PROVIDER_ORDER.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {AI_PROVIDER_INFO[p].label}
+                        {AI_PROVIDER_INFO[p].freeTier ? ` · ${t('freeTier')}` : ''}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -300,9 +297,27 @@ export function AiConfig() {
                   onChange={(e) => setModel(e.target.value)}
                   placeholder={AI_PROVIDER_DEFAULT_MODEL[provider]}
                   disabled={disabled}
+                  list="ai-model-hints"
                 />
+                <datalist id="ai-model-hints">
+                  {AI_PROVIDER_INFO[provider].modelHints.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
               </div>
             </div>
+
+            <p className="text-xs text-muted-foreground">
+              {AI_PROVIDER_INFO[provider].note}{' '}
+              <a
+                href={AI_PROVIDER_INFO[provider].keyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary hover:underline"
+              >
+                {t('getKey', { provider: AI_PROVIDER_INFO[provider].label })}
+              </a>
+            </p>
 
             <div className="space-y-2">
               <Label htmlFor="ai-key">{t('apiKey')}</Label>
@@ -322,7 +337,7 @@ export function AiConfig() {
                         setKeyEdited(true);
                       }
                     }}
-                    placeholder={KEY_PLACEHOLDER[provider]}
+                    placeholder={AI_PROVIDER_INFO[provider].keyPlaceholder}
                     disabled={disabled}
                     autoComplete="off"
                   />

@@ -34,6 +34,7 @@ import {
   Search,
   MoreVertical,
   KeyRound,
+  ToggleRight,
   Trash2,
   CheckCircle2,
   ShieldAlert,
@@ -48,6 +49,7 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { SYSTEM_ADMIN_EMAIL } from "@/lib/auth/admin";
+import { AccountFeaturesDialog } from "@/components/admin/account-features-dialog";
 
 export interface AdminUserRecord {
   id: string;
@@ -84,6 +86,9 @@ export function AdminUsersTable({
 
   // Delete user dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Account features dialog state (migration 045)
+  const [featuresDialogOpen, setFeaturesDialogOpen] = useState(false);
 
   // Filtered users
   const filteredUsers = useMemo(() => {
@@ -370,6 +375,19 @@ export function AdminUsersTable({
                               Reset Password
                             </DropdownMenuItem>
 
+                            {u.accountId && !isSystemAdminUser && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedUser(u);
+                                  setFeaturesDialogOpen(true);
+                                }}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <ToggleRight className="h-4 w-4 text-primary" />
+                                Manage Features
+                              </DropdownMenuItem>
+                            )}
+
                             {!isSystemAdminUser && (
                               <>
                                 <DropdownMenuSeparator />
@@ -492,6 +510,13 @@ export function AdminUsersTable({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AccountFeaturesDialog
+        accountId={selectedUser?.accountId ?? null}
+        accountName={selectedUser?.accountName ?? ""}
+        open={featuresDialogOpen}
+        onOpenChange={setFeaturesDialogOpen}
+      />
     </div>
   );
 }

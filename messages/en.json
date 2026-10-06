@@ -40,7 +40,8 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Profile",
     "menuSettings": "Settings",
-    "menuSignOut": "Sign out"
+    "menuSignOut": "Sign out",
+    "buttonClicks": "Button Clicks"
   },
   "Header": {
     "dashboard": "Dashboard",
@@ -1887,7 +1888,9 @@
       "saveSuccess": "AI assistant saved.",
       "saveFailed": "Failed to save.",
       "removeSuccess": "AI configuration removed.",
-      "removeFailed": "Failed to remove."
+      "removeFailed": "Failed to remove.",
+      "freeTier": "free tier",
+      "getKey": "Get a {provider} key →"
     },
     "aiKnowledge": {
       "loadFailed": "Failed to load knowledge base",
@@ -2061,5 +2064,62 @@
   },
   "DashboardShell": {
     "loading": "Loading..."
+  },
+  "WindowKeepalive": {
+    "title": "24-hour window keep-alive",
+    "description": "WhatsApp only allows normal messages within 24 hours of the customer’s last message. Send one automatic check-in shortly before that window closes, so a reply from the customer re-opens it for another 24 hours.",
+    "enable": "Send a check-in before the window closes",
+    "enableDesc": "Sent about {hour} hours after the customer’s last message.",
+    "message": "Check-in message",
+    "lead": "Minutes before the window closes",
+    "leadDesc": "Between 15 and 240. Default 60 (sent at hour 23).",
+    "quiet": "Skip if someone messaged within (minutes)",
+    "quietDesc": "A recent agent or bot message already serves as the nudge.",
+    "rules": "Sent at most once per customer message. Never sent to closed conversations or to contacts tagged unsubscribe.",
+    "save": "Save",
+    "toastSaved": "Keep-alive settings saved",
+    "toastFailed": "Could not save: {error}"
+  },
+  "FeatureGate": {
+    "title": "Not available on your account",
+    "description": "{feature} is not enabled for your account. Contact your administrator to turn it on.",
+    "dismiss": "Dismiss"
+  },
+  "ButtonClicks": {
+    "title": "Button Clicks",
+    "subtitle": "Which buttons customers tap on your templates, carousels and interactive messages.",
+    "lastDays": "Last {days} days",
+    "retry": "Retry",
+    "totalClicks": "Total clicks",
+    "uniqueContacts": "Unique contacts",
+    "fromBroadcasts": "From broadcasts",
+    "fromChats": "From chats & bots",
+    "emptyTitle": "No button clicks yet",
+    "emptyHint": "Send a template with quick-reply buttons. Taps appear here within seconds. Link and phone buttons are not reported by WhatsApp.",
+    "byBroadcast": "By broadcast",
+    "byButton": "By button",
+    "recent": "Recent clicks",
+    "broadcast": "Broadcast",
+    "template": "Template",
+    "sent": "Sent",
+    "clicks": "Clicks",
+    "uniqueClickers": "Unique clickers",
+    "clickRate": "Click rate",
+    "button": "Button",
+    "lastClick": "Last click",
+    "contact": "Contact",
+    "source": "Source",
+    "time": "Time",
+    "unknownContact": "Unknown contact",
+    "card": "card {n}",
+    "sourceBroadcast": "Broadcast",
+    "sourceInbox": "Inbox",
+    "sourceBot": "Bot / flow",
+    "sourceUnknown": "Unknown",
+    "kind": {
+      "template_quick_reply": "Template button",
+      "interactive_button": "Interactive button",
+      "interactive_list": "List option"
+    }
   }
 }

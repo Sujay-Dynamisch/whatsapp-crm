@@ -40,7 +40,8 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configuración",
-    "menuSignOut": "Cerrar sesión"
+    "menuSignOut": "Cerrar sesión",
+    "buttonClicks": "Clics en botones"
   },
   "Header": {
     "dashboard": "Panel",
@@ -1887,7 +1888,9 @@
       "saveSuccess": "Asistente de IA guardado.",
       "saveFailed": "Error al guardar.",
       "removeSuccess": "Configuración de IA eliminada.",
-      "removeFailed": "Error al eliminar."
+      "removeFailed": "Error al eliminar.",
+      "freeTier": "nivel gratuito",
+      "getKey": "Obtener una clave de {provider} →"
     },
     "aiKnowledge": {
       "loadFailed": "Error al cargar la base de conocimiento",
@@ -2061,5 +2064,62 @@
   },
   "DashboardShell": {
     "loading": "Cargando..."
+  },
+  "WindowKeepalive": {
+    "title": "Mantener abierta la ventana de 24 horas",
+    "description": "WhatsApp solo permite mensajes normales dentro de las 24 horas posteriores al último mensaje del cliente. Envía un mensaje automático poco antes de que se cierre esa ventana, para que una respuesta del cliente la vuelva a abrir por otras 24 horas.",
+    "enable": "Enviar un mensaje antes de que se cierre la ventana",
+    "enableDesc": "Se envía unas {hour} horas después del último mensaje del cliente.",
+    "message": "Mensaje de seguimiento",
+    "lead": "Minutos antes del cierre de la ventana",
+    "leadDesc": "Entre 15 y 240. Predeterminado 60 (se envía a la hora 23).",
+    "quiet": "Omitir si alguien escribió en los últimos (minutos)",
+    "quietDesc": "Un mensaje reciente de un agente o bot ya sirve como recordatorio.",
+    "rules": "Se envía como máximo una vez por mensaje del cliente. Nunca a conversaciones cerradas ni a contactos con la etiqueta unsubscribe.",
+    "save": "Guardar",
+    "toastSaved": "Configuración guardada",
+    "toastFailed": "No se pudo guardar: {error}"
+  },
+  "FeatureGate": {
+    "title": "No disponible en tu cuenta",
+    "description": "{feature} no está habilitado para tu cuenta. Contacta a tu administrador para activarlo.",
+    "dismiss": "Cerrar"
+  },
+  "ButtonClicks": {
+    "title": "Clics en botones",
+    "subtitle": "Qué botones tocan los clientes en tus plantillas, carruseles y mensajes interactivos.",
+    "lastDays": "Últimos {days} días",
+    "retry": "Reintentar",
+    "totalClicks": "Clics totales",
+    "uniqueContacts": "Contactos únicos",
+    "fromBroadcasts": "De difusiones",
+    "fromChats": "De chats y bots",
+    "emptyTitle": "Aún no hay clics",
+    "emptyHint": "Envía una plantilla con botones de respuesta rápida. Los toques aparecen aquí en segundos. WhatsApp no informa los botones de enlace ni de teléfono.",
+    "byBroadcast": "Por difusión",
+    "byButton": "Por botón",
+    "recent": "Clics recientes",
+    "broadcast": "Difusión",
+    "template": "Plantilla",
+    "sent": "Enviados",
+    "clicks": "Clics",
+    "uniqueClickers": "Contactos que hicieron clic",
+    "clickRate": "Tasa de clics",
+    "button": "Botón",
+    "lastClick": "Último clic",
+    "contact": "Contacto",
+    "source": "Origen",
+    "time": "Hora",
+    "unknownContact": "Contacto desconocido",
+    "card": "tarjeta {n}",
+    "sourceBroadcast": "Difusión",
+    "sourceInbox": "Bandeja",
+    "sourceBot": "Bot / flujo",
+    "sourceUnknown": "Desconocido",
+    "kind": {
+      "template_quick_reply": "Botón de plantilla",
+      "interactive_button": "Botón interactivo",
+      "interactive_list": "Opción de lista"
+    }
   }
 }
