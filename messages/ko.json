@@ -41,7 +41,8 @@
     "menuProfile": "프로필",
     "menuSettings": "설정",
     "menuSignOut": "로그아웃",
-    "buttonClicks": "버튼 클릭"
+    "buttonClicks": "버튼 클릭",
+    "journeys": "여정"
   },
   "Header": {
     "dashboard": "대시보드",
@@ -2238,6 +2239,139 @@
       "save": "저장",
       "saved": "언어 설정이 저장되었습니다",
       "saveFailed": "저장하지 못했습니다: {error}"
+    }
+  },
+  "Journeys": {
+    "status": {
+      "draft": "초안",
+      "active": "활성",
+      "paused": "일시 중지됨"
+    },
+    "node": {
+      "trigger": "시작",
+      "wait": "대기",
+      "wait_for_reply": "답장 대기",
+      "condition": "조건",
+      "send_template": "템플릿 보내기",
+      "send_text": "메시지 보내기",
+      "add_tag": "태그 추가",
+      "remove_tag": "태그 제거",
+      "create_deal": "거래 생성",
+      "end": "종료"
+    },
+    "nodeHelp": {
+      "trigger": "연락처를 이 여정에 넣는 조건입니다.",
+      "wait": "다음 단계 전에 잠시 멈춥니다.",
+      "wait_for_reply": "고객이 답하면 즉시 “답장함”으로, 제한 시간이 지나면 “답장 없음”으로 진행합니다.",
+      "condition": "연락처의 행동에 따라 분기합니다.",
+      "send_template": "승인된 WhatsApp 템플릿을 보냅니다. 언제든 가능합니다.",
+      "send_text": "일반 메시지를 보냅니다. 고객의 마지막 메시지 후 24시간 이내에만 가능합니다.",
+      "add_tag": "연락처에 태그를 추가합니다.",
+      "remove_tag": "연락처에서 태그를 제거합니다.",
+      "create_deal": "파이프라인에 거래를 생성합니다.",
+      "end": "연락처가 여기서 여정을 마칩니다."
+    },
+    "trigger": {
+      "manual": "수동 등록",
+      "contact_created": "새 연락처가 추가될 때",
+      "first_message": "연락처가 처음 메시지를 보낼 때",
+      "tag_added": "태그가 추가될 때",
+      "tag_added_with": "태그 추가: {tag}",
+      "button_clicked": "버튼을 누를 때",
+      "button_clicked_with": "버튼 누름: {button}"
+    },
+    "condition": {
+      "replied": "답장함",
+      "clicked_button": "버튼을 누름",
+      "has_tag": "태그 있음",
+      "window_open": "24시간 창이 열려 있음"
+    },
+    "unit": {
+      "minutes": "분",
+      "hours": "시간",
+      "days": "일"
+    },
+    "slot": {
+      "yes": "예",
+      "no": "아니요",
+      "replied": "답장함",
+      "timeout": "답장 없음"
+    },
+    "summary": {
+      "wait": "{amount}{unit} 대기",
+      "waitReply": "최대 {amount}{unit}",
+      "hasTag": "태그 있음: {tag}",
+      "clicked": "“{button}” 누름",
+      "clickedAny": "아무 버튼이나 누름",
+      "chooseTag": "태그 선택",
+      "chooseTemplate": "템플릿 선택",
+      "writeMessage": "메시지 작성",
+      "chooseStage": "단계 선택",
+      "end": "여정 완료"
+    },
+    "form": {
+      "startsWhen": "시작 조건",
+      "tag": "태그",
+      "chooseTag": "태그 선택…",
+      "buttonText": "버튼 텍스트",
+      "anyButton": "모든 버튼",
+      "manualHelp": "활성 여정에서 “연락처 등록”을 사용해 태그별로 연락처를 추가하세요.",
+      "waitFor": "대기 시간",
+      "giveUpAfter": "포기 시점",
+      "amount": "수량",
+      "waitReplyHelp": "고객의 모든 메시지나 버튼 누름이 답장으로 간주됩니다.",
+      "check": "확인",
+      "template": "템플릿",
+      "chooseTemplate": "승인된 템플릿 선택…",
+      "params": "변수",
+      "paramsHelp": "한 줄에 하나씩, {{1}}, {{2}}…용. 연락처 정보는 {{name}} 또는 {{phone}}을 사용하세요.",
+      "message": "메시지",
+      "textHelp": "{{name}}과 {{phone}}을 사용할 수 있습니다.",
+      "stage": "파이프라인 단계",
+      "chooseStage": "단계 선택…",
+      "dealTitle": "거래 제목",
+      "dealValue": "거래 금액",
+      "endHelp": "설정할 항목이 없습니다.",
+      "deleteStep": "단계 삭제",
+      "done": "완료"
+    },
+    "editor": {
+      "back": "여정으로 돌아가기",
+      "name": "여정 이름",
+      "addStep": "단계 추가",
+      "stats": "통계",
+      "enroll": "연락처 등록",
+      "save": "저장",
+      "activate": "활성화",
+      "pause": "일시 중지",
+      "saved": "여정이 저장되었습니다",
+      "saveFailed": "여정을 저장하지 못했습니다",
+      "fixIssues": "활성화하기 전에 {count, plural, other {#개의 문제}}를 해결하세요",
+      "activated": "여정이 활성화되었습니다",
+      "paused": "여정이 일시 중지되었습니다",
+      "issues": "{count, plural, other {해결할 문제 #개:}}",
+      "enrollTitle": "연락처 등록",
+      "enrollDesc": "이 태그가 있는 모든 연락처를 여정에 등록합니다 (한 번에 최대 500명). 수신 거부한 연락처는 제외됩니다.",
+      "enrolled": "{enrolled}명 등록, {skipped}명 제외",
+      "cancel": "취소"
+    },
+    "list": {
+      "title": "여정",
+      "subtitle": "대기, 분기, 템플릿, 태그, 거래로 구성된 자동 다단계 경로와 단계별 전환율.",
+      "new": "새 여정",
+      "newDesc": "이름을 지정하세요. 다음에 단계를 설계합니다.",
+      "namePlaceholder": "예: 신규 리드 육성",
+      "create": "만들기",
+      "emptyTitle": "아직 여정이 없습니다",
+      "emptyHint": "예: 새 연락처 → 1일 대기 → 답장이 없으면 혜택 템플릿 보내기 → “구매”를 누르면 태그 지정 후 거래 생성.",
+      "inProgress": "진행 중",
+      "completed": "완료",
+      "failed": "실패",
+      "updated": "{when} 업데이트됨",
+      "open": "열기",
+      "delete": "삭제",
+      "deleteConfirm": "“{name}”을(를) 삭제할까요? 진행 중인 연락처가 중단됩니다.",
+      "deleteFailed": "여정을 삭제하지 못했습니다"
     }
   }
 }

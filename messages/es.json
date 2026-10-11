@@ -41,7 +41,8 @@
     "menuProfile": "Perfil",
     "menuSettings": "Configuración",
     "menuSignOut": "Cerrar sesión",
-    "buttonClicks": "Clics en botones"
+    "buttonClicks": "Clics en botones",
+    "journeys": "Recorridos"
   },
   "Header": {
     "dashboard": "Panel",
@@ -2238,6 +2239,139 @@
       "save": "Guardar",
       "saved": "Configuración de idiomas guardada",
       "saveFailed": "No se pudo guardar: {error}"
+    }
+  },
+  "Journeys": {
+    "status": {
+      "draft": "Borrador",
+      "active": "Activo",
+      "paused": "En pausa"
+    },
+    "node": {
+      "trigger": "Inicio",
+      "wait": "Esperar",
+      "wait_for_reply": "Esperar respuesta",
+      "condition": "Condición",
+      "send_template": "Enviar plantilla",
+      "send_text": "Enviar mensaje",
+      "add_tag": "Añadir etiqueta",
+      "remove_tag": "Quitar etiqueta",
+      "create_deal": "Crear negocio",
+      "end": "Fin"
+    },
+    "nodeHelp": {
+      "trigger": "Qué añade un contacto a este recorrido.",
+      "wait": "Pausa antes del siguiente paso.",
+      "wait_for_reply": "Sigue por “Respondió” en cuanto el cliente conteste, o por “Sin respuesta” tras el límite.",
+      "condition": "Bifurca según lo que hizo el contacto.",
+      "send_template": "Envía una plantilla aprobada de WhatsApp. Funciona siempre.",
+      "send_text": "Envía un mensaje normal. Solo dentro de las 24 horas desde el último mensaje del cliente.",
+      "add_tag": "Etiqueta al contacto.",
+      "remove_tag": "Quita una etiqueta al contacto.",
+      "create_deal": "Crea un negocio en un embudo.",
+      "end": "El contacto sale del recorrido aquí."
+    },
+    "trigger": {
+      "manual": "Inscrito manualmente",
+      "contact_created": "Se añade un contacto nuevo",
+      "first_message": "Un contacto escribe por primera vez",
+      "tag_added": "Se añade una etiqueta",
+      "tag_added_with": "Etiqueta añadida: {tag}",
+      "button_clicked": "Se toca un botón",
+      "button_clicked_with": "Botón tocado: {button}"
+    },
+    "condition": {
+      "replied": "Ha respondido",
+      "clicked_button": "Tocó un botón",
+      "has_tag": "Tiene una etiqueta",
+      "window_open": "La ventana de 24 horas está abierta"
+    },
+    "unit": {
+      "minutes": "minutos",
+      "hours": "horas",
+      "days": "días"
+    },
+    "slot": {
+      "yes": "Sí",
+      "no": "No",
+      "replied": "Respondió",
+      "timeout": "Sin respuesta"
+    },
+    "summary": {
+      "wait": "Esperar {amount} {unit}",
+      "waitReply": "Hasta {amount} {unit}",
+      "hasTag": "Tiene la etiqueta: {tag}",
+      "clicked": "Tocó “{button}”",
+      "clickedAny": "Tocó cualquier botón",
+      "chooseTag": "Elige una etiqueta",
+      "chooseTemplate": "Elige una plantilla",
+      "writeMessage": "Escribe el mensaje",
+      "chooseStage": "Elige una etapa",
+      "end": "Recorrido completo"
+    },
+    "form": {
+      "startsWhen": "Empieza cuando",
+      "tag": "Etiqueta",
+      "chooseTag": "Elige una etiqueta…",
+      "buttonText": "Texto del botón",
+      "anyButton": "Cualquier botón",
+      "manualHelp": "Usa “Inscribir contactos” en un recorrido activo para añadir contactos por etiqueta.",
+      "waitFor": "Esperar",
+      "giveUpAfter": "Rendirse tras",
+      "amount": "Cantidad",
+      "waitReplyHelp": "Cualquier mensaje o toque de botón del cliente cuenta como respuesta.",
+      "check": "Comprobar",
+      "template": "Plantilla",
+      "chooseTemplate": "Elige una plantilla aprobada…",
+      "params": "Variables",
+      "paramsHelp": "Una por línea, para {{1}}, {{2}}… Usa {{name}} o {{phone}} para los datos del contacto.",
+      "message": "Mensaje",
+      "textHelp": "Puedes usar {{name}} y {{phone}}.",
+      "stage": "Etapa del embudo",
+      "chooseStage": "Elige una etapa…",
+      "dealTitle": "Título del negocio",
+      "dealValue": "Valor del negocio",
+      "endHelp": "Nada que configurar.",
+      "deleteStep": "Eliminar paso",
+      "done": "Listo"
+    },
+    "editor": {
+      "back": "Volver a recorridos",
+      "name": "Nombre del recorrido",
+      "addStep": "Añadir paso",
+      "stats": "Estadísticas",
+      "enroll": "Inscribir contactos",
+      "save": "Guardar",
+      "activate": "Activar",
+      "pause": "Pausar",
+      "saved": "Recorrido guardado",
+      "saveFailed": "No se pudo guardar el recorrido",
+      "fixIssues": "Corrige {count, plural, =1 {1 problema} other {# problemas}} antes de activar",
+      "activated": "El recorrido está activo",
+      "paused": "Recorrido en pausa",
+      "issues": "{count, plural, =1 {1 problema por corregir:} other {# problemas por corregir:}}",
+      "enrollTitle": "Inscribir contactos",
+      "enrollDesc": "Inicia a todos los que tengan esta etiqueta (hasta 500 a la vez). Se omiten los contactos dados de baja.",
+      "enrolled": "{enrolled} inscritos, {skipped} omitidos",
+      "cancel": "Cancelar"
+    },
+    "list": {
+      "title": "Recorridos",
+      "subtitle": "Rutas automáticas de varios pasos: esperas, bifurcaciones, plantillas, etiquetas y negocios, con conversión en cada paso.",
+      "new": "Nuevo recorrido",
+      "newDesc": "Ponle un nombre. Después diseñarás los pasos.",
+      "namePlaceholder": "p. ej. Seguimiento de nuevos clientes",
+      "create": "Crear",
+      "emptyTitle": "Aún no hay recorridos",
+      "emptyHint": "Ejemplo: contacto nuevo → esperar 1 día → si no responde, enviar una oferta → si toca “Comprar”, etiquetarlo y crear un negocio.",
+      "inProgress": "En curso",
+      "completed": "Completados",
+      "failed": "Fallidos",
+      "updated": "Actualizado {when}",
+      "open": "Abrir",
+      "delete": "Eliminar",
+      "deleteConfirm": "¿Eliminar “{name}”? Los contactos en él se detendrán.",
+      "deleteFailed": "No se pudo eliminar el recorrido"
     }
   }
 }

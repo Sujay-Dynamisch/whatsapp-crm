@@ -173,6 +173,14 @@ BEGIN
     RAISE EXCEPTION 'multilingual columns / language_settings missing — migration 049 did not apply';
   END IF;
 
+  -- 050: journeys. The partial unique index is what stops a contact
+  -- being enrolled twice at once; the claim function drives the tick.
+  IF to_regclass('public.journeys') IS NULL
+     OR to_regclass('public.idx_journey_enrollments_live') IS NULL
+     OR to_regprocedure('public.claim_journey_enrollments(integer)') IS NULL THEN
+    RAISE EXCEPTION 'journeys schema incomplete — migration 050 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

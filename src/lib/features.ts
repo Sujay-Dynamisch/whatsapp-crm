@@ -24,6 +24,7 @@ export const FEATURES = [
   'smart_sending',
   'automations',
   'flows',
+  'journeys',
   'ai_agents',
   'window_keepalive',
   'translation',
@@ -66,6 +67,10 @@ export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
   flows: {
     label: 'Flows',
     description: 'Visual chatbot flows.',
+  },
+  journeys: {
+    label: 'Journeys',
+    description: 'Visual multi-step customer journeys with waits, branches and per-step conversion.',
   },
   ai_agents: {
     label: 'AI Agents',
@@ -151,11 +156,13 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/automations', feature: 'automations' },
   { prefix: '/flows', feature: 'flows' },
   { prefix: '/agents', feature: 'ai_agents' },
+  { prefix: '/journeys', feature: 'journeys' },
   { prefix: '/button-clicks', feature: 'button_analytics' },
   // Internal APIs
   { prefix: '/api/whatsapp/broadcast', feature: 'broadcasts' },
   { prefix: '/api/automations', feature: 'automations' },
   { prefix: '/api/flows', feature: 'flows' },
+  { prefix: '/api/journeys', feature: 'journeys' },
   { prefix: '/api/ai', feature: 'ai_agents' },
   { prefix: '/api/conversations/window-keepalive', feature: 'window_keepalive' },
   { prefix: '/api/account/api-keys', feature: 'api_access' },

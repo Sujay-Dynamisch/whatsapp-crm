@@ -41,7 +41,8 @@
     "menuProfile": "Profile",
     "menuSettings": "Settings",
     "menuSignOut": "Sign out",
-    "buttonClicks": "Button Clicks"
+    "buttonClicks": "Button Clicks",
+    "journeys": "Journeys"
   },
   "Header": {
     "dashboard": "Dashboard",
@@ -2238,6 +2239,139 @@
       "save": "Save",
       "saved": "Language settings saved",
       "saveFailed": "Could not save: {error}"
+    }
+  },
+  "Journeys": {
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "paused": "Paused"
+    },
+    "node": {
+      "trigger": "Start",
+      "wait": "Wait",
+      "wait_for_reply": "Wait for reply",
+      "condition": "Condition",
+      "send_template": "Send template",
+      "send_text": "Send message",
+      "add_tag": "Add tag",
+      "remove_tag": "Remove tag",
+      "create_deal": "Create deal",
+      "end": "End"
+    },
+    "nodeHelp": {
+      "trigger": "What puts a contact on this journey.",
+      "wait": "Pause before the next step.",
+      "wait_for_reply": "Continue down “Replied” as soon as the customer answers, or “No reply” after the time limit.",
+      "condition": "Branch on what the contact has done.",
+      "send_template": "Send an approved WhatsApp template. Works any time.",
+      "send_text": "Send a normal message. Only allowed within 24 hours of the customer’s last message.",
+      "add_tag": "Tag the contact.",
+      "remove_tag": "Remove a tag from the contact.",
+      "create_deal": "Create a deal in a pipeline.",
+      "end": "The contact leaves the journey here."
+    },
+    "trigger": {
+      "manual": "Enrolled manually",
+      "contact_created": "A new contact is added",
+      "first_message": "A contact messages for the first time",
+      "tag_added": "A tag is added",
+      "tag_added_with": "Tag added: {tag}",
+      "button_clicked": "A button is tapped",
+      "button_clicked_with": "Button tapped: {button}"
+    },
+    "condition": {
+      "replied": "Has replied",
+      "clicked_button": "Tapped a button",
+      "has_tag": "Has a tag",
+      "window_open": "24-hour window is open"
+    },
+    "unit": {
+      "minutes": "minutes",
+      "hours": "hours",
+      "days": "days"
+    },
+    "slot": {
+      "yes": "Yes",
+      "no": "No",
+      "replied": "Replied",
+      "timeout": "No reply"
+    },
+    "summary": {
+      "wait": "Wait {amount} {unit}",
+      "waitReply": "Up to {amount} {unit}",
+      "hasTag": "Has tag: {tag}",
+      "clicked": "Tapped “{button}”",
+      "clickedAny": "Tapped any button",
+      "chooseTag": "Choose a tag",
+      "chooseTemplate": "Choose a template",
+      "writeMessage": "Write the message",
+      "chooseStage": "Choose a stage",
+      "end": "Journey complete"
+    },
+    "form": {
+      "startsWhen": "Starts when",
+      "tag": "Tag",
+      "chooseTag": "Choose a tag…",
+      "buttonText": "Button text",
+      "anyButton": "Any button",
+      "manualHelp": "Use “Enroll contacts” on an active journey to add contacts by tag.",
+      "waitFor": "Wait for",
+      "giveUpAfter": "Give up after",
+      "amount": "Amount",
+      "waitReplyHelp": "Any message or button tap from the customer counts as a reply.",
+      "check": "Check",
+      "template": "Template",
+      "chooseTemplate": "Choose an approved template…",
+      "params": "Variables",
+      "paramsHelp": "One per line, for {{1}}, {{2}}… Use {{name}} or {{phone}} for the contact’s details.",
+      "message": "Message",
+      "textHelp": "You can use {{name}} and {{phone}}.",
+      "stage": "Pipeline stage",
+      "chooseStage": "Choose a stage…",
+      "dealTitle": "Deal title",
+      "dealValue": "Deal value",
+      "endHelp": "Nothing to configure.",
+      "deleteStep": "Delete step",
+      "done": "Done"
+    },
+    "editor": {
+      "back": "Back to journeys",
+      "name": "Journey name",
+      "addStep": "Add step",
+      "stats": "Stats",
+      "enroll": "Enroll contacts",
+      "save": "Save",
+      "activate": "Activate",
+      "pause": "Pause",
+      "saved": "Journey saved",
+      "saveFailed": "Could not save the journey",
+      "fixIssues": "Fix {count, plural, =1 {1 problem} other {# problems}} before activating",
+      "activated": "Journey is live",
+      "paused": "Journey paused",
+      "issues": "{count, plural, =1 {1 problem to fix:} other {# problems to fix:}}",
+      "enrollTitle": "Enroll contacts",
+      "enrollDesc": "Start everyone with this tag on the journey (up to 500 at a time). Unsubscribed contacts are skipped.",
+      "enrolled": "{enrolled} enrolled, {skipped} skipped",
+      "cancel": "Cancel"
+    },
+    "list": {
+      "title": "Journeys",
+      "subtitle": "Automated multi-step paths: waits, branches, templates, tags and deals, with conversion at every step.",
+      "new": "New journey",
+      "newDesc": "Give it a name. You’ll design the steps next.",
+      "namePlaceholder": "e.g. New lead nurture",
+      "create": "Create",
+      "emptyTitle": "No journeys yet",
+      "emptyHint": "Example: new contact → wait 1 day → if no reply, send an offer template → if they tap “Buy”, tag them and create a deal.",
+      "inProgress": "In progress",
+      "completed": "Completed",
+      "failed": "Failed",
+      "updated": "Updated {when}",
+      "open": "Open",
+      "delete": "Delete",
+      "deleteConfirm": "Delete “{name}”? Contacts in it will stop.",
+      "deleteFailed": "Could not delete the journey"
     }
   }
 }

@@ -41,7 +41,8 @@
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
     "menuSignOut": "Sair",
-    "buttonClicks": "Cliques em botões"
+    "buttonClicks": "Cliques em botões",
+    "journeys": "Jornadas"
   },
   "Header": {
     "dashboard": "Painel",
@@ -2238,6 +2239,139 @@
       "save": "Salvar",
       "saved": "Configurações de idioma salvas",
       "saveFailed": "Não foi possível salvar: {error}"
+    }
+  },
+  "Journeys": {
+    "status": {
+      "draft": "Rascunho",
+      "active": "Ativa",
+      "paused": "Pausada"
+    },
+    "node": {
+      "trigger": "Início",
+      "wait": "Aguardar",
+      "wait_for_reply": "Aguardar resposta",
+      "condition": "Condição",
+      "send_template": "Enviar modelo",
+      "send_text": "Enviar mensagem",
+      "add_tag": "Adicionar etiqueta",
+      "remove_tag": "Remover etiqueta",
+      "create_deal": "Criar negócio",
+      "end": "Fim"
+    },
+    "nodeHelp": {
+      "trigger": "O que coloca um contato nesta jornada.",
+      "wait": "Pausa antes da próxima etapa.",
+      "wait_for_reply": "Segue por “Respondeu” assim que o cliente responder, ou por “Sem resposta” após o limite.",
+      "condition": "Ramifica conforme o que o contato fez.",
+      "send_template": "Envia um modelo aprovado do WhatsApp. Funciona a qualquer momento.",
+      "send_text": "Envia uma mensagem normal. Só dentro de 24 horas da última mensagem do cliente.",
+      "add_tag": "Etiqueta o contato.",
+      "remove_tag": "Remove uma etiqueta do contato.",
+      "create_deal": "Cria um negócio em um funil.",
+      "end": "O contato sai da jornada aqui."
+    },
+    "trigger": {
+      "manual": "Inscrito manualmente",
+      "contact_created": "Um novo contato é adicionado",
+      "first_message": "Um contato envia a primeira mensagem",
+      "tag_added": "Uma etiqueta é adicionada",
+      "tag_added_with": "Etiqueta adicionada: {tag}",
+      "button_clicked": "Um botão é tocado",
+      "button_clicked_with": "Botão tocado: {button}"
+    },
+    "condition": {
+      "replied": "Respondeu",
+      "clicked_button": "Tocou em um botão",
+      "has_tag": "Tem uma etiqueta",
+      "window_open": "A janela de 24 horas está aberta"
+    },
+    "unit": {
+      "minutes": "minutos",
+      "hours": "horas",
+      "days": "dias"
+    },
+    "slot": {
+      "yes": "Sim",
+      "no": "Não",
+      "replied": "Respondeu",
+      "timeout": "Sem resposta"
+    },
+    "summary": {
+      "wait": "Aguardar {amount} {unit}",
+      "waitReply": "Até {amount} {unit}",
+      "hasTag": "Tem a etiqueta: {tag}",
+      "clicked": "Tocou em “{button}”",
+      "clickedAny": "Tocou em qualquer botão",
+      "chooseTag": "Escolha uma etiqueta",
+      "chooseTemplate": "Escolha um modelo",
+      "writeMessage": "Escreva a mensagem",
+      "chooseStage": "Escolha uma etapa",
+      "end": "Jornada concluída"
+    },
+    "form": {
+      "startsWhen": "Começa quando",
+      "tag": "Etiqueta",
+      "chooseTag": "Escolha uma etiqueta…",
+      "buttonText": "Texto do botão",
+      "anyButton": "Qualquer botão",
+      "manualHelp": "Use “Inscrever contatos” em uma jornada ativa para adicionar contatos por etiqueta.",
+      "waitFor": "Aguardar",
+      "giveUpAfter": "Desistir após",
+      "amount": "Quantidade",
+      "waitReplyHelp": "Qualquer mensagem ou toque em botão do cliente conta como resposta.",
+      "check": "Verificar",
+      "template": "Modelo",
+      "chooseTemplate": "Escolha um modelo aprovado…",
+      "params": "Variáveis",
+      "paramsHelp": "Uma por linha, para {{1}}, {{2}}… Use {{name}} ou {{phone}} para os dados do contato.",
+      "message": "Mensagem",
+      "textHelp": "Você pode usar {{name}} e {{phone}}.",
+      "stage": "Etapa do funil",
+      "chooseStage": "Escolha uma etapa…",
+      "dealTitle": "Título do negócio",
+      "dealValue": "Valor do negócio",
+      "endHelp": "Nada para configurar.",
+      "deleteStep": "Excluir etapa",
+      "done": "Concluir"
+    },
+    "editor": {
+      "back": "Voltar às jornadas",
+      "name": "Nome da jornada",
+      "addStep": "Adicionar etapa",
+      "stats": "Estatísticas",
+      "enroll": "Inscrever contatos",
+      "save": "Salvar",
+      "activate": "Ativar",
+      "pause": "Pausar",
+      "saved": "Jornada salva",
+      "saveFailed": "Não foi possível salvar a jornada",
+      "fixIssues": "Corrija {count, plural, =1 {1 problema} other {# problemas}} antes de ativar",
+      "activated": "A jornada está ativa",
+      "paused": "Jornada pausada",
+      "issues": "{count, plural, =1 {1 problema para corrigir:} other {# problemas para corrigir:}}",
+      "enrollTitle": "Inscrever contatos",
+      "enrollDesc": "Inicia todos com esta etiqueta na jornada (até 500 por vez). Contatos descadastrados são ignorados.",
+      "enrolled": "{enrolled} inscritos, {skipped} ignorados",
+      "cancel": "Cancelar"
+    },
+    "list": {
+      "title": "Jornadas",
+      "subtitle": "Caminhos automáticos de várias etapas: esperas, ramificações, modelos, etiquetas e negócios, com conversão em cada etapa.",
+      "new": "Nova jornada",
+      "newDesc": "Dê um nome. Depois você desenha as etapas.",
+      "namePlaceholder": "ex.: Nutrição de novos leads",
+      "create": "Criar",
+      "emptyTitle": "Nenhuma jornada ainda",
+      "emptyHint": "Exemplo: novo contato → aguardar 1 dia → se não responder, enviar uma oferta → se tocar em “Comprar”, etiquetar e criar um negócio.",
+      "inProgress": "Em andamento",
+      "completed": "Concluídos",
+      "failed": "Com falha",
+      "updated": "Atualizada {when}",
+      "open": "Abrir",
+      "delete": "Excluir",
+      "deleteConfirm": "Excluir “{name}”? Os contatos nela vão parar.",
+      "deleteFailed": "Não foi possível excluir a jornada"
     }
   }
 }

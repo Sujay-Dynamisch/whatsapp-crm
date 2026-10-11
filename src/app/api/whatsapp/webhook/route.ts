@@ -20,6 +20,7 @@ import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { recordButtonClick } from '@/lib/whatsapp/button-clicks'
 import { refreshQuality } from '@/lib/smart-sending/quality'
 import { processInboundLanguage } from '@/lib/language/inbound'
+import { dispatchJourneyInbound } from '@/lib/journeys/dispatch'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -913,6 +914,14 @@ async function processMessage(
     message,
     text: contentText,
     accessToken,
+  })
+
+  // Journeys (migration 050): any customer message resumes their "wait
+  // for reply" steps; a button tap can also start a journey. Never throws.
+  await dispatchJourneyInbound(supabaseAdmin(), {
+    accountId,
+    contactId: contactRecord.id,
+    buttonText: interactiveReplyId ? contentText : null,
   })
 
   // ============================================================

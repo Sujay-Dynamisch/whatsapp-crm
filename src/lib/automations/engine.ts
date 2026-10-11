@@ -25,6 +25,15 @@ import { engineSendText, engineSendTemplate, engineSendInteractive } from './met
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 import { accountHasFeature } from '@/lib/features-server'
+import { dispatchJourneyTrigger } from '@/lib/journeys/dispatch'
+import type { JourneyTriggerType } from '@/lib/journeys/graph'
+
+/** Automation trigger → journey trigger (migration 050). */
+const JOURNEY_TRIGGER_FOR: Partial<Record<string, JourneyTriggerType>> = {
+  new_contact_created: 'contact_created',
+  first_inbound_message: 'first_message',
+  tag_added: 'tag_added',
+}
 
 // ------------------------------------------------------------
 // Public API
@@ -68,6 +77,19 @@ export interface DispatchInput {
 export async function runAutomationsForTrigger(input: DispatchInput): Promise<void> {
   try {
     const db = supabaseAdmin()
+
+    // Journeys (migration 050) start on the same relationship events.
+    // Dispatched here, ahead of the automations feature check, so they
+    // run even for accounts without automations. Never throws.
+    const journeyTrigger = JOURNEY_TRIGGER_FOR[input.triggerType]
+    if (journeyTrigger && input.contactId) {
+      await dispatchJourneyTrigger(db, {
+        accountId: input.accountId,
+        contactId: input.contactId,
+        trigger: journeyTrigger,
+        tagId: input.context?.tag_id,
+      })
+    }
 
     // Switched off for this account by the system admin (migration 045).
     if (!(await accountHasFeature(db, input.accountId, 'automations'))) return
