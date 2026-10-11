@@ -26,6 +26,8 @@ export const FEATURES = [
   'flows',
   'ai_agents',
   'window_keepalive',
+  'translation',
+  'voice_transcription',
   'api_access',
   'button_analytics',
 ] as const;
@@ -68,7 +70,15 @@ export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
   ai_agents: {
     label: 'AI Agents',
     description: 'AI drafts, auto-replies, knowledge base and playground.',
-    implies: ['window_keepalive'],
+    implies: ['window_keepalive', 'translation', 'voice_transcription'],
+  },
+  translation: {
+    label: 'Inbox translation',
+    description: 'Translate customer messages for agents and agent replies for customers.',
+  },
+  voice_transcription: {
+    label: 'Voice-note transcription',
+    description: 'Turn customer voice notes into text (and short summaries).',
   },
   window_keepalive: {
     label: '24h window keep-alive',
@@ -152,6 +162,8 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/api/button-clicks', feature: 'button_analytics' },
   { prefix: '/api/delivery-settings', feature: 'smart_sending' },
   { prefix: '/api/whatsapp/quality', feature: 'smart_sending' },
+  { prefix: '/api/language-settings', feature: 'ai_agents' },
+  { prefix: '/api/messages/translate', feature: 'translation' },
 ];
 
 const UNGATED = ['/api/automations/cron', '/api/flows/cron'];

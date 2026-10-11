@@ -22,6 +22,7 @@ import {
   Plus,
   MessageSquareDashed,
   Zap,
+  Languages,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -40,6 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { useCan } from "@/hooks/use-can";
 import { cn } from "@/lib/utils";
+import { languageName } from "@/lib/language/languages";
 import { toast } from "sonner";
 import {
   uploadAccountMedia,
@@ -112,7 +114,12 @@ interface MediaDraft {
 interface MessageComposerProps {
   conversationId: string;
   sessionExpired: boolean;
-  onSend: (text: string, replyToId?: string) => void;
+  onSend: (text: string, replyToId?: string, opts?: { translate?: boolean }) => void;
+  /**
+   * Customer language to offer outbound translation into (migration 049),
+   * or null when not applicable.
+   */
+  translateTo?: string | null;
   onSendMedia: (payload: SendMediaPayload) => void;
   onSendInteractive: (payload: InteractiveMessagePayload, replyToId?: string) => void;
   onOpenTemplates: () => void;
@@ -140,11 +147,13 @@ export function MessageComposer({
   onOpenTemplates,
   replyTo,
   onClearReply,
+  translateTo = null,
 }: MessageComposerProps) {
   const t = useTranslations("Inbox.composer");
 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [translateOn, setTranslateOn] = useState(true);
   const [drafting, setDrafting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -226,7 +235,7 @@ export function MessageComposer({
 
     setSending(true);
     try {
-      onSend(trimmed, replyTo?.id);
+      onSend(trimmed, replyTo?.id, { translate: Boolean(translateTo) && translateOn });
       setText("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
@@ -234,7 +243,7 @@ export function MessageComposer({
     } finally {
       setSending(false);
     }
-  }, [text, sending, sessionExpired, onSend, replyTo?.id]);
+  }, [text, sending, sessionExpired, onSend, replyTo?.id, translateTo, translateOn]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -537,6 +546,26 @@ export function MessageComposer({
 
   return (
     <div className="border-t border-border bg-card p-3">
+      {translateTo && (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTranslateOn((v) => !v)}
+            aria-pressed={translateOn}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+              translateOn
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:bg-muted",
+            )}
+          >
+            <Languages className="h-3.5 w-3.5" />
+            {translateOn
+              ? t("translateOn", { language: languageName(translateTo) })
+              : t("translateOff", { language: languageName(translateTo) })}
+          </button>
+        </div>
+      )}
       {replyTo && (
         <div className="mb-2">
           <ReplyQuote

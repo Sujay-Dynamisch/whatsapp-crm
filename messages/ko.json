@@ -226,7 +226,9 @@
       "send": "보내기",
       "quickReplyNamePrompt": "이 빠른 답장의 이름을 지정하세요:",
       "quickReplySaved": "빠른 답장으로 저장되었습니다.",
-      "quickReplySaveError": "빠른 답장을 저장하지 못했습니다."
+      "quickReplySaveError": "빠른 답장을 저장하지 못했습니다.",
+      "translateOn": "{language}(으)로 번역 중",
+      "translateOff": "{language}(으)로 번역하지 않고 보내기"
     },
     "bubble": {
       "photo": "사진",
@@ -315,6 +317,15 @@
       "resumed": "AI가 재개되었습니다.",
       "updateError": "AI 어시스턴트를 업데이트하지 못했습니다.",
       "networkError": "서버에 연결할 수 없습니다."
+    },
+    "language": {
+      "transcript": "음성 메시지 텍스트",
+      "transcriptFailed": "이 음성 메시지를 텍스트로 변환하지 못했습니다.",
+      "transcriptSkipped": "변환되지 않음: 설정 → 언어에서 Groq 또는 OpenAI 키를 추가하세요.",
+      "translatedFrom": "{language}에서 번역됨",
+      "translation": "번역",
+      "translate": "번역",
+      "youWrote": "작성한 내용: {text}"
     }
   },
   "Contacts": {
@@ -1709,7 +1720,8 @@
       "deals": "딜 & 통화",
       "members": "팀원",
       "api": "API 키",
-      "delivery": "스마트 발송"
+      "delivery": "스마트 발송",
+      "language": "언어"
     },
     "groups": {
       "account": "계정",
@@ -2196,6 +2208,35 @@
       "yellowPassDesc": "평가가 노란색인 동안 묶음당 수신자 수.",
       "save": "저장",
       "saved": "설정이 저장되었습니다",
+      "saveFailed": "저장하지 못했습니다: {error}"
+    }
+  },
+  "Language": {
+    "settings": {
+      "title": "언어",
+      "description": "고객의 언어로 대화하고 음성 메시지를 이해하세요.",
+      "translationTitle": "번역",
+      "translationDesc": "고객 메시지는 팀의 언어로 번역되고, 답장은 고객의 언어로 보낼 수 있습니다.",
+      "agentLanguage": "팀 언어",
+      "agentLanguageDesc": "수신 메시지가 이 언어로 번역됩니다.",
+      "translateInbound": "수신 메시지 자동 번역",
+      "translateInboundDesc": "끄면 상담원이 필요할 때 메시지를 번역할 수 있습니다.",
+      "aiKeyNote": "번역에는 AI 에이전트 → 설정의 AI 제공업체 키가 사용됩니다 (Groq, Gemini 같은 무료 제공업체도 가능).",
+      "voiceTitle": "음성 메시지",
+      "voiceDesc": "고객 음성 메시지를 텍스트로 변환하여 상담원과 AI 에이전트가 읽고 답할 수 있게 합니다.",
+      "transcribe": "음성 메시지 텍스트 변환",
+      "transcribeDesc": "Whisper를 사용합니다. 다른 언어인 경우 텍스트도 번역됩니다.",
+      "summarize": "긴 음성 메시지 요약",
+      "summarizeDesc": "긴 텍스트 위에 한두 문장 요약을 추가합니다.",
+      "provider": "변환 제공업체",
+      "providerAuto": "자동",
+      "providerGroq": "Groq (무료 등급)",
+      "providerOpenai": "OpenAI",
+      "key": "변환 API 키 (선택 사항)",
+      "keySet": "저장된 키가 있습니다. 입력하면 교체됩니다.",
+      "providerHelp": "자동은 AI 에이전트 키가 OpenAI 또는 Groq이면 재사용합니다. 다른 AI 제공업체를 쓰는 경우 여기에 무료 Groq 키를 추가하세요 (console.groq.com/keys).",
+      "save": "저장",
+      "saved": "언어 설정이 저장되었습니다",
       "saveFailed": "저장하지 못했습니다: {error}"
     }
   }

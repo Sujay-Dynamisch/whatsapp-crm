@@ -31,6 +31,8 @@ describe('feature registry', () => {
       'flows',
       'ai_agents',
       'window_keepalive',
+      'translation',
+      'voice_transcription',
       'api_access',
       'button_analytics',
     ]);
@@ -105,6 +107,8 @@ describe('featureForPath', () => {
     ['/api/button-clicks', 'button_analytics'],
     ['/api/delivery-settings', 'smart_sending'],
     ['/api/whatsapp/quality', 'smart_sending'],
+    ['/api/language-settings', 'ai_agents'],
+    ['/api/messages/translate', 'translation'],
   ])('%s → %s', (path, feature) => {
     expect(featureForPath(path)).toBe(feature);
   });

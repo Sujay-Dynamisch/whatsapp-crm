@@ -163,6 +163,16 @@ BEGIN
     RAISE EXCEPTION 'claim_limited_retries is missing — migration 048 did not apply';
   END IF;
 
+  -- 049: multilingual inbox. The webhook writes these columns on every
+  -- translated / transcribed message.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'messages'
+      AND column_name IN ('detected_language', 'translated_text', 'original_text', 'transcript', 'transcript_summary', 'transcript_status')
+  ) <> 6 OR to_regclass('public.language_settings') IS NULL THEN
+    RAISE EXCEPTION 'multilingual columns / language_settings missing — migration 049 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

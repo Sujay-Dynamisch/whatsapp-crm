@@ -226,7 +226,9 @@
       "send": "Send",
       "quickReplyNamePrompt": "Name this quick reply:",
       "quickReplySaved": "Saved as a quick reply.",
-      "quickReplySaveError": "Couldn't save the quick reply."
+      "quickReplySaveError": "Couldn't save the quick reply.",
+      "translateOn": "Translating to {language}",
+      "translateOff": "Send without translating to {language}"
     },
     "bubble": {
       "photo": "Photo",
@@ -315,6 +317,15 @@
       "resumed": "AI resumed.",
       "updateError": "Couldn’t update the AI assistant.",
       "networkError": "Couldn’t reach the server."
+    },
+    "language": {
+      "transcript": "Voice note transcript",
+      "transcriptFailed": "Could not transcribe this voice note.",
+      "transcriptSkipped": "Not transcribed: add a Groq or OpenAI key in Settings → Languages.",
+      "translatedFrom": "Translated from {language}",
+      "translation": "Translation",
+      "translate": "Translate",
+      "youWrote": "You wrote: {text}"
     }
   },
   "Contacts": {
@@ -1709,7 +1720,8 @@
       "deals": "Deals & currency",
       "members": "Team members",
       "api": "API keys",
-      "delivery": "Smart sending"
+      "delivery": "Smart sending",
+      "language": "Languages"
     },
     "groups": {
       "account": "Account",
@@ -2196,6 +2208,35 @@
       "yellowPassDesc": "Recipients per batch while the rating is yellow.",
       "save": "Save",
       "saved": "Smart sending settings saved",
+      "saveFailed": "Could not save: {error}"
+    }
+  },
+  "Language": {
+    "settings": {
+      "title": "Languages",
+      "description": "Talk to customers in their language and understand their voice notes.",
+      "translationTitle": "Translation",
+      "translationDesc": "Customer messages are translated into your team’s language, and replies can be sent back in the customer’s language.",
+      "agentLanguage": "Your team’s language",
+      "agentLanguageDesc": "Incoming messages are translated into this language.",
+      "translateInbound": "Translate incoming messages automatically",
+      "translateInboundDesc": "Otherwise agents can translate a message on demand.",
+      "aiKeyNote": "Translation uses the AI provider key from AI Agents → Setup (free providers like Groq and Gemini work).",
+      "voiceTitle": "Voice notes",
+      "voiceDesc": "Turn customer voice notes into text so agents and the AI agent can read and answer them.",
+      "transcribe": "Transcribe voice notes",
+      "transcribeDesc": "Uses Whisper. The transcript is also translated when it is in another language.",
+      "summarize": "Summarise long voice notes",
+      "summarizeDesc": "Adds a one or two sentence summary above long transcripts.",
+      "provider": "Transcription provider",
+      "providerAuto": "Automatic",
+      "providerGroq": "Groq (free tier)",
+      "providerOpenai": "OpenAI",
+      "key": "Transcription API key (optional)",
+      "keySet": "A key is saved. Type to replace it.",
+      "providerHelp": "Automatic reuses your AI Agents key when it is OpenAI or Groq. With any other AI provider, add a free Groq key here (console.groq.com/keys).",
+      "save": "Save",
+      "saved": "Language settings saved",
       "saveFailed": "Could not save: {error}"
     }
   }

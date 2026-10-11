@@ -5,6 +5,7 @@ import { aiContextMessageLimit } from './defaults'
 interface DbMessage {
   sender_type: 'customer' | 'agent' | 'bot'
   content_text: string | null
+  transcript?: string | null
 }
 
 /**
@@ -21,21 +22,27 @@ export async function buildConversationContext(
   conversationId: string,
   limit: number = aiContextMessageLimit(),
 ): Promise<ChatMessage[]> {
-  const { data, error } = await db
-    .from('messages')
-    .select('sender_type, content_text')
-    .eq('conversation_id', conversationId)
-    .in('content_type', ['text', 'interactive'])
-    .order('created_at', { ascending: false })
-    .limit(limit)
+  // Voice notes count as text once transcribed (migration 049). If that
+  // migration hasn't run, fall back to the text-only query.
+  const query = (withTranscripts: boolean) =>
+    db
+      .from('messages')
+      .select(withTranscripts ? 'sender_type, content_text, transcript' : 'sender_type, content_text')
+      .eq('conversation_id', conversationId)
+      .in('content_type', withTranscripts ? ['text', 'interactive', 'audio'] : ['text', 'interactive'])
+      .order('created_at', { ascending: false })
+      .limit(limit)
 
+  let { data, error } = await query(true)
+  if (error && /transcript/.test(error.message)) ({ data, error } = await query(false))
   if (error) throw error
 
-  const rows = ((data ?? []) as DbMessage[]).reverse()
+  const rows = ((data ?? []) as unknown as DbMessage[]).reverse()
   return rows
-    .filter((m) => m.content_text && m.content_text.trim())
-    .map((m) => ({
+    .map((m) => ({ m, text: (m.content_text || m.transcript || '').trim() }))
+    .filter(({ text }) => text)
+    .map(({ m, text }) => ({
       role: m.sender_type === 'customer' ? 'user' : 'assistant',
-      content: m.content_text!.trim(),
+      content: text,
     }))
 }

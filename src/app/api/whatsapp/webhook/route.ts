@@ -19,6 +19,7 @@ import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { recordButtonClick } from '@/lib/whatsapp/button-clicks'
 import { refreshQuality } from '@/lib/smart-sending/quality'
+import { processInboundLanguage } from '@/lib/language/inbound'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -902,6 +903,18 @@ async function processMessage(
     clickedAt: new Date(parseInt(message.timestamp) * 1000),
   })
 
+  // Translation + voice-note transcription (migration 049). Runs before
+  // automations and the AI so a voice note's transcript can trigger
+  // keyword automations and be answered by the AI. Never throws.
+  const { transcript } = await processInboundLanguage(supabaseAdmin(), {
+    accountId,
+    conversationId: conversation.id,
+    messageRowId: insertedRows[0].id as string,
+    message,
+    text: contentText,
+    accessToken,
+  })
+
   // ============================================================
   // Flow runner dispatch.
   //
@@ -948,7 +961,7 @@ async function processMessage(
   // message all exist before any step — including send_message — runs.
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
-  const inboundText = contentText ?? message.text?.body ?? ''
+  const inboundText = contentText ?? message.text?.body ?? transcript ?? ''
 
   // Unsubscribe detection: if customer replies STOP / opt-out, tag contact as 'unsubscribe'
   if (inboundText.trim() && isUnsubscribeText(inboundText)) {

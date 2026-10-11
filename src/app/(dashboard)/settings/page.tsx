@@ -19,6 +19,7 @@ import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { SmartSendingPanel } from '@/components/settings/smart-sending-panel';
+import { LanguagePanel } from '@/components/settings/language-panel';
 import { FeatureUnavailable } from '@/components/layout/feature-gate';
 import {
   resolveSection,
@@ -83,6 +84,7 @@ function SettingsPageInner() {
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
     delivery: <SmartSendingPanel />,
+    language: <LanguagePanel />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,
   };

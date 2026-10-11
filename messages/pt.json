@@ -226,7 +226,9 @@
       "send": "Enviar",
       "quickReplyNamePrompt": "Dê um nome a esta resposta rápida:",
       "quickReplySaved": "Salva como resposta rápida.",
-      "quickReplySaveError": "Não foi possível salvar a resposta rápida."
+      "quickReplySaveError": "Não foi possível salvar a resposta rápida.",
+      "translateOn": "Traduzindo para {language}",
+      "translateOff": "Enviar sem traduzir para {language}"
     },
     "bubble": {
       "photo": "Foto",
@@ -315,6 +317,15 @@
       "resumed": "IA retomada.",
       "updateError": "Não foi possível atualizar o assistente de IA.",
       "networkError": "Não foi possível conectar ao servidor."
+    },
+    "language": {
+      "transcript": "Transcrição da mensagem de voz",
+      "transcriptFailed": "Não foi possível transcrever esta mensagem de voz.",
+      "transcriptSkipped": "Não transcrita: adicione uma chave da Groq ou OpenAI em Configurações → Idiomas.",
+      "translatedFrom": "Traduzido do {language}",
+      "translation": "Tradução",
+      "translate": "Traduzir",
+      "youWrote": "Você escreveu: {text}"
     }
   },
   "Contacts": {
@@ -1709,7 +1720,8 @@
       "deals": "Negócios e moeda",
       "members": "Membros da equipe",
       "api": "Chaves de API",
-      "delivery": "Envio inteligente"
+      "delivery": "Envio inteligente",
+      "language": "Idiomas"
     },
     "groups": {
       "account": "Conta",
@@ -2196,6 +2208,35 @@
       "yellowPassDesc": "Destinatários por lote enquanto a nota estiver amarela.",
       "save": "Salvar",
       "saved": "Configurações salvas",
+      "saveFailed": "Não foi possível salvar: {error}"
+    }
+  },
+  "Language": {
+    "settings": {
+      "title": "Idiomas",
+      "description": "Fale com os clientes no idioma deles e entenda suas mensagens de voz.",
+      "translationTitle": "Tradução",
+      "translationDesc": "As mensagens dos clientes são traduzidas para o idioma da sua equipe e as respostas podem ser enviadas no idioma do cliente.",
+      "agentLanguage": "Idioma da sua equipe",
+      "agentLanguageDesc": "As mensagens recebidas são traduzidas para este idioma.",
+      "translateInbound": "Traduzir mensagens recebidas automaticamente",
+      "translateInboundDesc": "Caso contrário, os agentes podem traduzir uma mensagem quando precisarem.",
+      "aiKeyNote": "A tradução usa a chave do provedor de IA em Agentes de IA → Configuração (provedores gratuitos como Groq e Gemini funcionam).",
+      "voiceTitle": "Mensagens de voz",
+      "voiceDesc": "Transforme mensagens de voz em texto para que agentes e a IA possam ler e responder.",
+      "transcribe": "Transcrever mensagens de voz",
+      "transcribeDesc": "Usa o Whisper. A transcrição também é traduzida se estiver em outro idioma.",
+      "summarize": "Resumir mensagens de voz longas",
+      "summarizeDesc": "Adiciona um resumo de uma ou duas frases acima das transcrições longas.",
+      "provider": "Provedor de transcrição",
+      "providerAuto": "Automático",
+      "providerGroq": "Groq (nível gratuito)",
+      "providerOpenai": "OpenAI",
+      "key": "Chave de API de transcrição (opcional)",
+      "keySet": "Há uma chave salva. Digite para substituí-la.",
+      "providerHelp": "Automático reutiliza sua chave de Agentes de IA se for OpenAI ou Groq. Com outro provedor, adicione aqui uma chave gratuita da Groq (console.groq.com/keys).",
+      "save": "Salvar",
+      "saved": "Configurações de idioma salvas",
       "saveFailed": "Não foi possível salvar: {error}"
     }
   }

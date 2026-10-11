@@ -1,6 +1,7 @@
 import {
   Coins,
   Gauge,
+  Languages,
   FileText,
   KeyRound,
   LayoutGrid,
@@ -34,6 +35,7 @@ export const SETTINGS_SECTIONS = [
   'fields',
   'deals',
   'delivery',
+  'language',
   'members',
   'api',
 ] as const;
@@ -61,6 +63,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
   delivery: { id: 'delivery', label: 'Smart sending', icon: Gauge, group: 'workspace' },
+  language: { id: 'language', label: 'Languages', icon: Languages, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
 };
@@ -95,5 +98,6 @@ export function resolveSection(raw: string | null): SettingsSection {
 export const SECTION_FEATURE: Partial<Record<SettingsSection, Feature>> = {
   deals: 'pipelines',
   delivery: 'smart_sending',
+  language: 'ai_agents',
   api: 'api_access',
 };

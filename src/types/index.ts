@@ -198,6 +198,8 @@ export interface Conversation {
    */
   ai_autoreply_disabled?: boolean;
   ai_reply_count?: number;
+  /** Last detected customer language, ISO 639-1 (migration 049). */
+  customer_language?: string | null;
   ai_handoff_summary?: string | null;
 }
 
@@ -284,6 +286,13 @@ export interface Message {
   error_code?: number | null;
   error_title?: string | null;
   error_details?: string | null;
+  /** Multilingual inbox (migration 049). */
+  detected_language?: string | null;
+  translated_text?: string | null;
+  original_text?: string | null;
+  transcript?: string | null;
+  transcript_summary?: string | null;
+  transcript_status?: 'done' | 'failed' | 'skipped' | null;
 }
 
 export type ReactionActor = 'customer' | 'agent';

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useAgentLanguage } from "@/hooks/use-agent-language";
 import { usePresence } from "@/hooks/use-presence";
 import { PresenceDot } from "@/components/presence/presence-dot";
 import { presenceLabel } from "@/lib/presence";
@@ -171,7 +172,8 @@ export function MessageThread({
   const tTimer = useTranslations("Inbox.sessionTimer");
   const tQuote = useTranslations("Inbox.replyQuote");
 
-  const { user } = useAuth();
+  const { user, hasFeature } = useAuth();
+  const agentLanguage = useAgentLanguage();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -467,7 +469,7 @@ export function MessageThread({
   }, [messages]);
 
   const handleSend = useCallback(
-    async (text: string, replyToId?: string) => {
+    async (text: string, replyToId?: string, opts?: { translate?: boolean }) => {
       if (!conversation) return;
 
       const tempId = `temp-${Date.now()}`;
@@ -495,6 +497,9 @@ export function MessageThread({
             message_type: "text",
             content_text: text,
             reply_to_message_id: replyToId,
+            // Outbound translation (migration 049) — the server
+            // translates into the customer's language.
+            ...(opts?.translate ? { translate: true } : {}),
           }),
         });
 
@@ -1200,6 +1205,13 @@ export function MessageThread({
         onOpenTemplates={handleOpenTemplates}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
+        translateTo={
+          hasFeature("translation") &&
+          conversation.customer_language &&
+          conversation.customer_language !== agentLanguage
+            ? conversation.customer_language
+            : null
+        }
       />
 
       <TemplatePicker
