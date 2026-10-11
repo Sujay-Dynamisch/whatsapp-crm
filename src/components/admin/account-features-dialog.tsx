@@ -111,7 +111,7 @@ export function AccountFeaturesDialog({
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+          <div className="max-h-[55dvh] space-y-2 overflow-y-auto pr-1">
             {FEATURES.map((feature) => {
               const parent = blockedBy(feature);
               const on = isFeatureEnabled(disabled, feature);

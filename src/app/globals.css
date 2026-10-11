@@ -237,6 +237,32 @@ html[data-theme="rose"] {
   }
 }
 
+/* ------------------------------------------------------------------
+ * Mobile
+ * ------------------------------------------------------------------ */
+
+/* One over-wide child must not make the whole page scroll sideways.
+ * `clip` (not `hidden`) so position: sticky keeps working. */
+body {
+  overflow-x: clip;
+}
+
+/* iOS Safari zooms the page when a focused field's font is under
+ * 16px. Unlayered so it beats the text-sm utilities on phones only. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Notched phones (viewport-fit=cover): keep fixed chrome clear of the
+ * home indicator / rounded corners. */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

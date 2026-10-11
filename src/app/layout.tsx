@@ -43,6 +43,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#020617",
   colorScheme: "dark light",
+  width: "device-width",
+  initialScale: 1,
+  // Use the full screen on notched phones (safe-area insets are padded
+  // in globals.css), and let the on-screen keyboard shrink the layout
+  // so the chat composer stays visible above it.
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
 };
 
 // Inline boot script — runs before React hydrates so the user's

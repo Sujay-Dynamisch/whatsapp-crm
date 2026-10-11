@@ -103,7 +103,7 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
             the legend is lg-only), so there's no empty band above the
             stage on small screens. */}
         {!isMobile && (
-          <div className="flex items-center gap-4 px-6 py-3.5">
+          <div className="flex items-center gap-4 px-3 py-3.5 sm:px-6">
             <div
               role="group"
               aria-label={t("editorView")}
@@ -140,7 +140,7 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
         )}
 
         {/* ---- stage: the active view, owning its own overflow ---- */}
-        <div className="relative mx-6 min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card-2">
+        <div className="relative mx-3 min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card-2 sm:mx-6">
           {effectiveView === "canvas" ? (
             <FlowCanvas />
           ) : (
@@ -151,7 +151,7 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
         </div>
 
         {/* ---- validation / activate-readiness bar ---- */}
-        <div className="px-6 pb-5 pt-3">
+        <div className="px-3 pb-5 pt-3 sm:px-6">
           <ValidationPanel />
         </div>
       </div>

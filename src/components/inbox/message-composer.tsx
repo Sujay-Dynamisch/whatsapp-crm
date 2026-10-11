@@ -658,7 +658,7 @@ export function MessageComposer({
           </Button>
         </div>
       ) : (
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-1 sm:gap-2">
           {/* Attach menu — photo / video / document / voice. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -723,6 +723,16 @@ export function MessageComposer({
                 <Zap className="mr-2 h-4 w-4" />
                 {t("quickReplies")}
               </DropdownMenuItem>
+              {/* Phones: AI draft lives here so the text box keeps its
+                  width; on sm+ it's the standalone button below. */}
+              <DropdownMenuItem
+                className="sm:hidden"
+                disabled={drafting || readOnly}
+                onClick={handleDraft}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {t("draftWithAI")}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -745,7 +755,7 @@ export function MessageComposer({
             gateReason="send messages"
             disabled={drafting}
             title={readOnly ? undefined : t("draftWithAI")}
-            className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-primary"
+            className="hidden h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-primary sm:inline-flex"
             onClick={handleDraft}
           >
             {drafting ? (
@@ -807,7 +817,7 @@ export function MessageComposer({
           <DialogHeader>
             <DialogTitle>{t("interactiveMessage")}</DialogTitle>
           </DialogHeader>
-          <div className="max-h-[70vh] overflow-y-auto">
+          <div className="max-h-[70dvh] overflow-y-auto">
             <InteractiveBuilder
               value={interactivePayload}
               onChange={setInteractivePayload}

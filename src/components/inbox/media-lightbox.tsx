@@ -40,8 +40,8 @@ import { galleryIndexOf, type MediaGalleryItem } from "@/lib/media/gallery";
 
 type Translator = ReturnType<typeof useTranslations>;
 
-/** Leaves room for the caption and the header inside a 100vh dialog. */
-const MEDIA_MAX_HEIGHT = "max-h-[75vh]";
+/** Leaves room for the caption and the header inside a 100dvh dialog. */
+const MEDIA_MAX_HEIGHT = "max-h-[75dvh]";
 
 interface MediaLightboxProps {
   items: MediaGalleryItem[];
