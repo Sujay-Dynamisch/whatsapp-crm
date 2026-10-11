@@ -124,6 +124,13 @@ export interface Contact {
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the
    *  Inbox conversation list, for tag filtering). Absent otherwise. */
   tags?: Tag[];
+  /** Engagement signals (migration 048) — see lib/smart-sending/engagement. */
+  last_engaged_at?: string | null;
+  last_read_at?: string | null;
+  unread_streak?: number;
+  meta_limited_count?: number;
+  last_meta_limited_at?: string | null;
+  activity_hours?: number[];
 }
 
 export interface Tag {
@@ -543,6 +550,11 @@ export interface BroadcastRecipient {
    * Added in migration 038; null on rows created before it.
    */
   template_params?: string[] | null;
+  /** Smart sending (migration 048). */
+  error_code?: number | null;
+  retry_count?: number;
+  retry_at?: string | null;
+  send_after?: string | null;
   created_at: string;
   contact?: Contact;
 }

@@ -29,6 +29,7 @@ import { createGcpBackend, type SchedulingBackend } from '@/lib/broadcast-schedu
 import {
   handleArm,
   handleExecute,
+  handleLimitedRetries,
   handleReconcile,
   isArmPayload,
   isExecutePayload,
@@ -164,8 +165,13 @@ export async function reconcileBroadcasts(req: Req, res: Res): Promise<void> {
     const s = guard(req, res);
     if (!s) return;
     const report = await handleReconcile(s.db, s.backend, s.cfg);
-    console.log(JSON.stringify({ fn: 'reconcileBroadcasts', ...report }));
-    res.status(200).json(report);
+    // 131049 automatic retries (migration 048) ride the same 5-minute
+    // schedule; a failure here must not hide the reconcile result.
+    const retries = await handleLimitedRetries(s.db).catch((err) => ({
+      error: err instanceof Error ? err.message : String(err),
+    }));
+    console.log(JSON.stringify({ fn: 'reconcileBroadcasts', ...report, retries }));
+    res.status(200).json({ ...report, retries });
   } catch (err) {
     console.error('[reconcileBroadcasts]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'internal' });

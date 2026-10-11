@@ -10,6 +10,17 @@ import {
 import { normalizeKey } from '@/lib/contacts/dedupe';
 import { getUnsubscribedContactIds } from '@/lib/contacts/unsubscribe';
 import { Contact, MessageTemplate } from '@/types';
+import {
+  bestHourUtc,
+  computeEngagement,
+  DEFAULT_ENGAGEMENT_FILTER,
+  DEFAULT_REST_POLICY,
+  passesEngagementFilter,
+  personalSendTime,
+  type EngagementFilter,
+  type RestPolicy,
+} from '@/lib/smart-sending/engagement';
+import { zonedLocalToUtc } from '@/lib/broadcast-scheduling/time';
 
 import type {
   SendTimeCardParams,
@@ -31,6 +42,8 @@ export interface AudienceConfig {
   csvContacts?: { phone: string; name?: string }[];
   /** Contacts carrying any of these tags are subtracted from the result. */
   excludeTagIds?: string[];
+  /** Engagement-based exclusion (smart sending, migration 048). */
+  engagementFilter?: EngagementFilter;
 }
 
 /**
@@ -67,6 +80,11 @@ interface BroadcastPayload {
     localDatetime: string;
     timezone: string;
   };
+  /**
+   * Smart timing (migration 048, needs `schedule`): each recipient is
+   * sent at their most active hour within 24h of the scheduled time.
+   */
+  smartTiming?: boolean;
 }
 
 /**
@@ -81,6 +99,18 @@ export class BroadcastScheduleError extends Error {
     super(message);
     this.name = 'BroadcastScheduleError';
     this.broadcastId = broadcastId;
+  }
+}
+
+/**
+ * The server refused to keep sending (the number's quality rating is
+ * RED). Remaining recipients stay 'pending' — resumable from the
+ * broadcast page once the rating recovers.
+ */
+export class BroadcastPausedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BroadcastPausedError';
   }
 }
 
@@ -273,7 +303,7 @@ async function fetchCustomValueIndex(
 }
 
 export function useBroadcastSending(): UseBroadcastSendingReturn {
-  const { accountId } = useAuth();
+  const { accountId, hasFeature } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [processedCount, setProcessedCount] = useState(0);
@@ -340,6 +370,26 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       const unsubscribedIds = await getUnsubscribedContactIds(supabase, accountId);
       if (unsubscribedIds.size > 0) {
         contacts = contacts.filter((c) => !unsubscribedIds.has(c.id));
+      }
+    }
+
+    // Smart sending (migration 048): leave out resting / low-engagement
+    // contacts per the chosen filter. Defaults to skipping resting ones.
+    if (accountId && hasFeature('smart_sending')) {
+      const filter = audience.engagementFilter ?? DEFAULT_ENGAGEMENT_FILTER;
+      if (filter !== 'all') {
+        const { data: s } = await supabase
+          .from('delivery_settings')
+          .select('rest_days, rest_after_unread')
+          .eq('account_id', accountId)
+          .maybeSingle();
+        const policy: RestPolicy = {
+          restDays: s?.rest_days ?? DEFAULT_REST_POLICY.restDays,
+          restAfterUnread: s?.rest_after_unread ?? DEFAULT_REST_POLICY.restAfterUnread,
+        };
+        contacts = contacts.filter((c) =>
+          passesEngagementFilter(computeEngagement(c, policy), filter),
+        );
       }
     }
 
@@ -517,6 +567,12 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       }
       setTotalCount(contacts.length);
 
+      // Smart timing only applies to a server-side (scheduled) send.
+      const smartTimingBase =
+        payload.smartTiming && payload.schedule && hasFeature('smart_sending')
+          ? zonedLocalToUtc(payload.schedule.localDatetime, payload.schedule.timezone)
+          : null;
+
       // ── Step 2: Create broadcast row ──────────────────────────────
       setProgress(10);
       const { data: broadcast, error: broadcastError } = await supabase
@@ -540,6 +596,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             ? {
                 template_id: payload.template.id ?? null,
                 timezone: payload.schedule.timezone,
+                ...(smartTimingBase ? { smart_timing: true } : {}),
               }
             : {}),
           // A scheduled campaign stays 'scheduled' until the server
@@ -612,6 +669,18 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         status: 'pending' as const,
         template_params: paramsByContact.get(contact.id) ?? [],
         ...(payload.schedule ? { message_params: freezeMessageParams(contact) } : {}),
+        // Personal send time; null = send at the scheduled time (no
+        // activity pattern yet).
+        ...(smartTimingBase
+          ? {
+              send_after: (() => {
+                const hour = bestHourUtc(contact.activity_hours);
+                return hour === null
+                  ? null
+                  : personalSendTime(smartTimingBase, hour, contact.id).toISOString();
+              })(),
+            }
+          : {}),
       }));
 
       for (let i = 0; i < recipientRows.length; i += INSERT_BATCH_SIZE) {
@@ -731,6 +800,12 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             data = await res.json();
             if (res.ok) break;
 
+            // Quality guard (migration 048): stop the whole campaign,
+            // leaving the rest 'pending' so it can be resumed later.
+            if ((data as { code?: string }).code === 'quality_guard') {
+              throw new BroadcastPausedError(data.error || 'Broadcast paused by the quality guard');
+            }
+
             const retryIn =
               attempt < BATCH_SEND_ATTEMPTS
                 ? batchRetryDelayMs(res.status, res.headers.get('Retry-After'))
@@ -795,6 +870,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           setFailedCount(totalFailed);
           setProcessedCount(Math.min(i + batch.length, totalRecipients));
         } catch (err) {
+          if (err instanceof BroadcastPausedError) throw err;
           for (const recipient of batch) {
             totalFailed++;
             await supabase

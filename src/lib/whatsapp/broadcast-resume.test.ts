@@ -123,6 +123,7 @@ interface PlanWrites {
   statusFilter?: unknown;
   failedIds?: unknown;
   failedUpdate?: Record<string, unknown>;
+  orFilter?: string;
 }
 
 function planDb(fx: PlanFixture, writes: PlanWrites = {}): SupabaseClient {
@@ -132,6 +133,10 @@ function planDb(fx: PlanFixture, writes: PlanWrites = {}): SupabaseClient {
         select: () => b,
         eq: () => b,
         order: () => b,
+        or: (expr: string) => {
+          writes.orFilter = expr;
+          return b;
+        },
         in: (col: string, vals: unknown) => {
           if (col === 'status') writes.statusFilter = vals;
           if (col === 'id') writes.failedIds = vals;
@@ -364,5 +369,31 @@ describe('planBroadcastResume', () => {
       'pending',
     );
     expect(plan.templateRow?.language).toBe('en');
+  });
+});
+
+describe('planBroadcastResume — smart timing and targeted retries (migration 048)', () => {
+  it('never plans a recipient whose personal send time is still ahead', async () => {
+    const writes: PlanWrites = {};
+    await planBroadcastResume(
+      planDb({ broadcast: BROADCAST, config: CONFIG, recipients: [recipient('r1', '+14155550101')] }, writes),
+      'acct-1',
+      'bc-1',
+      'pending',
+      { now: new Date('2026-10-11T10:00:00Z') },
+    );
+    expect(writes.orFilter).toBe('send_after.is.null,send_after.lte.2026-10-11T10:00:00.000Z');
+  });
+
+  it('limits a retry pass to the claimed recipients', async () => {
+    const writes: PlanWrites = {};
+    await planBroadcastResume(
+      planDb({ broadcast: BROADCAST, config: CONFIG, recipients: [recipient('r1', '+14155550101')] }, writes),
+      'acct-1',
+      'bc-1',
+      'failed',
+      { recipientIds: ['r1'] },
+    );
+    expect(writes.failedIds).toEqual(['r1']);
   });
 });

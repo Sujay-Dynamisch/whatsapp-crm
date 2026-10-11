@@ -742,7 +742,8 @@
         "toastCancelled": "예약이 취소되었습니다",
         "toastRetried": "{count}명의 수신자에 대한 재시도가 대기열에 추가되었습니다",
         "toastFailed": "예약 요청 실패: {error}"
-      }
+      },
+      "autoRetryAt": "자동 재시도 {when}"
     },
     "new": {
       "title": "새 브로드캐스트",
@@ -876,7 +877,10 @@
         "schedulePastError": "미래 시간을 선택하세요.",
         "scheduleBtn": "브로드캐스트 예약",
         "confirmScheduleTitle": "예약 확인",
-        "confirmScheduleDesc": "이 브로드캐스트는 <b>{template}</b> 템플릿으로 <b>{when}</b>에 <b>{count, number}</b>명의 연락처에게 발송됩니다."
+        "confirmScheduleDesc": "이 브로드캐스트는 <b>{template}</b> 템플릿으로 <b>{when}</b>에 <b>{count, number}</b>명의 연락처에게 발송됩니다.",
+        "smartTiming": "스마트 타이밍",
+        "smartTimingDesc": "24시간 이내에 각 연락처가 주로 메시지를 읽는 시간에 발송합니다. 패턴이 없는 연락처는 시작 시간에 받습니다.",
+        "smartTimingNow": "앞으로 24시간 중 각 연락처의 최적 시간"
       }
     }
   },
@@ -1704,7 +1708,8 @@
       "fields": "필드 & 태그",
       "deals": "딜 & 통화",
       "members": "팀원",
-      "api": "API 키"
+      "api": "API 키",
+      "delivery": "스마트 발송"
     },
     "groups": {
       "account": "계정",
@@ -2120,6 +2125,78 @@
       "template_quick_reply": "템플릿 버튼",
       "interactive_button": "인터랙티브 버튼",
       "interactive_list": "목록 옵션"
+    }
+  },
+  "SmartSending": {
+    "filter": {
+      "title": "참여도",
+      "all": {
+        "label": "모두",
+        "desc": "참여도 필터 없음."
+      },
+      "skip_resting": {
+        "label": "휴식 중인 연락처 제외",
+        "desc": "최근 Meta가 제한했거나 여러 브로드캐스트를 무시한 연락처를 제외합니다. 권장."
+      },
+      "warm_and_engaged": {
+        "label": "관심 및 활성",
+        "desc": "최근 읽거나 답장한 연락처만."
+      },
+      "engaged": {
+        "label": "활성만",
+        "desc": "최근 답장, 클릭 또는 읽은 연락처만. 전달률 최고."
+      }
+    },
+    "badge": {
+      "engaged": "활성",
+      "warm": "관심",
+      "cold": "비활성",
+      "resting": "휴식 중",
+      "scoreTitle": "참여 점수 {score}/100",
+      "restReason": {
+        "meta_limited": "최근 Meta가 이 연락처의 마케팅 메시지를 제한했습니다 (131049)",
+        "unread_streak": "여러 브로드캐스트를 연속으로 읽지 않았습니다",
+        "null": ""
+      }
+    },
+    "settings": {
+      "title": "스마트 발송",
+      "description": "번호를 보호하고 읽을 가능성이 높은 사람에게 도달하세요.",
+      "qualityTitle": "번호 품질",
+      "qualityDesc": "Meta는 최근 차단 및 신고를 바탕으로 WhatsApp 번호를 평가합니다. 낮은 평가는 제한으로 이어질 수 있습니다.",
+      "rating": {
+        "GREEN": "높음 (녹색)",
+        "YELLOW": "보통 (노란색)",
+        "RED": "낮음 (빨간색)",
+        "UNKNOWN": "알 수 없음"
+      },
+      "tier": "메시지 한도: {tier}",
+      "checked": "{when} 확인됨",
+      "neverChecked": "아직 확인 안 됨",
+      "refresh": "새로고침",
+      "refreshFailed": "새로고침 실패: {error}",
+      "action": {
+        "allow": "브로드캐스트가 정상적으로 발송됩니다.",
+        "slow": "품질 보통: 브로드캐스트를 더 작은 묶음으로 10분 간격으로 발송합니다.",
+        "block": "품질 낮음: 평가가 회복될 때까지 브로드캐스트가 일시 중지됩니다."
+      },
+      "rulesTitle": "전달 규칙",
+      "rulesDesc": "휴식, 자동 재시도 및 품질 보호의 동작 방식.",
+      "autoRetry": "Meta 제한 발송 자동 재시도",
+      "autoRetryDesc": "Meta가 연락처에 대한 마케팅 메시지를 제한하면(오류 131049) 나중에 한 번 더 시도합니다.",
+      "qualityGuard": "품질 보호",
+      "qualityGuardDesc": "품질이 보통이면 속도를 늦추고 낮으면 일시 중지합니다.",
+      "retryDelay": "재시도 간격 (시간)",
+      "retryDelayDesc": "12~72. 기본값 24.",
+      "restDays": "Meta 제한 후 휴식 (일)",
+      "restDaysDesc": "Meta가 제한한 연락처는 이 기간 동안 새 브로드캐스트에서 제외됩니다.",
+      "restUnread": "읽지 않은 브로드캐스트 후 휴식",
+      "restUnreadDesc": "이 수만큼 연속으로 브로드캐스트를 무시한 연락처는 다시 참여할 때까지 휴식합니다.",
+      "yellowPass": "품질 보통일 때 묶음 크기",
+      "yellowPassDesc": "평가가 노란색인 동안 묶음당 수신자 수.",
+      "save": "저장",
+      "saved": "설정이 저장되었습니다",
+      "saveFailed": "저장하지 못했습니다: {error}"
     }
   }
 }

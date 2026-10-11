@@ -21,6 +21,7 @@ export const FEATURES = [
   'pipelines',
   'broadcasts',
   'broadcast_scheduling',
+  'smart_sending',
   'automations',
   'flows',
   'ai_agents',
@@ -46,11 +47,15 @@ export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
   broadcasts: {
     label: 'Broadcasts',
     description: 'Bulk template campaigns to contacts.',
-    implies: ['broadcast_scheduling'],
+    implies: ['broadcast_scheduling', 'smart_sending'],
   },
   broadcast_scheduling: {
     label: 'Scheduled broadcasts',
     description: 'Schedule broadcasts for a future time (Google Cloud).',
+  },
+  smart_sending: {
+    label: 'Smart sending',
+    description: 'Engagement scores, resting, automatic retry of Meta-limited sends, best-time sending and the quality guard.',
   },
   automations: {
     label: 'Automations',
@@ -145,6 +150,8 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/api/conversations/window-keepalive', feature: 'window_keepalive' },
   { prefix: '/api/account/api-keys', feature: 'api_access' },
   { prefix: '/api/button-clicks', feature: 'button_analytics' },
+  { prefix: '/api/delivery-settings', feature: 'smart_sending' },
+  { prefix: '/api/whatsapp/quality', feature: 'smart_sending' },
 ];
 
 const UNGATED = ['/api/automations/cron', '/api/flows/cron'];

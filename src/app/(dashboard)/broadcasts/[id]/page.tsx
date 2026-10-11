@@ -643,6 +643,13 @@ export default function BroadcastDetailPage() {
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-xs text-red-400">
                         {recipient.error_message ?? '-'}
+                        {recipient.retry_at && (
+                          <span className="block text-amber-500">
+                            {t('autoRetryAt', {
+                              when: new Date(recipient.retry_at).toLocaleString(),
+                            })}
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

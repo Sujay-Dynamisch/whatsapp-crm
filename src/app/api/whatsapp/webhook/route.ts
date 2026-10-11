@@ -18,6 +18,7 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { recordButtonClick } from '@/lib/whatsapp/button-clicks'
+import { refreshQuality } from '@/lib/smart-sending/quality'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -265,6 +266,25 @@ export async function POST(request: Request) {
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }
 
+async function handleQualityUpdate(wabaId: string, value: unknown) {
+  const event = (value as { event?: string } | null)?.event ?? null
+  const { data: configs } = await supabaseAdmin()
+    .from('whatsapp_config')
+    .select('id, account_id')
+    .eq('waba_id', wabaId)
+  for (const cfg of configs ?? []) {
+    await supabaseAdmin()
+      .from('whatsapp_config')
+      .update({ quality_event: event, quality_event_at: new Date().toISOString() })
+      .eq('id', cfg.id)
+    if (cfg.account_id) {
+      await refreshQuality(supabaseAdmin(), cfg.account_id as string).catch((err) =>
+        console.warn('[webhook] quality refresh failed:', err?.message ?? err)
+      )
+    }
+  }
+}
+
 async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
   if (!body.entry) return
 
@@ -287,6 +307,14 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           },
           supabaseAdmin(),
         )
+        continue
+      }
+
+      // Number quality changed (FLAGGED / UNFLAGGED / tier change).
+      // Refresh the cached rating the broadcast quality guard reads
+      // (migration 048). entry.id is the WABA id.
+      if ((change.field as string) === 'phone_number_quality_update') {
+        await handleQualityUpdate(entry.id, change.value as unknown)
         continue
       }
 
@@ -491,6 +519,9 @@ async function handleStatusUpdate(status: {
       update.error_message =
         `[${failure.code}] ${failure.title}` +
         (failure.details ? `: ${failure.details}` : '')
+      // Numeric code (migration 048): 131049 (Meta's per-user marketing
+      // limit) schedules the automatic retry and rests the contact.
+      if (Number.isInteger(failure.code)) update.error_code = failure.code
     }
 
     const { error: recUpdateErr } = await supabaseAdmin()

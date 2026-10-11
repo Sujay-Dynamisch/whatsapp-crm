@@ -742,7 +742,8 @@
         "toastCancelled": "Agendamento cancelado",
         "toastRetried": "Nova tentativa na fila para {count} destinatários",
         "toastFailed": "Falha no agendamento: {error}"
-      }
+      },
+      "autoRetryAt": "Nova tentativa automática {when}"
     },
     "new": {
       "title": "Novo disparo",
@@ -876,7 +877,10 @@
         "schedulePastError": "Escolha um horário no futuro.",
         "scheduleBtn": "Agendar transmissão",
         "confirmScheduleTitle": "Confirmar agendamento",
-        "confirmScheduleDesc": "Esta transmissão será enviada para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b> em <b>{when}</b>."
+        "confirmScheduleDesc": "Esta transmissão será enviada para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b> em <b>{when}</b>.",
+        "smartTiming": "Horário inteligente",
+        "smartTimingDesc": "Entrega a cada contato no horário em que costuma ler mensagens, em até 24 horas. Contatos sem padrão recebem no horário de início.",
+        "smartTimingNow": "o melhor horário de cada contato nas próximas 24 horas"
       }
     }
   },
@@ -1704,7 +1708,8 @@
       "fields": "Campos e tags",
       "deals": "Negócios e moeda",
       "members": "Membros da equipe",
-      "api": "Chaves de API"
+      "api": "Chaves de API",
+      "delivery": "Envio inteligente"
     },
     "groups": {
       "account": "Conta",
@@ -2120,6 +2125,78 @@
       "template_quick_reply": "Botão de modelo",
       "interactive_button": "Botão interativo",
       "interactive_list": "Opção de lista"
+    }
+  },
+  "SmartSending": {
+    "filter": {
+      "title": "Engajamento",
+      "all": {
+        "label": "Todos",
+        "desc": "Sem filtro de engajamento."
+      },
+      "skip_resting": {
+        "label": "Pular contatos em descanso",
+        "desc": "Exclui contatos limitados pela Meta recentemente ou que ignoraram várias transmissões. Recomendado."
+      },
+      "warm_and_engaged": {
+        "label": "Engajados e mornos",
+        "desc": "Apenas contatos com leituras ou respostas recentes."
+      },
+      "engaged": {
+        "label": "Apenas engajados",
+        "desc": "Apenas contatos que responderam, clicaram ou leram recentemente. Melhor entrega."
+      }
+    },
+    "badge": {
+      "engaged": "Engajado",
+      "warm": "Morno",
+      "cold": "Frio",
+      "resting": "Em descanso",
+      "scoreTitle": "Pontuação de engajamento {score}/100",
+      "restReason": {
+        "meta_limited": "A Meta limitou mensagens de marketing para este contato recentemente (131049)",
+        "unread_streak": "Ignorou várias transmissões seguidas",
+        "null": ""
+      }
+    },
+    "settings": {
+      "title": "Envio inteligente",
+      "description": "Proteja seu número e alcance quem tem mais chance de ler.",
+      "qualityTitle": "Qualidade do número",
+      "qualityDesc": "A Meta avalia seu número com base em bloqueios e denúncias recentes. Uma nota baixa pode gerar restrições.",
+      "rating": {
+        "GREEN": "Alta (verde)",
+        "YELLOW": "Média (amarela)",
+        "RED": "Baixa (vermelha)",
+        "UNKNOWN": "Desconhecida"
+      },
+      "tier": "Limite de mensagens: {tier}",
+      "checked": "Verificado {when}",
+      "neverChecked": "Ainda não verificado",
+      "refresh": "Atualizar",
+      "refreshFailed": "Não foi possível atualizar: {error}",
+      "action": {
+        "allow": "As transmissões são enviadas normalmente.",
+        "slow": "Qualidade média: transmissões em lotes menores, a cada 10 minutos.",
+        "block": "Qualidade baixa: transmissões pausadas até a nota melhorar."
+      },
+      "rulesTitle": "Regras de entrega",
+      "rulesDesc": "Como funcionam o descanso, as novas tentativas automáticas e a proteção de qualidade.",
+      "autoRetry": "Repetir automaticamente envios limitados pela Meta",
+      "autoRetryDesc": "Quando a Meta limita uma mensagem de marketing a um contato (erro 131049), tenta mais uma vez depois.",
+      "qualityGuard": "Proteção de qualidade",
+      "qualityGuardDesc": "Desacelera com qualidade média e pausa com qualidade baixa.",
+      "retryDelay": "Tentar novamente após (horas)",
+      "retryDelayDesc": "De 12 a 72. Padrão 24.",
+      "restDays": "Descanso após limite da Meta (dias)",
+      "restDaysDesc": "Contatos limitados pela Meta ficam fora de novas transmissões por esse período.",
+      "restUnread": "Descanso após transmissões não lidas",
+      "restUnreadDesc": "Contatos que ignoram essa quantidade de transmissões seguidas descansam até interagir.",
+      "yellowPass": "Tamanho do lote com qualidade média",
+      "yellowPassDesc": "Destinatários por lote enquanto a nota estiver amarela.",
+      "save": "Salvar",
+      "saved": "Configurações salvas",
+      "saveFailed": "Não foi possível salvar: {error}"
     }
   }
 }

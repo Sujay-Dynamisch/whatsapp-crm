@@ -18,6 +18,9 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useAuth } from '@/hooks/use-auth';
+import { EngagementFilterPicker } from '@/components/broadcasts/engagement-filter-picker';
+import type { EngagementFilter } from '@/lib/smart-sending/engagement';
 
 type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv';
 type CustomFieldOperator = 'is' | 'is_not' | 'contains';
@@ -34,6 +37,7 @@ interface AudienceConfig {
   customField?: CustomFieldFilter;
   csvContacts?: { phone: string; name?: string }[];
   excludeTagIds?: string[];
+  engagementFilter?: EngagementFilter;
 }
 
 interface Step2Props {
@@ -50,6 +54,7 @@ export function Step2SelectAudience({
   onBack,
 }: Step2Props) {
   const t = useTranslations('Broadcasts.wizard');
+  const { hasFeature } = useAuth();
 
   const OPERATOR_OPTIONS = useMemo<{ value: CustomFieldOperator; label: string }[]>(() => [
     { value: 'is', label: t('selectAudience.operatorIs') },
@@ -529,6 +534,13 @@ export function Step2SelectAudience({
           </div>
         )}
       </div>
+
+      {hasFeature('smart_sending') && (
+        <EngagementFilterPicker
+          value={audience.engagementFilter}
+          onChange={(engagementFilter) => onUpdate({ ...audience, engagementFilter })}
+        />
+      )}
 
       {/* Audience Summary */}
       <div className="rounded-xl border border-border bg-card/50 p-4">

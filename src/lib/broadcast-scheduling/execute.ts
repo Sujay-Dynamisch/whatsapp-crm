@@ -28,11 +28,14 @@ import {
 } from '@/lib/whatsapp/broadcast-core';
 import {
   DELIVERY_LOCK_STALE_MS,
+  claimBroadcastDelivery,
   planBroadcastResume,
+  releaseBroadcastDelivery,
 } from '@/lib/whatsapp/broadcast-resume';
 import { getUnsubscribedContactIds } from '@/lib/contacts/unsubscribe';
 import { isFeatureEnabled } from '@/lib/features';
 import { loadDisabledFeatures } from '@/lib/features-server';
+import { checkQualityGuard } from '@/lib/smart-sending/quality';
 
 import type { SchedulingConfig } from './config';
 import { schedulerJobName, type SchedulingBackend } from './gcp-backend';
@@ -277,6 +280,22 @@ export async function handleExecute(
     return markFailed(db, row, `feature_disabled: ${blocked} is not enabled for this account`, now);
   }
 
+  // Quality-rating guard (migration 048): RED holds the broadcast,
+  // YELLOW sends smaller, spaced-out passes.
+  const guard = await checkQualityGuard(db, row.account_id, now);
+  if (guard.action === 'block') {
+    if (!(await claim(db, row, now))) return { outcome: 'busy' };
+    return markFailed(
+      db,
+      row,
+      "quality_guard: your WhatsApp number's quality rating is RED, so the broadcast was held to protect it. Retry once the rating recovers.",
+      now
+    );
+  }
+  const passSize =
+    guard.action === 'slow' ? Math.min(cfg.passSize, guard.settings.yellow_pass_size) : cfg.passSize;
+  const passGapMs = guard.action === 'slow' ? SLOW_PASS_GAP_MS : 0;
+
   // A scheduled send that arrives hours late (outage, paused queue)
   // is more likely to annoy than to help. Fail it visibly; the user can
   // retry deliberately. Retries/continuations are never "late".
@@ -316,8 +335,8 @@ export async function handleExecute(
 
     let delivered = false;
     try {
-      const { plan } = await planBroadcastResume(db, row.account_id, row.id, 'pending');
-      await deliverBroadcast(db, { ...plan, planned: plan.planned.slice(0, cfg.passSize) });
+      const { plan } = await planBroadcastResume(db, row.account_id, row.id, 'pending', { now });
+      await deliverBroadcast(db, { ...plan, planned: plan.planned.slice(0, passSize) });
       delivered = true;
     } catch (err) {
       if (!(err instanceof BroadcastError && err.code === 'nothing_to_resume')) throw err;
@@ -328,12 +347,21 @@ export async function handleExecute(
     const result = await summarizeRecipients(db, row.id, pass + 1);
 
     if (pending > 0) {
+      // Next pass: now if anything is due, otherwise the earliest
+      // personal send time (smart timing); never sooner than the
+      // slow-mode gap.
+      const dueAt = await nextPendingDueAt(db, row.id, now);
+      const nextAt = passGapMs
+        ? new Date(Math.max(dueAt.getTime(), Date.now() + passGapMs))
+        : dueAt;
+
       // Release first, then hand off. If the enqueue below fails we
       // throw → Cloud Tasks retries THIS task, which re-claims (the
       // lock is free) and carries on from the remaining pending rows.
       await updateIfVersion(db, row.id, row.schedule_version, {
         delivery_locked_at: null,
         execution_result: result,
+        next_pass_at: nextAt.toISOString(),
       });
       const next: ExecutePayload = {
         broadcastId: row.id,
@@ -343,7 +371,7 @@ export async function handleExecute(
       };
       await backend.createTask({
         taskId: cloudTaskId(row.id, row.schedule_version, pass + 1),
-        scheduleTime: new Date(),
+        scheduleTime: nextAt,
         payload: next,
       });
       return { outcome: 'continued', nextPass: pass + 1, pending };
@@ -362,6 +390,7 @@ export async function handleExecute(
         : { completed_at: doneAt, last_error: null }),
       delivery_locked_at: null,
       execution_result: result,
+      next_pass_at: null,
     });
     return allFailed
       ? { outcome: 'failed', error: 'all_recipients_failed' }
@@ -385,6 +414,125 @@ export async function handleExecute(
     }).catch(() => {});
     throw err;
   }
+}
+
+/** Gap between passes when the number's quality is YELLOW. */
+export const SLOW_PASS_GAP_MS = 10 * 60 * 1000;
+
+/**
+ * When the next pass should run: `now` if any pending recipient is due
+ * (no personal send time, or it has passed), otherwise the earliest
+ * future personal send time.
+ */
+export async function nextPendingDueAt(
+  db: SupabaseClient,
+  broadcastId: string,
+  now: Date
+): Promise<Date> {
+  const nowIso = now.toISOString();
+  const { count } = await db
+    .from('broadcast_recipients')
+    .select('id', { count: 'exact', head: true })
+    .eq('broadcast_id', broadcastId)
+    .eq('status', 'pending')
+    .or(`send_after.is.null,send_after.lte.${nowIso}`);
+  if ((count ?? 0) > 0) return now;
+
+  const { data } = await db
+    .from('broadcast_recipients')
+    .select('send_after')
+    .eq('broadcast_id', broadcastId)
+    .eq('status', 'pending')
+    .order('send_after', { ascending: true })
+    .limit(1);
+  const next = (data as { send_after: string | null }[] | null)?.[0]?.send_after;
+  return next ? new Date(next) : now;
+}
+
+// ------------------------------------------------------------------
+// Automatic retry of Meta-limited sends (Scheduler → every 5 min)
+// ------------------------------------------------------------------
+
+export interface RetryReport {
+  claimed: number;
+  sent: number;
+  deferred: number;
+  errors: { broadcastId: string; error: string }[];
+}
+
+/** How long to push a retry back when it can't run right now. */
+const RETRY_DEFER_MS = 15 * 60 * 1000;
+const RETRY_BATCH = 50;
+
+/**
+ * Send the one automatic retry for recipients that hit Meta's per-user
+ * marketing limit (131049) a day or more ago (migration 048). Claimed
+ * rows are re-sent under the broadcast's delivery lock; if the lock is
+ * busy or the quality guard blocks, they go back to 'failed' with a
+ * later retry_at instead of being stranded as 'pending'.
+ */
+export async function handleLimitedRetries(
+  db: SupabaseClient,
+  now: Date = new Date()
+): Promise<RetryReport> {
+  const report: RetryReport = { claimed: 0, sent: 0, deferred: 0, errors: [] };
+  const { data, error } = await db.rpc('claim_limited_retries', { p_limit: 200 });
+  if (error) throw new Error(`claim_limited_retries failed: ${error.message}`);
+
+  const rows = (data ?? []) as { recipient_id: string; broadcast_id: string; account_id: string }[];
+  report.claimed = rows.length;
+
+  const byBroadcast = new Map<string, { accountId: string; ids: string[] }>();
+  for (const r of rows) {
+    const entry = byBroadcast.get(r.broadcast_id) ?? { accountId: r.account_id, ids: [] };
+    entry.ids.push(r.recipient_id);
+    byBroadcast.set(r.broadcast_id, entry);
+  }
+
+  const defer = async (ids: string[]) => {
+    for (let i = 0; i < ids.length; i += RETRY_BATCH) {
+      await db
+        .from('broadcast_recipients')
+        .update({
+          status: 'failed',
+          retry_count: 0,
+          retry_at: new Date(now.getTime() + RETRY_DEFER_MS).toISOString(),
+          // No error_code: re-stamping 131049 would count the contact as
+          // Meta-limited a second time (track_recipient_engagement).
+          error_message: 'Automatic retry deferred (broadcast busy or number quality is RED)',
+        })
+        .in('id', ids.slice(i, i + RETRY_BATCH))
+        .eq('status', 'pending');
+    }
+    report.deferred += ids.length;
+  };
+
+  for (const [broadcastId, { accountId, ids }] of byBroadcast) {
+    const guard = await checkQualityGuard(db, accountId, now);
+    if (guard.action === 'block' || !(await claimBroadcastDelivery(db, accountId, broadcastId, now))) {
+      await defer(ids);
+      continue;
+    }
+    try {
+      for (let i = 0; i < ids.length; i += RETRY_BATCH) {
+        try {
+          const { plan } = await planBroadcastResume(db, accountId, broadcastId, 'pending', {
+            recipientIds: ids.slice(i, i + RETRY_BATCH),
+            now,
+          });
+          await deliverBroadcast(db, plan);
+          report.sent += plan.planned.length;
+        } catch (err) {
+          if (!(err instanceof BroadcastError && err.code === 'nothing_to_resume')) throw err;
+        }
+      }
+    } catch (err) {
+      report.errors.push({ broadcastId, error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      await releaseBroadcastDelivery(db, broadcastId);
+    }
+  }
+  return report;
 }
 
 // ------------------------------------------------------------------
@@ -424,7 +572,11 @@ export async function handleReconcile(
   // 2. 'queued' well past T: the task was lost.
   const { data: lost } = await select('queued').lt('scheduled_at', iso(-QUEUED_GRACE_MS));
   // 3. 'processing' with a stale lock, or unlocked and idle: crashed pass / lost continuation.
-  const { data: stuck } = await select('processing').lt('updated_at', iso(-PROCESSING_IDLE_MS));
+  // …but not a smart-timing broadcast that is simply waiting for its
+  // next personal send time (next_pass_at in the future).
+  const { data: stuck } = await select('processing')
+    .lt('updated_at', iso(-PROCESSING_IDLE_MS))
+    .or(`next_pass_at.is.null,next_pass_at.lt.${iso(-PROCESSING_IDLE_MS)}`);
 
   for (const row of (unarmed ?? []) as ScheduleRow[]) {
     try {

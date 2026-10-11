@@ -26,6 +26,7 @@ describe('feature registry', () => {
       'pipelines',
       'broadcasts',
       'broadcast_scheduling',
+      'smart_sending',
       'automations',
       'flows',
       'ai_agents',
@@ -102,6 +103,8 @@ describe('featureForPath', () => {
     ['/api/account/api-keys/abc', 'api_access'],
     ['/button-clicks', 'button_analytics'],
     ['/api/button-clicks', 'button_analytics'],
+    ['/api/delivery-settings', 'smart_sending'],
+    ['/api/whatsapp/quality', 'smart_sending'],
   ])('%s → %s', (path, feature) => {
     expect(featureForPath(path)).toBe(feature);
   });

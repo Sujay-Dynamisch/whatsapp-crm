@@ -147,6 +147,22 @@ BEGIN
     RAISE EXCEPTION 'button_clicks feature gate policy is missing — migration 046 did not apply';
   END IF;
 
+  -- 048: smart sending. Both triggers are what make the retry and the
+  -- engagement signals happen at all; without them everything applies
+  -- cleanly and nothing is ever retried or scored.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'schedule_limited_retry'
+      AND tgrelid = 'public.broadcast_recipients'::regclass
+  ) OR NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'track_recipient_engagement'
+      AND tgrelid = 'public.broadcast_recipients'::regclass
+  ) THEN
+    RAISE EXCEPTION 'smart-sending triggers are missing — migration 048 did not apply';
+  END IF;
+  IF to_regprocedure('public.claim_limited_retries(integer)') IS NULL THEN
+    RAISE EXCEPTION 'claim_limited_retries is missing — migration 048 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

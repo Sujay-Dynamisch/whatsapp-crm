@@ -15,6 +15,7 @@ import {
   useBroadcastSending,
 } from '@/hooks/use-broadcast-sending';
 import { Check } from 'lucide-react';
+import type { EngagementFilter } from '@/lib/smart-sending/engagement';
 
 /**
  * Server-side scheduling needs the Google Cloud setup in
@@ -57,6 +58,7 @@ export default function NewBroadcastPage() {
     };
     csvContacts?: { phone: string; name?: string }[];
     excludeTagIds?: string[];
+    engagementFilter?: EngagementFilter;
   }>({ type: 'all' });
   const [variables, setVariables] = useState<
     Record<string, { type: 'static' | 'field' | 'custom_field'; value: string }>
@@ -64,7 +66,11 @@ export default function NewBroadcastPage() {
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
   const [name, setName] = useState('');
 
-  async function handleSchedule(localDatetime: string, timezone: string) {
+  async function handleSchedule(
+    localDatetime: string,
+    timezone: string,
+    opts: { smartTiming?: boolean } = {},
+  ) {
     if (!template) return;
 
     try {
@@ -77,10 +83,12 @@ export default function NewBroadcastPage() {
           customField: audience.customField,
           csvContacts: audience.csvContacts,
           excludeTagIds: audience.excludeTagIds,
+          engagementFilter: audience.engagementFilter,
         },
         variables,
         headerMediaUrl,
         schedule: { localDatetime, timezone },
+        smartTiming: opts.smartTiming,
       });
       toast.success(
         t('toastScheduled', { when: `${localDatetime.replace('T', ' ')} (${timezone})` }),
@@ -112,6 +120,7 @@ export default function NewBroadcastPage() {
           customField: audience.customField,
           csvContacts: audience.csvContacts,
           excludeTagIds: audience.excludeTagIds,
+          engagementFilter: audience.engagementFilter,
         },
         variables,
         headerMediaUrl,
@@ -280,6 +289,7 @@ export default function NewBroadcastPage() {
                   ? handleSchedule
                   : undefined
               }
+              smartTimingAvailable={SCHEDULING_ENABLED && hasFeature('smart_sending')}
               onSaveDraft={handleSaveDraft}
               onBack={() => setCurrentStep(2)}
               isProcessing={isProcessing}

@@ -47,6 +47,7 @@ import { useTranslations } from 'next-intl';
 import { contactHandle } from '@/lib/whatsapp/wa-identity';
 import { parseInternationalPhone } from '@/lib/whatsapp/phone-utils';
 import { tagContactAsUnsubscribed, removeUnsubscribeTag } from '@/lib/contacts/unsubscribe';
+import { EngagementBadge } from '@/components/contacts/engagement-badge';
 
 interface ContactDetailViewProps {
   open: boolean;
@@ -444,6 +445,7 @@ export function ContactDetailView({
                     <SheetTitle className="text-popover-foreground truncate">
                       {contact.name || t('unnamed')}
                     </SheetTitle>
+                    <EngagementBadge contact={contact} showScore />
                     {isUnsubscribed && (
                       <span className="inline-flex items-center gap-1 rounded bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-400 border border-red-500/30">
                         <Ban className="size-3" />

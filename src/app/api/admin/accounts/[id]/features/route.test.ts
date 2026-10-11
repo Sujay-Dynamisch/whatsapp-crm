@@ -85,7 +85,7 @@ describe('GET', () => {
     // Off because its parent is off, not switched off itself.
     expect(byKey.broadcast_scheduling).toMatchObject({ enabled: false, switchedOff: false });
     expect(byKey.pipelines).toMatchObject({ enabled: true, switchedOff: false });
-    expect(body.features).toHaveLength(9);
+    expect(body.features).toHaveLength(10);
   });
 
   it('400s a malformed id and 404s an unknown account', async () => {

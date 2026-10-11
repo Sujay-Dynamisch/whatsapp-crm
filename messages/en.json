@@ -742,7 +742,8 @@
         "toastCancelled": "Schedule cancelled",
         "toastRetried": "Retry queued for {count} recipients",
         "toastFailed": "Scheduling request failed: {error}"
-      }
+      },
+      "autoRetryAt": "Automatic retry {when}"
     },
     "new": {
       "title": "New Broadcast",
@@ -876,7 +877,10 @@
         "schedulePastError": "Pick a time in the future.",
         "scheduleBtn": "Schedule Broadcast",
         "confirmScheduleTitle": "Confirm Schedule",
-        "confirmScheduleDesc": "This broadcast will be sent to <b>{count, number}</b> {count, plural, =1 {contact} other {contacts}} using the <b>{template}</b> template at <b>{when}</b>."
+        "confirmScheduleDesc": "This broadcast will be sent to <b>{count, number}</b> {count, plural, =1 {contact} other {contacts}} using the <b>{template}</b> template at <b>{when}</b>.",
+        "smartTiming": "Smart timing",
+        "smartTimingDesc": "Deliver to each contact at the hour they usually read messages, within 24 hours. Contacts without a pattern get it at the start time.",
+        "smartTimingNow": "each contact’s best hour over the next 24 hours"
       }
     }
   },
@@ -1704,7 +1708,8 @@
       "fields": "Fields & tags",
       "deals": "Deals & currency",
       "members": "Team members",
-      "api": "API keys"
+      "api": "API keys",
+      "delivery": "Smart sending"
     },
     "groups": {
       "account": "Account",
@@ -2120,6 +2125,78 @@
       "template_quick_reply": "Template button",
       "interactive_button": "Interactive button",
       "interactive_list": "List option"
+    }
+  },
+  "SmartSending": {
+    "filter": {
+      "title": "Engagement",
+      "all": {
+        "label": "Everyone",
+        "desc": "No engagement filtering."
+      },
+      "skip_resting": {
+        "label": "Skip resting contacts",
+        "desc": "Leave out contacts Meta limited recently or who ignored several broadcasts. Recommended."
+      },
+      "warm_and_engaged": {
+        "label": "Warm and engaged",
+        "desc": "Only contacts with recent reads or replies."
+      },
+      "engaged": {
+        "label": "Engaged only",
+        "desc": "Only contacts who replied, clicked or read recently. Best delivery."
+      }
+    },
+    "badge": {
+      "engaged": "Engaged",
+      "warm": "Warm",
+      "cold": "Cold",
+      "resting": "Resting",
+      "scoreTitle": "Engagement score {score}/100",
+      "restReason": {
+        "meta_limited": "Meta limited marketing messages to this contact recently (131049)",
+        "unread_streak": "Ignored several broadcasts in a row",
+        "null": ""
+      }
+    },
+    "settings": {
+      "title": "Smart sending",
+      "description": "Protect your number and reach the people most likely to read.",
+      "qualityTitle": "Number quality",
+      "qualityDesc": "Meta rates your WhatsApp number from recent blocks and reports. A low rating can lead to restrictions.",
+      "rating": {
+        "GREEN": "High (green)",
+        "YELLOW": "Medium (yellow)",
+        "RED": "Low (red)",
+        "UNKNOWN": "Unknown"
+      },
+      "tier": "Messaging limit: {tier}",
+      "checked": "Checked {when}",
+      "neverChecked": "Not checked yet",
+      "refresh": "Refresh",
+      "refreshFailed": "Could not refresh: {error}",
+      "action": {
+        "allow": "Broadcasts send normally.",
+        "slow": "Quality is medium: broadcasts are sent in smaller batches, spaced 10 minutes apart.",
+        "block": "Quality is low: broadcasts are paused until the rating recovers."
+      },
+      "rulesTitle": "Delivery rules",
+      "rulesDesc": "How resting, automatic retries and the quality guard behave.",
+      "autoRetry": "Retry Meta-limited sends automatically",
+      "autoRetryDesc": "When Meta limits a marketing message to a contact (error 131049), try once more later.",
+      "qualityGuard": "Quality guard",
+      "qualityGuardDesc": "Slow broadcasts down when quality is medium and pause them when it is low.",
+      "retryDelay": "Retry after (hours)",
+      "retryDelayDesc": "12 to 72. Default 24.",
+      "restDays": "Rest after a Meta limit (days)",
+      "restDaysDesc": "Contacts limited by Meta are left out of new broadcasts for this long.",
+      "restUnread": "Rest after unread broadcasts",
+      "restUnreadDesc": "Contacts who ignore this many broadcasts in a row are rested until they engage.",
+      "yellowPass": "Batch size when quality is medium",
+      "yellowPassDesc": "Recipients per batch while the rating is yellow.",
+      "save": "Save",
+      "saved": "Smart sending settings saved",
+      "saveFailed": "Could not save: {error}"
     }
   }
 }

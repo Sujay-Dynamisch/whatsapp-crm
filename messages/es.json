@@ -742,7 +742,8 @@
         "toastCancelled": "Programación cancelada",
         "toastRetried": "Reintento en cola para {count} destinatarios",
         "toastFailed": "Error en la programación: {error}"
-      }
+      },
+      "autoRetryAt": "Reintento automático {when}"
     },
     "new": {
       "title": "Nueva difusión",
@@ -876,7 +877,10 @@
         "schedulePastError": "Elige una hora en el futuro.",
         "scheduleBtn": "Programar difusión",
         "confirmScheduleTitle": "Confirmar programación",
-        "confirmScheduleDesc": "Esta difusión se enviará a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b> el <b>{when}</b>."
+        "confirmScheduleDesc": "Esta difusión se enviará a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b> el <b>{when}</b>.",
+        "smartTiming": "Horario inteligente",
+        "smartTimingDesc": "Entrega a cada contacto a la hora en que suele leer mensajes, dentro de 24 horas. Los contactos sin patrón lo reciben a la hora de inicio.",
+        "smartTimingNow": "la mejor hora de cada contacto en las próximas 24 horas"
       }
     }
   },
@@ -1704,7 +1708,8 @@
       "fields": "Campos y etiquetas",
       "deals": "Negocios y moneda",
       "members": "Miembros del equipo",
-      "api": "Claves de API"
+      "api": "Claves de API",
+      "delivery": "Envío inteligente"
     },
     "groups": {
       "account": "Cuenta",
@@ -2120,6 +2125,78 @@
       "template_quick_reply": "Botón de plantilla",
       "interactive_button": "Botón interactivo",
       "interactive_list": "Opción de lista"
+    }
+  },
+  "SmartSending": {
+    "filter": {
+      "title": "Participación",
+      "all": {
+        "label": "Todos",
+        "desc": "Sin filtrar por participación."
+      },
+      "skip_resting": {
+        "label": "Omitir contactos en descanso",
+        "desc": "Excluye contactos que Meta limitó hace poco o que ignoraron varias difusiones. Recomendado."
+      },
+      "warm_and_engaged": {
+        "label": "Activos y templados",
+        "desc": "Solo contactos con lecturas o respuestas recientes."
+      },
+      "engaged": {
+        "label": "Solo activos",
+        "desc": "Solo contactos que respondieron, hicieron clic o leyeron hace poco. Mejor entrega."
+      }
+    },
+    "badge": {
+      "engaged": "Activo",
+      "warm": "Templado",
+      "cold": "Frío",
+      "resting": "En descanso",
+      "scoreTitle": "Puntuación de participación {score}/100",
+      "restReason": {
+        "meta_limited": "Meta limitó hace poco los mensajes de marketing a este contacto (131049)",
+        "unread_streak": "Ignoró varias difusiones seguidas",
+        "null": ""
+      }
+    },
+    "settings": {
+      "title": "Envío inteligente",
+      "description": "Protege tu número y llega a quienes tienen más probabilidad de leer.",
+      "qualityTitle": "Calidad del número",
+      "qualityDesc": "Meta califica tu número según bloqueos y denuncias recientes. Una calificación baja puede causar restricciones.",
+      "rating": {
+        "GREEN": "Alta (verde)",
+        "YELLOW": "Media (amarilla)",
+        "RED": "Baja (roja)",
+        "UNKNOWN": "Desconocida"
+      },
+      "tier": "Límite de mensajes: {tier}",
+      "checked": "Comprobado {when}",
+      "neverChecked": "Aún no comprobado",
+      "refresh": "Actualizar",
+      "refreshFailed": "No se pudo actualizar: {error}",
+      "action": {
+        "allow": "Las difusiones se envían con normalidad.",
+        "slow": "Calidad media: las difusiones se envían en lotes más pequeños, cada 10 minutos.",
+        "block": "Calidad baja: las difusiones están en pausa hasta que mejore."
+      },
+      "rulesTitle": "Reglas de entrega",
+      "rulesDesc": "Cómo funcionan el descanso, los reintentos automáticos y la protección de calidad.",
+      "autoRetry": "Reintentar automáticamente los envíos limitados por Meta",
+      "autoRetryDesc": "Si Meta limita un mensaje de marketing a un contacto (error 131049), se intenta una vez más después.",
+      "qualityGuard": "Protección de calidad",
+      "qualityGuardDesc": "Reduce la velocidad con calidad media y pausa con calidad baja.",
+      "retryDelay": "Reintentar después de (horas)",
+      "retryDelayDesc": "De 12 a 72. Predeterminado 24.",
+      "restDays": "Descanso tras un límite de Meta (días)",
+      "restDaysDesc": "Los contactos limitados por Meta se excluyen de nuevas difusiones durante este tiempo.",
+      "restUnread": "Descanso tras difusiones sin leer",
+      "restUnreadDesc": "Los contactos que ignoran esta cantidad de difusiones seguidas descansan hasta que interactúen.",
+      "yellowPass": "Tamaño de lote con calidad media",
+      "yellowPassDesc": "Destinatarios por lote mientras la calificación es amarilla.",
+      "save": "Guardar",
+      "saved": "Configuración guardada",
+      "saveFailed": "No se pudo guardar: {error}"
     }
   }
 }
