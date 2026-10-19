@@ -69,7 +69,7 @@ export function MetaPayloadDebugger({ data, triggerLabel = 'Meta Payload Debugge
         }
       />
 
-      <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto bg-card text-card-foreground border-border">
+      <DialogContent className="sm:max-w-4xl max-h-[85dvh] overflow-y-auto bg-card text-card-foreground border-border">
         <DialogHeader>
           <div className="flex items-center justify-between pr-6">
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">

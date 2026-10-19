@@ -147,6 +147,40 @@ BEGIN
     RAISE EXCEPTION 'button_clicks feature gate policy is missing — migration 046 did not apply';
   END IF;
 
+  -- 048: smart sending. Both triggers are what make the retry and the
+  -- engagement signals happen at all; without them everything applies
+  -- cleanly and nothing is ever retried or scored.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'schedule_limited_retry'
+      AND tgrelid = 'public.broadcast_recipients'::regclass
+  ) OR NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'track_recipient_engagement'
+      AND tgrelid = 'public.broadcast_recipients'::regclass
+  ) THEN
+    RAISE EXCEPTION 'smart-sending triggers are missing — migration 048 did not apply';
+  END IF;
+  IF to_regprocedure('public.claim_limited_retries(integer)') IS NULL THEN
+    RAISE EXCEPTION 'claim_limited_retries is missing — migration 048 did not apply';
+  END IF;
+
+  -- 049: multilingual inbox. The webhook writes these columns on every
+  -- translated / transcribed message.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'messages'
+      AND column_name IN ('detected_language', 'translated_text', 'original_text', 'transcript', 'transcript_summary', 'transcript_status')
+  ) <> 6 OR to_regclass('public.language_settings') IS NULL THEN
+    RAISE EXCEPTION 'multilingual columns / language_settings missing — migration 049 did not apply';
+  END IF;
+
+  -- 050: journeys. The partial unique index is what stops a contact
+  -- being enrolled twice at once; the claim function drives the tick.
+  IF to_regclass('public.journeys') IS NULL
+     OR to_regclass('public.idx_journey_enrollments_live') IS NULL
+     OR to_regprocedure('public.claim_journey_enrollments(integer)') IS NULL THEN
+    RAISE EXCEPTION 'journeys schema incomplete — migration 050 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

@@ -41,7 +41,8 @@
     "menuProfile": "Perfil",
     "menuSettings": "Configuración",
     "menuSignOut": "Cerrar sesión",
-    "buttonClicks": "Clics en botones"
+    "buttonClicks": "Clics en botones",
+    "journeys": "Recorridos"
   },
   "Header": {
     "dashboard": "Panel",
@@ -226,7 +227,9 @@
       "send": "Enviar",
       "quickReplyNamePrompt": "Ponle un nombre a esta respuesta rápida:",
       "quickReplySaved": "Guardada como respuesta rápida.",
-      "quickReplySaveError": "No se pudo guardar la respuesta rápida."
+      "quickReplySaveError": "No se pudo guardar la respuesta rápida.",
+      "translateOn": "Traduciendo al {language}",
+      "translateOff": "Enviar sin traducir al {language}"
     },
     "bubble": {
       "photo": "Foto",
@@ -315,6 +318,15 @@
       "resumed": "IA reanudada.",
       "updateError": "No se pudo actualizar el asistente de IA.",
       "networkError": "No se pudo conectar con el servidor."
+    },
+    "language": {
+      "transcript": "Transcripción de nota de voz",
+      "transcriptFailed": "No se pudo transcribir esta nota de voz.",
+      "transcriptSkipped": "Sin transcribir: añade una clave de Groq u OpenAI en Configuración → Idiomas.",
+      "translatedFrom": "Traducido del {language}",
+      "translation": "Traducción",
+      "translate": "Traducir",
+      "youWrote": "Escribiste: {text}"
     }
   },
   "Contacts": {
@@ -742,7 +754,8 @@
         "toastCancelled": "Programación cancelada",
         "toastRetried": "Reintento en cola para {count} destinatarios",
         "toastFailed": "Error en la programación: {error}"
-      }
+      },
+      "autoRetryAt": "Reintento automático {when}"
     },
     "new": {
       "title": "Nueva difusión",
@@ -876,7 +889,10 @@
         "schedulePastError": "Elige una hora en el futuro.",
         "scheduleBtn": "Programar difusión",
         "confirmScheduleTitle": "Confirmar programación",
-        "confirmScheduleDesc": "Esta difusión se enviará a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b> el <b>{when}</b>."
+        "confirmScheduleDesc": "Esta difusión se enviará a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b> el <b>{when}</b>.",
+        "smartTiming": "Horario inteligente",
+        "smartTimingDesc": "Entrega a cada contacto a la hora en que suele leer mensajes, dentro de 24 horas. Los contactos sin patrón lo reciben a la hora de inicio.",
+        "smartTimingNow": "la mejor hora de cada contacto en las próximas 24 horas"
       }
     }
   },
@@ -1617,6 +1633,15 @@
       "accessToken": "Token de acceso permanente",
       "accessTokenPlaceholder": "Ingresa tu token de acceso",
       "tokenHidden": "El token está oculto por seguridad. Vuelve a ingresarlo para actualizar la configuración.",
+      "metaAppId": "ID de la app de Meta",
+      "metaAppIdPlaceholder": "p. ej. 2094767454488902",
+      "metaAppSecret": "Clave secreta de la app de Meta",
+      "metaAppSecretPlaceholder": "Introduce la clave secreta de la app",
+      "metaAppHint": "Opcional. Úsalo cuando el token de acceso de este número provenga de la propia app de Meta del cliente (Meta → Configuración de la app → Básica). Ambos valores se verifican con Meta al guardar y el webhook aceptará eventos firmados por esta app.",
+      "metaAppIdNotNumeric": "El ID de la app de Meta solo debe contener dígitos.",
+      "metaAppSecretRequired": "Introduce la clave secreta de la app de Meta para este ID.",
+      "metaAppVerified": "App de Meta “{name}” verificada: se aceptan los webhooks firmados por ella.",
+      "metaAppInvalid": "No se pudo verificar el ID / clave secreta de la app de Meta guardados.",
       "webhookVerifyToken": "Token de verificación del webhook",
       "webhookVerifyTokenPlaceholder": "Crea un token de verificación personalizado",
       "webhookVerifyTokenHint": "Una cadena personalizada que tú creas. Debe coincidir con el token que configuraste en los ajustes de webhook de Meta.",
@@ -1704,7 +1729,9 @@
       "fields": "Campos y etiquetas",
       "deals": "Negocios y moneda",
       "members": "Miembros del equipo",
-      "api": "Claves de API"
+      "api": "Claves de API",
+      "delivery": "Envío inteligente",
+      "language": "Idiomas"
     },
     "groups": {
       "account": "Cuenta",
@@ -2088,6 +2115,7 @@
   "ButtonClicks": {
     "title": "Clics en botones",
     "subtitle": "Qué botones tocan los clientes en tus plantillas, carruseles y mensajes interactivos.",
+    "today": "Hoy",
     "lastDays": "Últimos {days} días",
     "retry": "Reintentar",
     "totalClicks": "Clics totales",
@@ -2120,6 +2148,240 @@
       "template_quick_reply": "Botón de plantilla",
       "interactive_button": "Botón interactivo",
       "interactive_list": "Opción de lista"
+    }
+  },
+  "SmartSending": {
+    "filter": {
+      "title": "Participación",
+      "all": {
+        "label": "Todos",
+        "desc": "Sin filtrar por participación."
+      },
+      "skip_resting": {
+        "label": "Omitir contactos en descanso",
+        "desc": "Excluye contactos que Meta limitó hace poco o que ignoraron varias difusiones. Recomendado."
+      },
+      "warm_and_engaged": {
+        "label": "Activos y templados",
+        "desc": "Solo contactos con lecturas o respuestas recientes."
+      },
+      "engaged": {
+        "label": "Solo activos",
+        "desc": "Solo contactos que respondieron, hicieron clic o leyeron hace poco. Mejor entrega."
+      }
+    },
+    "badge": {
+      "engaged": "Activo",
+      "warm": "Templado",
+      "cold": "Frío",
+      "resting": "En descanso",
+      "scoreTitle": "Puntuación de participación {score}/100",
+      "restReason": {
+        "meta_limited": "Meta limitó hace poco los mensajes de marketing a este contacto (131049)",
+        "unread_streak": "Ignoró varias difusiones seguidas",
+        "null": ""
+      }
+    },
+    "settings": {
+      "title": "Envío inteligente",
+      "description": "Protege tu número y llega a quienes tienen más probabilidad de leer.",
+      "qualityTitle": "Calidad del número",
+      "qualityDesc": "Meta califica tu número según bloqueos y denuncias recientes. Una calificación baja puede causar restricciones.",
+      "rating": {
+        "GREEN": "Alta (verde)",
+        "YELLOW": "Media (amarilla)",
+        "RED": "Baja (roja)",
+        "UNKNOWN": "Desconocida"
+      },
+      "tier": "Límite de mensajes: {tier}",
+      "checked": "Comprobado {when}",
+      "neverChecked": "Aún no comprobado",
+      "refresh": "Actualizar",
+      "refreshFailed": "No se pudo actualizar: {error}",
+      "action": {
+        "allow": "Las difusiones se envían con normalidad.",
+        "slow": "Calidad media: las difusiones se envían en lotes más pequeños, cada 10 minutos.",
+        "block": "Calidad baja: las difusiones están en pausa hasta que mejore."
+      },
+      "rulesTitle": "Reglas de entrega",
+      "rulesDesc": "Cómo funcionan el descanso, los reintentos automáticos y la protección de calidad.",
+      "autoRetry": "Reintentar automáticamente los envíos limitados por Meta",
+      "autoRetryDesc": "Si Meta limita un mensaje de marketing a un contacto (error 131049), se intenta una vez más después.",
+      "qualityGuard": "Protección de calidad",
+      "qualityGuardDesc": "Reduce la velocidad con calidad media y pausa con calidad baja.",
+      "retryDelay": "Reintentar después de (horas)",
+      "retryDelayDesc": "De 12 a 72. Predeterminado 24.",
+      "restDays": "Descanso tras un límite de Meta (días)",
+      "restDaysDesc": "Los contactos limitados por Meta se excluyen de nuevas difusiones durante este tiempo.",
+      "restUnread": "Descanso tras difusiones sin leer",
+      "restUnreadDesc": "Los contactos que ignoran esta cantidad de difusiones seguidas descansan hasta que interactúen.",
+      "yellowPass": "Tamaño de lote con calidad media",
+      "yellowPassDesc": "Destinatarios por lote mientras la calificación es amarilla.",
+      "save": "Guardar",
+      "saved": "Configuración guardada",
+      "saveFailed": "No se pudo guardar: {error}"
+    }
+  },
+  "Language": {
+    "settings": {
+      "title": "Idiomas",
+      "description": "Habla con los clientes en su idioma y entiende sus notas de voz.",
+      "translationTitle": "Traducción",
+      "translationDesc": "Los mensajes de clientes se traducen al idioma de tu equipo y las respuestas pueden enviarse en el idioma del cliente.",
+      "agentLanguage": "Idioma de tu equipo",
+      "agentLanguageDesc": "Los mensajes entrantes se traducen a este idioma.",
+      "translateInbound": "Traducir mensajes entrantes automáticamente",
+      "translateInboundDesc": "Si no, los agentes pueden traducir un mensaje cuando lo necesiten.",
+      "aiKeyNote": "La traducción usa la clave del proveedor de IA de Agentes de IA → Configuración (funcionan proveedores gratuitos como Groq y Gemini).",
+      "voiceTitle": "Notas de voz",
+      "voiceDesc": "Convierte las notas de voz en texto para que los agentes y la IA puedan leerlas y responder.",
+      "transcribe": "Transcribir notas de voz",
+      "transcribeDesc": "Usa Whisper. La transcripción también se traduce si está en otro idioma.",
+      "summarize": "Resumir notas de voz largas",
+      "summarizeDesc": "Añade un resumen de una o dos frases sobre las transcripciones largas.",
+      "provider": "Proveedor de transcripción",
+      "providerAuto": "Automático",
+      "providerGroq": "Groq (nivel gratuito)",
+      "providerOpenai": "OpenAI",
+      "key": "Clave de API de transcripción (opcional)",
+      "keySet": "Hay una clave guardada. Escribe para reemplazarla.",
+      "providerHelp": "Automático reutiliza tu clave de Agentes de IA si es OpenAI o Groq. Con otro proveedor, añade aquí una clave gratuita de Groq (console.groq.com/keys).",
+      "save": "Guardar",
+      "saved": "Configuración de idiomas guardada",
+      "saveFailed": "No se pudo guardar: {error}"
+    }
+  },
+  "Journeys": {
+    "status": {
+      "draft": "Borrador",
+      "active": "Activo",
+      "paused": "En pausa"
+    },
+    "node": {
+      "trigger": "Inicio",
+      "wait": "Esperar",
+      "wait_for_reply": "Esperar respuesta",
+      "condition": "Condición",
+      "send_template": "Enviar plantilla",
+      "send_text": "Enviar mensaje",
+      "add_tag": "Añadir etiqueta",
+      "remove_tag": "Quitar etiqueta",
+      "create_deal": "Crear negocio",
+      "end": "Fin"
+    },
+    "nodeHelp": {
+      "trigger": "Qué añade un contacto a este recorrido.",
+      "wait": "Pausa antes del siguiente paso.",
+      "wait_for_reply": "Sigue por “Respondió” en cuanto el cliente conteste, o por “Sin respuesta” tras el límite.",
+      "condition": "Bifurca según lo que hizo el contacto.",
+      "send_template": "Envía una plantilla aprobada de WhatsApp. Funciona siempre.",
+      "send_text": "Envía un mensaje normal. Solo dentro de las 24 horas desde el último mensaje del cliente.",
+      "add_tag": "Etiqueta al contacto.",
+      "remove_tag": "Quita una etiqueta al contacto.",
+      "create_deal": "Crea un negocio en un embudo.",
+      "end": "El contacto sale del recorrido aquí."
+    },
+    "trigger": {
+      "manual": "Inscrito manualmente",
+      "contact_created": "Se añade un contacto nuevo",
+      "first_message": "Un contacto escribe por primera vez",
+      "tag_added": "Se añade una etiqueta",
+      "tag_added_with": "Etiqueta añadida: {tag}",
+      "button_clicked": "Se toca un botón",
+      "button_clicked_with": "Botón tocado: {button}"
+    },
+    "condition": {
+      "replied": "Ha respondido",
+      "clicked_button": "Tocó un botón",
+      "has_tag": "Tiene una etiqueta",
+      "window_open": "La ventana de 24 horas está abierta"
+    },
+    "unit": {
+      "minutes": "minutos",
+      "hours": "horas",
+      "days": "días"
+    },
+    "slot": {
+      "yes": "Sí",
+      "no": "No",
+      "replied": "Respondió",
+      "timeout": "Sin respuesta"
+    },
+    "summary": {
+      "wait": "Esperar {amount} {unit}",
+      "waitReply": "Hasta {amount} {unit}",
+      "hasTag": "Tiene la etiqueta: {tag}",
+      "clicked": "Tocó “{button}”",
+      "clickedAny": "Tocó cualquier botón",
+      "chooseTag": "Elige una etiqueta",
+      "chooseTemplate": "Elige una plantilla",
+      "writeMessage": "Escribe el mensaje",
+      "chooseStage": "Elige una etapa",
+      "end": "Recorrido completo"
+    },
+    "form": {
+      "startsWhen": "Empieza cuando",
+      "tag": "Etiqueta",
+      "chooseTag": "Elige una etiqueta…",
+      "buttonText": "Texto del botón",
+      "anyButton": "Cualquier botón",
+      "manualHelp": "Usa “Inscribir contactos” en un recorrido activo para añadir contactos por etiqueta.",
+      "waitFor": "Esperar",
+      "giveUpAfter": "Rendirse tras",
+      "amount": "Cantidad",
+      "waitReplyHelp": "Cualquier mensaje o toque de botón del cliente cuenta como respuesta.",
+      "check": "Comprobar",
+      "template": "Plantilla",
+      "chooseTemplate": "Elige una plantilla aprobada…",
+      "params": "Variables",
+      "paramsHelp": "Una por línea, para {{1}}, {{2}}… Usa {{name}} o {{phone}} para los datos del contacto.",
+      "message": "Mensaje",
+      "textHelp": "Puedes usar {{name}} y {{phone}}.",
+      "stage": "Etapa del embudo",
+      "chooseStage": "Elige una etapa…",
+      "dealTitle": "Título del negocio",
+      "dealValue": "Valor del negocio",
+      "endHelp": "Nada que configurar.",
+      "deleteStep": "Eliminar paso",
+      "done": "Listo"
+    },
+    "editor": {
+      "back": "Volver a recorridos",
+      "name": "Nombre del recorrido",
+      "addStep": "Añadir paso",
+      "stats": "Estadísticas",
+      "enroll": "Inscribir contactos",
+      "save": "Guardar",
+      "activate": "Activar",
+      "pause": "Pausar",
+      "saved": "Recorrido guardado",
+      "saveFailed": "No se pudo guardar el recorrido",
+      "fixIssues": "Corrige {count, plural, =1 {1 problema} other {# problemas}} antes de activar",
+      "activated": "El recorrido está activo",
+      "paused": "Recorrido en pausa",
+      "issues": "{count, plural, =1 {1 problema por corregir:} other {# problemas por corregir:}}",
+      "enrollTitle": "Inscribir contactos",
+      "enrollDesc": "Inicia a todos los que tengan esta etiqueta (hasta 500 a la vez). Se omiten los contactos dados de baja.",
+      "enrolled": "{enrolled} inscritos, {skipped} omitidos",
+      "cancel": "Cancelar"
+    },
+    "list": {
+      "title": "Recorridos",
+      "subtitle": "Rutas automáticas de varios pasos: esperas, bifurcaciones, plantillas, etiquetas y negocios, con conversión en cada paso.",
+      "new": "Nuevo recorrido",
+      "newDesc": "Ponle un nombre. Después diseñarás los pasos.",
+      "namePlaceholder": "p. ej. Seguimiento de nuevos clientes",
+      "create": "Crear",
+      "emptyTitle": "Aún no hay recorridos",
+      "emptyHint": "Ejemplo: contacto nuevo → esperar 1 día → si no responde, enviar una oferta → si toca “Comprar”, etiquetarlo y crear un negocio.",
+      "inProgress": "En curso",
+      "completed": "Completados",
+      "failed": "Fallidos",
+      "updated": "Actualizado {when}",
+      "open": "Abrir",
+      "delete": "Eliminar",
+      "deleteConfirm": "¿Eliminar “{name}”? Los contactos en él se detendrán.",
+      "deleteFailed": "No se pudo eliminar el recorrido"
     }
   }
 }

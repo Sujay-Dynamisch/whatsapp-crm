@@ -11,6 +11,7 @@ import {
   validateSendMessageParams,
   SendMessageError,
 } from '@/lib/whatsapp/send-message'
+import { translateOutgoing, TranslationUnavailableError } from '@/lib/language/outbound'
 
 // The dashboard's outbound-send endpoint. It owns auth, per-user rate
 // limiting, and the two ways the UI targets a thread — an existing
@@ -152,11 +153,40 @@ export async function POST(request: Request) {
     // phone-variant retry, persists, pauses active flow runs). Its
     // `SendMessageError` carries a machine code + HTTP status; the
     // dashboard maps it to the internal `{ error }` shape.
+    // Outbound translation (migration 049): the customer gets their own
+    // language; the agent's wording is kept as original_text.
+    let outgoingText: string | null | undefined = content_text
+    let originalText: string | null = null
+    if (body.translate === true && message_type === 'text' && typeof content_text === 'string') {
+      try {
+        const t = await translateOutgoing(supabase, {
+          accountId,
+          conversationId,
+          text: content_text,
+        })
+        outgoingText = t.text
+        originalText = t.original
+      } catch (err) {
+        const status = err instanceof TranslationUnavailableError ? err.status : 502
+        return NextResponse.json(
+          {
+            error:
+              err instanceof Error
+                ? `Not sent — translation failed: ${err.message}`
+                : 'Not sent — translation failed',
+            code: 'translation_failed',
+          },
+          { status }
+        )
+      }
+    }
+
     try {
       const result = await sendMessageToConversation(supabase, accountId, {
         conversationId,
         messageType: message_type,
-        contentText: content_text,
+        contentText: outgoingText,
+        originalText,
         mediaUrl: media_url,
         filename,
         templateName: template_name,

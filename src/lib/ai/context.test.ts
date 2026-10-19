@@ -52,3 +52,40 @@ describe('buildConversationContext', () => {
     expect(out).toEqual([{ role: 'user', content: 'real' }])
   })
 })
+
+describe('buildConversationContext — voice notes (migration 049)', () => {
+  it('includes transcribed voice notes as customer text', async () => {
+    const out = await buildConversationContext(
+      fakeDb([
+        { sender_type: 'customer', content_text: null, transcript: 'kal delivery chahiye' },
+        { sender_type: 'agent', content_text: 'Hi! How can I help?' },
+      ]),
+      'conv-1',
+    )
+    expect(out).toEqual([
+      { role: 'assistant', content: 'Hi! How can I help?' },
+      { role: 'user', content: 'kal delivery chahiye' },
+    ])
+  })
+
+  it('falls back to text-only when the transcript column does not exist yet', async () => {
+    const calls: string[] = []
+    let attempt = 0
+    const chain = {
+      from: () => chain,
+      select: (cols: string) => (calls.push(cols), chain),
+      eq: () => chain,
+      in: () => chain,
+      order: () => chain,
+      limit: () =>
+        Promise.resolve(
+          attempt++ === 0
+            ? { data: null, error: { message: 'column messages.transcript does not exist' } }
+            : { data: [{ sender_type: 'customer', content_text: 'hello' }], error: null },
+        ),
+    }
+    const out = await buildConversationContext(chain as unknown as SupabaseClient, 'conv-1')
+    expect(out).toEqual([{ role: 'user', content: 'hello' }])
+    expect(calls).toEqual(['sender_type, content_text, transcript', 'sender_type, content_text'])
+  })
+})

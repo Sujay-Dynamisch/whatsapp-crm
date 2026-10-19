@@ -62,7 +62,7 @@ export default function AdminPortalPage() {
 
   if (authLoading) {
     return (
-      <div className="flex h-[60vh] items-center justify-center">
+      <div className="flex h-[60dvh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           <p className="text-sm text-muted-foreground">Verifying administrator access...</p>
@@ -73,7 +73,7 @@ export default function AdminPortalPage() {
 
   if (unauthorized) {
     return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center text-center p-6">
+      <div className="flex min-h-[50dvh] flex-col items-center justify-center text-center p-6">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 mb-4">
           <AlertCircle className="h-7 w-7" />
         </div>
@@ -120,7 +120,7 @@ export default function AdminPortalPage() {
 
       {/* All Users Directory Table */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-foreground">
               Customer & User Directory

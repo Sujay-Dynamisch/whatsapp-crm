@@ -54,8 +54,13 @@ function signatureMatches(rawBody: string, signatureHeader: string, secret: stri
 export function verifyMetaWebhookSignature(
   rawBody: string,
   signatureHeader: string | null,
+  /** Per-account App Secrets (whatsapp_config.app_secret, decrypted). */
+  extraSecrets: readonly string[] = [],
 ): boolean {
-  const secrets = parseAppSecrets(process.env.META_APP_SECRET)
+  const secrets = [
+    ...parseAppSecrets(process.env.META_APP_SECRET),
+    ...extraSecrets.filter((s) => s.length > 0),
+  ]
   if (secrets.length === 0) {
     console.error(
       '[webhook] META_APP_SECRET is not set — rejecting request. ' +

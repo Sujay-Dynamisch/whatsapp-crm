@@ -19,15 +19,30 @@ export async function GET(request: Request) {
     const { supabase, accountId } = await getCurrentAccount();
     const url = new URL(request.url);
 
-    const daysParam = Number(url.searchParams.get('days') ?? 30);
-    const days = RANGES.includes(daysParam) ? daysParam : 30;
+    const rawDays = url.searchParams.get('days');
     const broadcastId = url.searchParams.get('broadcast_id');
     if (broadcastId && !UUID_RE.test(broadcastId)) {
       return NextResponse.json({ error: 'Invalid broadcast_id' }, { status: 400 });
     }
 
     const to = new Date();
-    const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+    let from: Date;
+    let days: number | 'today';
+
+    if (rawDays === 'today' || rawDays === '0') {
+      days = rawDays === '0' ? 0 : 'today';
+      const fromParam = url.searchParams.get('from');
+      if (fromParam && !isNaN(new Date(fromParam).getTime())) {
+        from = new Date(fromParam);
+      } else {
+        from = new Date(to);
+        from.setHours(0, 0, 0, 0);
+      }
+    } else {
+      const daysParam = Number(rawDays ?? 30);
+      days = RANGES.includes(daysParam) ? daysParam : 30;
+      from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+    }
 
     const { data: summary, error: summaryErr } = await supabase.rpc('button_click_summary', {
       p_from: from.toISOString(),

@@ -15,6 +15,8 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit'
+import { checkQualityGuard } from '@/lib/smart-sending/quality'
+import { supabaseAdmin } from '@/lib/flows/admin-client'
 
 interface BroadcastResult {
   phone: string
@@ -80,6 +82,22 @@ export async function POST(request: Request) {
     const limit = checkRateLimit(`broadcast:${userId}`, RATE_LIMITS.broadcast)
     if (!limit.success) {
       return rateLimitResponse(limit)
+    }
+
+    // Quality-rating guard (migration 048): hold broadcasts while the
+    // number is RED. Service-role client — the check may refresh the
+    // cached rating on whatsapp_config, which agents can't write.
+    const guard = await checkQualityGuard(supabaseAdmin(), accountId)
+    if (guard.action === 'block') {
+      return NextResponse.json(
+        {
+          error:
+            "Your WhatsApp number's quality rating is RED. Broadcasts are paused to protect the number — try again once it recovers (Settings → Smart sending).",
+          code: 'quality_guard',
+          rating: guard.rating,
+        },
+        { status: 409 }
+      )
     }
 
     const body = await request.json()

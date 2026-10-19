@@ -21,10 +21,14 @@ export const FEATURES = [
   'pipelines',
   'broadcasts',
   'broadcast_scheduling',
+  'smart_sending',
   'automations',
   'flows',
+  'journeys',
   'ai_agents',
   'window_keepalive',
+  'translation',
+  'voice_transcription',
   'api_access',
   'button_analytics',
 ] as const;
@@ -46,11 +50,15 @@ export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
   broadcasts: {
     label: 'Broadcasts',
     description: 'Bulk template campaigns to contacts.',
-    implies: ['broadcast_scheduling'],
+    implies: ['broadcast_scheduling', 'smart_sending'],
   },
   broadcast_scheduling: {
     label: 'Scheduled broadcasts',
     description: 'Schedule broadcasts for a future time (Google Cloud).',
+  },
+  smart_sending: {
+    label: 'Smart sending',
+    description: 'Engagement scores, resting, automatic retry of Meta-limited sends, best-time sending and the quality guard.',
   },
   automations: {
     label: 'Automations',
@@ -60,10 +68,22 @@ export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
     label: 'Flows',
     description: 'Visual chatbot flows.',
   },
+  journeys: {
+    label: 'Journeys',
+    description: 'Visual multi-step customer journeys with waits, branches and per-step conversion.',
+  },
   ai_agents: {
     label: 'AI Agents',
     description: 'AI drafts, auto-replies, knowledge base and playground.',
-    implies: ['window_keepalive'],
+    implies: ['window_keepalive', 'translation', 'voice_transcription'],
+  },
+  translation: {
+    label: 'Inbox translation',
+    description: 'Translate customer messages for agents and agent replies for customers.',
+  },
+  voice_transcription: {
+    label: 'Voice-note transcription',
+    description: 'Turn customer voice notes into text (and short summaries).',
   },
   window_keepalive: {
     label: '24h window keep-alive',
@@ -136,15 +156,21 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/automations', feature: 'automations' },
   { prefix: '/flows', feature: 'flows' },
   { prefix: '/agents', feature: 'ai_agents' },
+  { prefix: '/journeys', feature: 'journeys' },
   { prefix: '/button-clicks', feature: 'button_analytics' },
   // Internal APIs
   { prefix: '/api/whatsapp/broadcast', feature: 'broadcasts' },
   { prefix: '/api/automations', feature: 'automations' },
   { prefix: '/api/flows', feature: 'flows' },
+  { prefix: '/api/journeys', feature: 'journeys' },
   { prefix: '/api/ai', feature: 'ai_agents' },
   { prefix: '/api/conversations/window-keepalive', feature: 'window_keepalive' },
   { prefix: '/api/account/api-keys', feature: 'api_access' },
   { prefix: '/api/button-clicks', feature: 'button_analytics' },
+  { prefix: '/api/delivery-settings', feature: 'smart_sending' },
+  { prefix: '/api/whatsapp/quality', feature: 'smart_sending' },
+  { prefix: '/api/language-settings', feature: 'ai_agents' },
+  { prefix: '/api/messages/translate', feature: 'translation' },
 ];
 
 const UNGATED = ['/api/automations/cron', '/api/flows/cron'];

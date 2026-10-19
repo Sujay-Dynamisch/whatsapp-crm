@@ -111,14 +111,16 @@ deploy armBroadcast 60s 256Mi
 deploy executeBroadcast 1800s 512Mi
 deploy reconcileBroadcasts 300s 256Mi
 deploy windowKeepalive 300s 256Mi
+deploy journeyTick 300s 256Mi
 
 ARM_URL="$(url_of armBroadcast)"
 EXEC_URL="$(url_of executeBroadcast)"
 RECONCILE_URL="$(url_of reconcileBroadcasts)"
 KEEPALIVE_URL="$(url_of windowKeepalive)"
+JOURNEY_URL="$(url_of journeyTick)"
 
 # First deploy didn't know its own URLs yet — patch them in.
-for fn in armBroadcast executeBroadcast reconcileBroadcasts windowKeepalive; do
+for fn in armBroadcast executeBroadcast reconcileBroadcasts windowKeepalive journeyTick; do
   svc="$(gc functions describe "$fn" --region "$REGION" --format 'value(serviceConfig.service)' | sed 's#.*/##')"
   gc run services update "$svc" --region "$REGION" --quiet \
     --update-env-vars "BROADCAST_ARM_FUNCTION_URL=${ARM_URL},BROADCAST_EXECUTE_FUNCTION_URL=${EXEC_URL}" >/dev/null
@@ -128,8 +130,8 @@ for fn in armBroadcast executeBroadcast reconcileBroadcasts windowKeepalive; do
 done
 
 SECRET_VALUE="$(gc secrets versions access latest --secret wacrm-broadcast-scheduler-secret)"
-every5min() { # job-name target-url
-  local flags=(--location "$REGION" --schedule "*/5 * * * *" --time-zone "Etc/UTC"
+schedule_job() { # job-name target-url cron
+  local flags=(--location "$REGION" --schedule "$3" --time-zone "Etc/UTC"
     --uri "$2" --http-method POST --message-body '{}'
     --oidc-service-account-email "$INVOKER_SA" --oidc-token-audience "$2"
     --attempt-deadline 300s)
@@ -143,10 +145,13 @@ every5min() { # job-name target-url
 }
 
 echo "==> Reconciler schedule (every 5 minutes)"
-every5min broadcast-reconcile "$RECONCILE_URL"
+schedule_job broadcast-reconcile "$RECONCILE_URL" "*/5 * * * *"
 
 echo "==> 24h-window keep-alive schedule (every 5 minutes)"
-every5min conversation-window-keepalive "$KEEPALIVE_URL"
+schedule_job conversation-window-keepalive "$KEEPALIVE_URL" "*/5 * * * *"
+
+echo "==> Journey tick (every minute)"
+schedule_job journey-tick "$JOURNEY_URL" "* * * * *"
 
 cat <<EOF
 

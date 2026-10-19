@@ -63,7 +63,13 @@ interface Step4Props {
   audience: AudienceConfig;
   onSend: () => void;
   /** Present when server-side scheduling is offered. */
-  onSchedule?: (localDatetime: string, timezone: string) => void;
+  onSchedule?: (
+    localDatetime: string,
+    timezone: string,
+    opts?: { smartTiming?: boolean },
+  ) => void;
+  /** Smart timing (smart sending, migration 048) can be offered. */
+  smartTimingAvailable?: boolean;
   onSaveDraft?: () => void;
   onBack: () => void;
   isProcessing: boolean;
@@ -81,6 +87,7 @@ export function Step4ScheduleSend({
   audience,
   onSend,
   onSchedule,
+  smartTimingAvailable = false,
   onSaveDraft,
   onBack,
   isProcessing,
@@ -95,6 +102,7 @@ export function Step4ScheduleSend({
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
   const [loadingReach, setLoadingReach] = useState(true);
   const [mode, setMode] = useState<'now' | 'schedule'>('now');
+  const [smartTiming, setSmartTiming] = useState(false);
   const [timezone, setTimezone] = useState(DEFAULT_BROADCAST_TIMEZONE);
   const [localDatetime, setLocalDatetime] = useState(() =>
     utcToZonedLocal(new Date(Date.now() + 60 * 60 * 1000), DEFAULT_BROADCAST_TIMEZONE),
@@ -106,9 +114,12 @@ export function Step4ScheduleSend({
       ? [...COMMON_TIMEZONES, ownZone]
       : COMMON_TIMEZONES;
 
-  const isScheduling = mode === 'schedule' && Boolean(onSchedule);
+  // Smart timing always goes through the server-side scheduler, even
+  // for "send now" (which becomes "start in 2 minutes").
+  const smartTimingOn = smartTiming && smartTimingAvailable && Boolean(onSchedule);
+  const isScheduling = (mode === 'schedule' || smartTimingOn) && Boolean(onSchedule);
   let scheduledInstant: Date | null = null;
-  if (isScheduling) {
+  if (isScheduling && mode === 'schedule') {
     try {
       scheduledInstant = zonedLocalToUtc(localDatetime, timezone);
     } catch {
@@ -118,8 +129,11 @@ export function Step4ScheduleSend({
   // Evaluated at render; the server re-validates with a small tolerance.
   const nowMs = Date.now();
   const scheduleInPast =
-    isScheduling && (!scheduledInstant || scheduledInstant.getTime() < nowMs);
-  const scheduledLabel = `${localDatetime.replace('T', ' ')} (${timezone})`;
+    mode === 'schedule' && isScheduling && (!scheduledInstant || scheduledInstant.getTime() < nowMs);
+  const scheduledLabel =
+    mode === 'schedule'
+      ? `${localDatetime.replace('T', ' ')} (${timezone})`
+      : t('scheduleSend.smartTimingNow');
 
   useEffect(() => {
     async function calculateReach() {
@@ -280,6 +294,26 @@ export function Step4ScheduleSend({
               </p>
             </div>
           )}
+
+          {smartTimingAvailable && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+              <input
+                type="checkbox"
+                checked={smartTiming}
+                onChange={(e) => setSmartTiming(e.target.checked)}
+                disabled={isProcessing}
+                className="mt-0.5 h-4 w-4 accent-primary"
+              />
+              <span>
+                <span className="block text-sm font-medium text-foreground">
+                  {t('scheduleSend.smartTiming')}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {t('scheduleSend.smartTimingDesc')}
+                </span>
+              </span>
+            </label>
+          )}
         </div>
       )}
 
@@ -401,8 +435,17 @@ export function Step4ScheduleSend({
               <Button
                 onClick={() => {
                   setShowConfirm(false);
-                  if (isScheduling && onSchedule) onSchedule(localDatetime, timezone);
-                  else onSend();
+                  if (isScheduling && onSchedule) {
+                    onSchedule(
+                      mode === 'schedule'
+                        ? localDatetime
+                        : utcToZonedLocal(new Date(Date.now() + 2 * 60_000), timezone),
+                      timezone,
+                      { smartTiming: smartTimingOn },
+                    );
+                  } else {
+                    onSend();
+                  }
                 }}
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >

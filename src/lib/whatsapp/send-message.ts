@@ -87,6 +87,8 @@ export interface SendMessageParams {
   /** Structured payload for `messageType === 'interactive'`. */
   interactivePayload?: InteractiveMessagePayload | null;
   replyToMessageId?: string | null;
+  /** What the agent typed when contentText is its translation (migration 049). */
+  originalText?: string | null;
 }
 
 export interface SendMessageResult {
@@ -200,6 +202,7 @@ export async function sendMessageToConversation(
     templateMessageParams,
     interactivePayload,
     replyToMessageId,
+    originalText,
   } = params;
 
   if (!conversationId) {
@@ -487,6 +490,9 @@ export async function sendMessageToConversation(
       message_id: waMessageId,
       status: 'sent',
       reply_to_message_id: replyToMessageId || null,
+      // Only written when translated, so a database without migration
+      // 049 is unaffected by ordinary sends.
+      ...(originalText ? { original_text: originalText } : {}),
     })
     .select()
     .single();

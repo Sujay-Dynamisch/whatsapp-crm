@@ -17,6 +17,7 @@ import {
   LogOut,
   MessageSquare,
   Radio,
+  Route,
   MousePointerClick,
   Settings,
   Shield,
@@ -106,6 +107,7 @@ const navItems: NavItem[] = [
   { href: "/button-clicks", labelKey: "buttonClicks", icon: MousePointerClick, feature: "button_analytics" },
   { href: "/automations", labelKey: "automations", icon: Zap, feature: "automations" },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, feature: "flows" },
+  { href: "/journeys", labelKey: "journeys", icon: Route, feature: "journeys" },
   { href: "/agents", labelKey: "aiAgents", icon: Bot, feature: "ai_agents" },
 ];
 

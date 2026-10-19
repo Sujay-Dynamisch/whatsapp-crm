@@ -50,6 +50,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { SYSTEM_ADMIN_EMAIL } from "@/lib/auth/admin";
 import { AccountFeaturesDialog } from "@/components/admin/account-features-dialog";
+import { UserProfileSheet } from "@/components/admin/user-profile-sheet";
 
 export interface AdminUserRecord {
   id: string;
@@ -89,6 +90,10 @@ export function AdminUsersTable({
 
   // Account features dialog state (migration 045)
   const [featuresDialogOpen, setFeaturesDialogOpen] = useState(false);
+
+  // User profile & full controls sheet state
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
 
   // Filtered users
   const filteredUsers = useMemo(() => {
@@ -295,17 +300,21 @@ export function AdminUsersTable({
                 return (
                   <TableRow
                     key={u.id}
-                    className="border-border/40 hover:bg-muted/30 transition-colors"
+                    onClick={() => {
+                      setProfileUserId(u.id);
+                      setProfileSheetOpen(true);
+                    }}
+                    className="border-border/40 hover:bg-muted/40 cursor-pointer transition-colors group"
                   >
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 text-primary font-bold text-xs">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 text-primary font-bold text-xs group-hover:scale-105 group-hover:border-primary/40 transition-transform">
                           {u.fullName
                             ? u.fullName.slice(0, 2).toUpperCase()
                             : u.email.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-medium text-foreground text-sm flex items-center gap-1.5">
+                          <span className="font-medium text-foreground text-sm flex items-center gap-1.5 group-hover:text-primary transition-colors">
                             {u.fullName}
                             {isSystemAdminUser && (
                               <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">
@@ -348,7 +357,10 @@ export function AdminUsersTable({
                         : "Never"}
                     </TableCell>
 
-                    <TableCell className="text-right">
+                    <TableCell
+                      className="text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           render={
@@ -357,12 +369,24 @@ export function AdminUsersTable({
                             </Button>
                           }
                         />
-                        <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuGroup>
                             <DropdownMenuLabel className="text-xs text-muted-foreground">
                               Manage User
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setProfileUserId(u.id);
+                                setProfileSheetOpen(true);
+                              }}
+                              className="gap-2 cursor-pointer font-medium"
+                            >
+                              <User className="h-4 w-4 text-primary" />
+                              Profile & Controls
+                            </DropdownMenuItem>
+
                             <DropdownMenuItem
                               onClick={() => {
                                 setSelectedUser(u);
@@ -516,6 +540,17 @@ export function AdminUsersTable({
         accountName={selectedUser?.accountName ?? ""}
         open={featuresDialogOpen}
         onOpenChange={setFeaturesDialogOpen}
+      />
+
+      <UserProfileSheet
+        userId={profileUserId}
+        open={profileSheetOpen}
+        onOpenChange={setProfileSheetOpen}
+        onUserUpdated={onRefresh}
+        onUserDeleted={() => {
+          setProfileSheetOpen(false);
+          onRefresh();
+        }}
       />
     </div>
   );

@@ -144,7 +144,8 @@ export async function planBroadcastResume(
   db: SupabaseClient,
   accountId: string,
   broadcastId: string,
-  scope: ResumeScope
+  scope: ResumeScope,
+  opts: { recipientIds?: string[]; now?: Date } = {}
 ): Promise<ResumePlan> {
   const { data: broadcast, error: bcError } = await db
     .from('broadcasts')
@@ -158,11 +159,17 @@ export async function planBroadcastResume(
   }
 
   const statuses = scopeStatuses(scope);
-  const { data: rawRows, error: recError } = await db
+  let recipientQuery = db
     .from('broadcast_recipients')
     .select('id, template_params, message_params, contact:contacts(phone)')
     .eq('broadcast_id', broadcastId)
     .in('status', statuses)
+    // Smart timing (migration 048): a recipient whose personal send
+    // time hasn't arrived yet must not be sent by any pass.
+    .or(`send_after.is.null,send_after.lte.${(opts.now ?? new Date()).toISOString()}`);
+  // Retries target exactly the recipients they claimed.
+  if (opts.recipientIds) recipientQuery = recipientQuery.in('id', opts.recipientIds);
+  const { data: rawRows, error: recError } = await recipientQuery
     // Oldest first, so repeated capped passes chew through the backlog
     // in a stable order instead of re-picking the same slice.
     .order('created_at', { ascending: true });

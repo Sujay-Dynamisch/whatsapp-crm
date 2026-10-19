@@ -18,6 +18,9 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { recordButtonClick } from '@/lib/whatsapp/button-clicks'
+import { refreshQuality } from '@/lib/smart-sending/quality'
+import { processInboundLanguage } from '@/lib/language/inbound'
+import { dispatchJourneyInbound } from '@/lib/journeys/dispatch'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -218,6 +221,55 @@ export async function GET(request: Request) {
   }
 }
 
+/**
+ * App Secrets saved per account (migration 051) for the numbers / WABAs
+ * this payload names. The ids come from the not-yet-verified body, but
+ * they only pick which secrets to try — the HMAC must still match one.
+ */
+async function accountAppSecretsFor(rawBody: string): Promise<string[]> {
+  let parsed: { entry?: WhatsAppWebhookEntry[] }
+  try {
+    parsed = JSON.parse(rawBody)
+  } catch {
+    return []
+  }
+  const isId = (v: unknown): v is string => typeof v === 'string' && /^\d+$/.test(v)
+  const wabaIds = new Set<string>()
+  const phoneIds = new Set<string>()
+  for (const entry of Array.isArray(parsed?.entry) ? parsed.entry : []) {
+    if (isId(entry?.id)) wabaIds.add(entry.id)
+    for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+      const pid = change?.value?.metadata?.phone_number_id
+      if (isId(pid)) phoneIds.add(pid)
+    }
+  }
+  const filters = [
+    phoneIds.size ? `phone_number_id.in.(${[...phoneIds].join(',')})` : null,
+    wabaIds.size ? `waba_id.in.(${[...wabaIds].join(',')})` : null,
+  ].filter(Boolean)
+  if (filters.length === 0) return []
+
+  const { data, error } = await supabaseAdmin()
+    .from('whatsapp_config')
+    .select('app_secret')
+    .not('app_secret', 'is', null)
+    .or(filters.join(','))
+    .limit(20)
+  if (error) {
+    console.error('[webhook] app_secret lookup failed:', error.message)
+    return []
+  }
+  const secrets: string[] = []
+  for (const row of (data ?? []) as { app_secret: string }[]) {
+    try {
+      secrets.push(decrypt(row.app_secret))
+    } catch {
+      console.error('[webhook] stored app_secret cannot be decrypted with ENCRYPTION_KEY')
+    }
+  }
+  return secrets
+}
+
 // POST - Receive messages
 export async function POST(request: Request) {
   // Read raw body first so we can HMAC-verify the exact bytes Meta
@@ -225,7 +277,12 @@ export async function POST(request: Request) {
   const rawBody = await request.text()
   const signature = request.headers.get('x-hub-signature-256')
 
-  if (!verifyMetaWebhookSignature(rawBody, signature)) {
+  // Env secrets first (no DB hit); fall back to the per-account App
+  // Secret saved from the settings form for customers on their own app.
+  const signatureOk =
+    (!!process.env.META_APP_SECRET?.trim() && verifyMetaWebhookSignature(rawBody, signature)) ||
+    verifyMetaWebhookSignature(rawBody, signature, await accountAppSecretsFor(rawBody))
+  if (!signatureOk) {
     // 401 (not 200) — we want Meta's delivery dashboard to show failures
     // loudly if a misconfiguration causes signatures to stop matching,
     // rather than silently eating events.
@@ -265,6 +322,25 @@ export async function POST(request: Request) {
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }
 
+async function handleQualityUpdate(wabaId: string, value: unknown) {
+  const event = (value as { event?: string } | null)?.event ?? null
+  const { data: configs } = await supabaseAdmin()
+    .from('whatsapp_config')
+    .select('id, account_id')
+    .eq('waba_id', wabaId)
+  for (const cfg of configs ?? []) {
+    await supabaseAdmin()
+      .from('whatsapp_config')
+      .update({ quality_event: event, quality_event_at: new Date().toISOString() })
+      .eq('id', cfg.id)
+    if (cfg.account_id) {
+      await refreshQuality(supabaseAdmin(), cfg.account_id as string).catch((err) =>
+        console.warn('[webhook] quality refresh failed:', err?.message ?? err)
+      )
+    }
+  }
+}
+
 async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
   if (!body.entry) return
 
@@ -287,6 +363,14 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           },
           supabaseAdmin(),
         )
+        continue
+      }
+
+      // Number quality changed (FLAGGED / UNFLAGGED / tier change).
+      // Refresh the cached rating the broadcast quality guard reads
+      // (migration 048). entry.id is the WABA id.
+      if ((change.field as string) === 'phone_number_quality_update') {
+        await handleQualityUpdate(entry.id, change.value as unknown)
         continue
       }
 
@@ -491,6 +575,9 @@ async function handleStatusUpdate(status: {
       update.error_message =
         `[${failure.code}] ${failure.title}` +
         (failure.details ? `: ${failure.details}` : '')
+      // Numeric code (migration 048): 131049 (Meta's per-user marketing
+      // limit) schedules the automatic retry and rests the contact.
+      if (Number.isInteger(failure.code)) update.error_code = failure.code
     }
 
     const { error: recUpdateErr } = await supabaseAdmin()
@@ -871,6 +958,26 @@ async function processMessage(
     clickedAt: new Date(parseInt(message.timestamp) * 1000),
   })
 
+  // Translation + voice-note transcription (migration 049). Runs before
+  // automations and the AI so a voice note's transcript can trigger
+  // keyword automations and be answered by the AI. Never throws.
+  const { transcript } = await processInboundLanguage(supabaseAdmin(), {
+    accountId,
+    conversationId: conversation.id,
+    messageRowId: insertedRows[0].id as string,
+    message,
+    text: contentText,
+    accessToken,
+  })
+
+  // Journeys (migration 050): any customer message resumes their "wait
+  // for reply" steps; a button tap can also start a journey. Never throws.
+  await dispatchJourneyInbound(supabaseAdmin(), {
+    accountId,
+    contactId: contactRecord.id,
+    buttonText: interactiveReplyId ? contentText : null,
+  })
+
   // ============================================================
   // Flow runner dispatch.
   //
@@ -917,7 +1024,7 @@ async function processMessage(
   // message all exist before any step — including send_message — runs.
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
-  const inboundText = contentText ?? message.text?.body ?? ''
+  const inboundText = contentText ?? message.text?.body ?? transcript ?? ''
 
   // Unsubscribe detection: if customer replies STOP / opt-out, tag contact as 'unsubscribe'
   if (inboundText.trim() && isUnsubscribeText(inboundText)) {

@@ -26,10 +26,14 @@ describe('feature registry', () => {
       'pipelines',
       'broadcasts',
       'broadcast_scheduling',
+      'smart_sending',
       'automations',
       'flows',
+      'journeys',
       'ai_agents',
       'window_keepalive',
+      'translation',
+      'voice_transcription',
       'api_access',
       'button_analytics',
     ]);
@@ -88,6 +92,8 @@ describe('featureForPath', () => {
     ['/automations/abc/edit', 'automations'],
     ['/flows/abc/runs', 'flows'],
     ['/agents', 'ai_agents'],
+    ['/journeys/abc', 'journeys'],
+    ['/api/journeys/abc/enroll', 'journeys'],
     ['/api/whatsapp/broadcast', 'broadcasts'],
     ['/api/whatsapp/broadcast/abc/resume', 'broadcasts'],
     ['/api/whatsapp/broadcast/abc/schedule', 'broadcast_scheduling'],
@@ -102,6 +108,10 @@ describe('featureForPath', () => {
     ['/api/account/api-keys/abc', 'api_access'],
     ['/button-clicks', 'button_analytics'],
     ['/api/button-clicks', 'button_analytics'],
+    ['/api/delivery-settings', 'smart_sending'],
+    ['/api/whatsapp/quality', 'smart_sending'],
+    ['/api/language-settings', 'ai_agents'],
+    ['/api/messages/translate', 'translation'],
   ])('%s → %s', (path, feature) => {
     expect(featureForPath(path)).toBe(feature);
   });

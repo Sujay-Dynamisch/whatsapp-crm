@@ -41,7 +41,8 @@
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
     "menuSignOut": "Sair",
-    "buttonClicks": "Cliques em botões"
+    "buttonClicks": "Cliques em botões",
+    "journeys": "Jornadas"
   },
   "Header": {
     "dashboard": "Painel",
@@ -226,7 +227,9 @@
       "send": "Enviar",
       "quickReplyNamePrompt": "Dê um nome a esta resposta rápida:",
       "quickReplySaved": "Salva como resposta rápida.",
-      "quickReplySaveError": "Não foi possível salvar a resposta rápida."
+      "quickReplySaveError": "Não foi possível salvar a resposta rápida.",
+      "translateOn": "Traduzindo para {language}",
+      "translateOff": "Enviar sem traduzir para {language}"
     },
     "bubble": {
       "photo": "Foto",
@@ -315,6 +318,15 @@
       "resumed": "IA retomada.",
       "updateError": "Não foi possível atualizar o assistente de IA.",
       "networkError": "Não foi possível conectar ao servidor."
+    },
+    "language": {
+      "transcript": "Transcrição da mensagem de voz",
+      "transcriptFailed": "Não foi possível transcrever esta mensagem de voz.",
+      "transcriptSkipped": "Não transcrita: adicione uma chave da Groq ou OpenAI em Configurações → Idiomas.",
+      "translatedFrom": "Traduzido do {language}",
+      "translation": "Tradução",
+      "translate": "Traduzir",
+      "youWrote": "Você escreveu: {text}"
     }
   },
   "Contacts": {
@@ -742,7 +754,8 @@
         "toastCancelled": "Agendamento cancelado",
         "toastRetried": "Nova tentativa na fila para {count} destinatários",
         "toastFailed": "Falha no agendamento: {error}"
-      }
+      },
+      "autoRetryAt": "Nova tentativa automática {when}"
     },
     "new": {
       "title": "Novo disparo",
@@ -876,7 +889,10 @@
         "schedulePastError": "Escolha um horário no futuro.",
         "scheduleBtn": "Agendar transmissão",
         "confirmScheduleTitle": "Confirmar agendamento",
-        "confirmScheduleDesc": "Esta transmissão será enviada para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b> em <b>{when}</b>."
+        "confirmScheduleDesc": "Esta transmissão será enviada para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b> em <b>{when}</b>.",
+        "smartTiming": "Horário inteligente",
+        "smartTimingDesc": "Entrega a cada contato no horário em que costuma ler mensagens, em até 24 horas. Contatos sem padrão recebem no horário de início.",
+        "smartTimingNow": "o melhor horário de cada contato nas próximas 24 horas"
       }
     }
   },
@@ -1617,6 +1633,15 @@
       "accessToken": "Token de acesso permanente",
       "accessTokenPlaceholder": "Informe seu token de acesso",
       "tokenHidden": "O token está oculto por segurança. Informe-o novamente para atualizar a configuração.",
+      "metaAppId": "ID do app da Meta",
+      "metaAppIdPlaceholder": "ex.: 2094767454488902",
+      "metaAppSecret": "Chave secreta do app da Meta",
+      "metaAppSecretPlaceholder": "Digite a chave secreta do app",
+      "metaAppHint": "Opcional. Use quando o token de acesso deste número vier do próprio app da Meta do cliente (Meta → Configurações do app → Básico). Os dois valores são verificados com a Meta ao salvar, e o webhook aceitará eventos assinados por este app.",
+      "metaAppIdNotNumeric": "O ID do app da Meta deve conter apenas dígitos.",
+      "metaAppSecretRequired": "Digite a chave secreta do app da Meta para este ID.",
+      "metaAppVerified": "App da Meta “{name}” verificado — webhooks assinados por ele são aceitos.",
+      "metaAppInvalid": "Não foi possível verificar o ID / chave secreta do app da Meta salvos.",
       "webhookVerifyToken": "Token de verificação do webhook",
       "webhookVerifyTokenPlaceholder": "Crie um token de verificação personalizado",
       "webhookVerifyTokenHint": "Uma string personalizada criada por você. Deve corresponder ao token definido nas configurações de webhook da Meta.",
@@ -1704,7 +1729,9 @@
       "fields": "Campos e tags",
       "deals": "Negócios e moeda",
       "members": "Membros da equipe",
-      "api": "Chaves de API"
+      "api": "Chaves de API",
+      "delivery": "Envio inteligente",
+      "language": "Idiomas"
     },
     "groups": {
       "account": "Conta",
@@ -2088,6 +2115,7 @@
   "ButtonClicks": {
     "title": "Cliques em botões",
     "subtitle": "Quais botões os clientes tocam nos seus modelos, carrosséis e mensagens interativas.",
+    "today": "Hoje",
     "lastDays": "Últimos {days} dias",
     "retry": "Tentar novamente",
     "totalClicks": "Total de cliques",
@@ -2120,6 +2148,240 @@
       "template_quick_reply": "Botão de modelo",
       "interactive_button": "Botão interativo",
       "interactive_list": "Opção de lista"
+    }
+  },
+  "SmartSending": {
+    "filter": {
+      "title": "Engajamento",
+      "all": {
+        "label": "Todos",
+        "desc": "Sem filtro de engajamento."
+      },
+      "skip_resting": {
+        "label": "Pular contatos em descanso",
+        "desc": "Exclui contatos limitados pela Meta recentemente ou que ignoraram várias transmissões. Recomendado."
+      },
+      "warm_and_engaged": {
+        "label": "Engajados e mornos",
+        "desc": "Apenas contatos com leituras ou respostas recentes."
+      },
+      "engaged": {
+        "label": "Apenas engajados",
+        "desc": "Apenas contatos que responderam, clicaram ou leram recentemente. Melhor entrega."
+      }
+    },
+    "badge": {
+      "engaged": "Engajado",
+      "warm": "Morno",
+      "cold": "Frio",
+      "resting": "Em descanso",
+      "scoreTitle": "Pontuação de engajamento {score}/100",
+      "restReason": {
+        "meta_limited": "A Meta limitou mensagens de marketing para este contato recentemente (131049)",
+        "unread_streak": "Ignorou várias transmissões seguidas",
+        "null": ""
+      }
+    },
+    "settings": {
+      "title": "Envio inteligente",
+      "description": "Proteja seu número e alcance quem tem mais chance de ler.",
+      "qualityTitle": "Qualidade do número",
+      "qualityDesc": "A Meta avalia seu número com base em bloqueios e denúncias recentes. Uma nota baixa pode gerar restrições.",
+      "rating": {
+        "GREEN": "Alta (verde)",
+        "YELLOW": "Média (amarela)",
+        "RED": "Baixa (vermelha)",
+        "UNKNOWN": "Desconhecida"
+      },
+      "tier": "Limite de mensagens: {tier}",
+      "checked": "Verificado {when}",
+      "neverChecked": "Ainda não verificado",
+      "refresh": "Atualizar",
+      "refreshFailed": "Não foi possível atualizar: {error}",
+      "action": {
+        "allow": "As transmissões são enviadas normalmente.",
+        "slow": "Qualidade média: transmissões em lotes menores, a cada 10 minutos.",
+        "block": "Qualidade baixa: transmissões pausadas até a nota melhorar."
+      },
+      "rulesTitle": "Regras de entrega",
+      "rulesDesc": "Como funcionam o descanso, as novas tentativas automáticas e a proteção de qualidade.",
+      "autoRetry": "Repetir automaticamente envios limitados pela Meta",
+      "autoRetryDesc": "Quando a Meta limita uma mensagem de marketing a um contato (erro 131049), tenta mais uma vez depois.",
+      "qualityGuard": "Proteção de qualidade",
+      "qualityGuardDesc": "Desacelera com qualidade média e pausa com qualidade baixa.",
+      "retryDelay": "Tentar novamente após (horas)",
+      "retryDelayDesc": "De 12 a 72. Padrão 24.",
+      "restDays": "Descanso após limite da Meta (dias)",
+      "restDaysDesc": "Contatos limitados pela Meta ficam fora de novas transmissões por esse período.",
+      "restUnread": "Descanso após transmissões não lidas",
+      "restUnreadDesc": "Contatos que ignoram essa quantidade de transmissões seguidas descansam até interagir.",
+      "yellowPass": "Tamanho do lote com qualidade média",
+      "yellowPassDesc": "Destinatários por lote enquanto a nota estiver amarela.",
+      "save": "Salvar",
+      "saved": "Configurações salvas",
+      "saveFailed": "Não foi possível salvar: {error}"
+    }
+  },
+  "Language": {
+    "settings": {
+      "title": "Idiomas",
+      "description": "Fale com os clientes no idioma deles e entenda suas mensagens de voz.",
+      "translationTitle": "Tradução",
+      "translationDesc": "As mensagens dos clientes são traduzidas para o idioma da sua equipe e as respostas podem ser enviadas no idioma do cliente.",
+      "agentLanguage": "Idioma da sua equipe",
+      "agentLanguageDesc": "As mensagens recebidas são traduzidas para este idioma.",
+      "translateInbound": "Traduzir mensagens recebidas automaticamente",
+      "translateInboundDesc": "Caso contrário, os agentes podem traduzir uma mensagem quando precisarem.",
+      "aiKeyNote": "A tradução usa a chave do provedor de IA em Agentes de IA → Configuração (provedores gratuitos como Groq e Gemini funcionam).",
+      "voiceTitle": "Mensagens de voz",
+      "voiceDesc": "Transforme mensagens de voz em texto para que agentes e a IA possam ler e responder.",
+      "transcribe": "Transcrever mensagens de voz",
+      "transcribeDesc": "Usa o Whisper. A transcrição também é traduzida se estiver em outro idioma.",
+      "summarize": "Resumir mensagens de voz longas",
+      "summarizeDesc": "Adiciona um resumo de uma ou duas frases acima das transcrições longas.",
+      "provider": "Provedor de transcrição",
+      "providerAuto": "Automático",
+      "providerGroq": "Groq (nível gratuito)",
+      "providerOpenai": "OpenAI",
+      "key": "Chave de API de transcrição (opcional)",
+      "keySet": "Há uma chave salva. Digite para substituí-la.",
+      "providerHelp": "Automático reutiliza sua chave de Agentes de IA se for OpenAI ou Groq. Com outro provedor, adicione aqui uma chave gratuita da Groq (console.groq.com/keys).",
+      "save": "Salvar",
+      "saved": "Configurações de idioma salvas",
+      "saveFailed": "Não foi possível salvar: {error}"
+    }
+  },
+  "Journeys": {
+    "status": {
+      "draft": "Rascunho",
+      "active": "Ativa",
+      "paused": "Pausada"
+    },
+    "node": {
+      "trigger": "Início",
+      "wait": "Aguardar",
+      "wait_for_reply": "Aguardar resposta",
+      "condition": "Condição",
+      "send_template": "Enviar modelo",
+      "send_text": "Enviar mensagem",
+      "add_tag": "Adicionar etiqueta",
+      "remove_tag": "Remover etiqueta",
+      "create_deal": "Criar negócio",
+      "end": "Fim"
+    },
+    "nodeHelp": {
+      "trigger": "O que coloca um contato nesta jornada.",
+      "wait": "Pausa antes da próxima etapa.",
+      "wait_for_reply": "Segue por “Respondeu” assim que o cliente responder, ou por “Sem resposta” após o limite.",
+      "condition": "Ramifica conforme o que o contato fez.",
+      "send_template": "Envia um modelo aprovado do WhatsApp. Funciona a qualquer momento.",
+      "send_text": "Envia uma mensagem normal. Só dentro de 24 horas da última mensagem do cliente.",
+      "add_tag": "Etiqueta o contato.",
+      "remove_tag": "Remove uma etiqueta do contato.",
+      "create_deal": "Cria um negócio em um funil.",
+      "end": "O contato sai da jornada aqui."
+    },
+    "trigger": {
+      "manual": "Inscrito manualmente",
+      "contact_created": "Um novo contato é adicionado",
+      "first_message": "Um contato envia a primeira mensagem",
+      "tag_added": "Uma etiqueta é adicionada",
+      "tag_added_with": "Etiqueta adicionada: {tag}",
+      "button_clicked": "Um botão é tocado",
+      "button_clicked_with": "Botão tocado: {button}"
+    },
+    "condition": {
+      "replied": "Respondeu",
+      "clicked_button": "Tocou em um botão",
+      "has_tag": "Tem uma etiqueta",
+      "window_open": "A janela de 24 horas está aberta"
+    },
+    "unit": {
+      "minutes": "minutos",
+      "hours": "horas",
+      "days": "dias"
+    },
+    "slot": {
+      "yes": "Sim",
+      "no": "Não",
+      "replied": "Respondeu",
+      "timeout": "Sem resposta"
+    },
+    "summary": {
+      "wait": "Aguardar {amount} {unit}",
+      "waitReply": "Até {amount} {unit}",
+      "hasTag": "Tem a etiqueta: {tag}",
+      "clicked": "Tocou em “{button}”",
+      "clickedAny": "Tocou em qualquer botão",
+      "chooseTag": "Escolha uma etiqueta",
+      "chooseTemplate": "Escolha um modelo",
+      "writeMessage": "Escreva a mensagem",
+      "chooseStage": "Escolha uma etapa",
+      "end": "Jornada concluída"
+    },
+    "form": {
+      "startsWhen": "Começa quando",
+      "tag": "Etiqueta",
+      "chooseTag": "Escolha uma etiqueta…",
+      "buttonText": "Texto do botão",
+      "anyButton": "Qualquer botão",
+      "manualHelp": "Use “Inscrever contatos” em uma jornada ativa para adicionar contatos por etiqueta.",
+      "waitFor": "Aguardar",
+      "giveUpAfter": "Desistir após",
+      "amount": "Quantidade",
+      "waitReplyHelp": "Qualquer mensagem ou toque em botão do cliente conta como resposta.",
+      "check": "Verificar",
+      "template": "Modelo",
+      "chooseTemplate": "Escolha um modelo aprovado…",
+      "params": "Variáveis",
+      "paramsHelp": "Uma por linha, para {{1}}, {{2}}… Use {{name}} ou {{phone}} para os dados do contato.",
+      "message": "Mensagem",
+      "textHelp": "Você pode usar {{name}} e {{phone}}.",
+      "stage": "Etapa do funil",
+      "chooseStage": "Escolha uma etapa…",
+      "dealTitle": "Título do negócio",
+      "dealValue": "Valor do negócio",
+      "endHelp": "Nada para configurar.",
+      "deleteStep": "Excluir etapa",
+      "done": "Concluir"
+    },
+    "editor": {
+      "back": "Voltar às jornadas",
+      "name": "Nome da jornada",
+      "addStep": "Adicionar etapa",
+      "stats": "Estatísticas",
+      "enroll": "Inscrever contatos",
+      "save": "Salvar",
+      "activate": "Ativar",
+      "pause": "Pausar",
+      "saved": "Jornada salva",
+      "saveFailed": "Não foi possível salvar a jornada",
+      "fixIssues": "Corrija {count, plural, =1 {1 problema} other {# problemas}} antes de ativar",
+      "activated": "A jornada está ativa",
+      "paused": "Jornada pausada",
+      "issues": "{count, plural, =1 {1 problema para corrigir:} other {# problemas para corrigir:}}",
+      "enrollTitle": "Inscrever contatos",
+      "enrollDesc": "Inicia todos com esta etiqueta na jornada (até 500 por vez). Contatos descadastrados são ignorados.",
+      "enrolled": "{enrolled} inscritos, {skipped} ignorados",
+      "cancel": "Cancelar"
+    },
+    "list": {
+      "title": "Jornadas",
+      "subtitle": "Caminhos automáticos de várias etapas: esperas, ramificações, modelos, etiquetas e negócios, com conversão em cada etapa.",
+      "new": "Nova jornada",
+      "newDesc": "Dê um nome. Depois você desenha as etapas.",
+      "namePlaceholder": "ex.: Nutrição de novos leads",
+      "create": "Criar",
+      "emptyTitle": "Nenhuma jornada ainda",
+      "emptyHint": "Exemplo: novo contato → aguardar 1 dia → se não responder, enviar uma oferta → se tocar em “Comprar”, etiquetar e criar um negócio.",
+      "inProgress": "Em andamento",
+      "completed": "Concluídos",
+      "failed": "Com falha",
+      "updated": "Atualizada {when}",
+      "open": "Abrir",
+      "delete": "Excluir",
+      "deleteConfirm": "Excluir “{name}”? Os contatos nela vão parar.",
+      "deleteFailed": "Não foi possível excluir a jornada"
     }
   }
 }

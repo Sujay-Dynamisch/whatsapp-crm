@@ -66,6 +66,30 @@ describe('GET /api/button-clicks', () => {
     expect(Math.round((to - from) / 86_400_000)).toBe(7);
   });
 
+  it('supports the today filter with local day boundary or custom from', async () => {
+    const customFrom = '2026-10-18T00:00:00.000Z';
+    const res = await get(`?days=today&from=${encodeURIComponent(customFrom)}`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.days).toBe('today');
+    expect(state.rpcArgs!.p_from).toBe(customFrom);
+    expect(state.recentFilters['clicked_at>=']).toBe(customFrom);
+
+    // Without explicit from, falls back to start of current day
+    const res2 = await get('?days=today');
+    expect(res2.status).toBe(200);
+    expect((await res2.json()).days).toBe('today');
+    const fromTime = new Date(state.rpcArgs!.p_from);
+    expect(fromTime.getHours()).toBe(0);
+    expect(fromTime.getMinutes()).toBe(0);
+    expect(fromTime.getSeconds()).toBe(0);
+
+    // days=0 is also supported as alias for today
+    const res3 = await get('?days=0');
+    expect(res3.status).toBe(200);
+    expect((await res3.json()).days).toBe(0);
+  });
+
   it('falls back to 30 days for unsupported ranges', async () => {
     expect((await (await get('?days=5000')).json()).days).toBe(30);
     expect((await (await get()).json()).days).toBe(30);

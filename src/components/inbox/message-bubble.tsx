@@ -24,6 +24,7 @@ import {
 } from "./message-media";
 import { InteractivePreview } from "@/components/interactive/interactive-preview";
 import { useTranslations } from "next-intl";
+import { MessageLanguage } from "@/components/inbox/message-language";
 
 interface MessageBubbleProps {
   message: Message;
@@ -282,6 +283,7 @@ export function MessageBubble({
           isAgent={isAgent}
           onOpenMedia={onOpenMedia}
         />
+        <MessageLanguage message={message} isAgent={isAgent} />
         <div
           className={cn(
             "mt-1 flex items-center gap-1",

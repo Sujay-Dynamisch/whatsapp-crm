@@ -124,6 +124,13 @@ export interface Contact {
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the
    *  Inbox conversation list, for tag filtering). Absent otherwise. */
   tags?: Tag[];
+  /** Engagement signals (migration 048) — see lib/smart-sending/engagement. */
+  last_engaged_at?: string | null;
+  last_read_at?: string | null;
+  unread_streak?: number;
+  meta_limited_count?: number;
+  last_meta_limited_at?: string | null;
+  activity_hours?: number[];
 }
 
 export interface Tag {
@@ -191,6 +198,8 @@ export interface Conversation {
    */
   ai_autoreply_disabled?: boolean;
   ai_reply_count?: number;
+  /** Last detected customer language, ISO 639-1 (migration 049). */
+  customer_language?: string | null;
   ai_handoff_summary?: string | null;
 }
 
@@ -277,6 +286,13 @@ export interface Message {
   error_code?: number | null;
   error_title?: string | null;
   error_details?: string | null;
+  /** Multilingual inbox (migration 049). */
+  detected_language?: string | null;
+  translated_text?: string | null;
+  original_text?: string | null;
+  transcript?: string | null;
+  transcript_summary?: string | null;
+  transcript_status?: 'done' | 'failed' | 'skipped' | null;
 }
 
 export type ReactionActor = 'customer' | 'agent';
@@ -543,6 +559,11 @@ export interface BroadcastRecipient {
    * Added in migration 038; null on rows created before it.
    */
   template_params?: string[] | null;
+  /** Smart sending (migration 048). */
+  error_code?: number | null;
+  retry_count?: number;
+  retry_at?: string | null;
+  send_after?: string | null;
   created_at: string;
   contact?: Contact;
 }

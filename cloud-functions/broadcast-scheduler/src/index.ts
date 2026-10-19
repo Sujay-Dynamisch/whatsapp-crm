@@ -11,6 +11,7 @@
 // header is defence in depth on top of that.
 //
 //   windowKeepalive     ← Cloud Scheduler (*/5 min) — 24h-window check-ins
+//   journeyTick         ← Cloud Scheduler (every minute) — journey waits / timeouts
 //
 // Plain exported (req, res) handlers — the Node runtime wraps them in
 // the Functions Framework automatically, so no runtime dependency.
@@ -29,12 +30,15 @@ import { createGcpBackend, type SchedulingBackend } from '@/lib/broadcast-schedu
 import {
   handleArm,
   handleExecute,
+  handleLimitedRetries,
   handleReconcile,
   isArmPayload,
   isExecutePayload,
   type HandlerOutcome,
 } from '@/lib/broadcast-scheduling/execute';
 import { runWindowKeepalive } from '@/lib/conversations/window-keepalive';
+import { runJourneyTick } from '@/lib/journeys/engine';
+import { liveJourneyDeps } from '@/lib/journeys/dispatch';
 
 // Shared app modules (flows/ai admin clients used by engineSendText)
 // read the Next.js variable name.
@@ -164,8 +168,13 @@ export async function reconcileBroadcasts(req: Req, res: Res): Promise<void> {
     const s = guard(req, res);
     if (!s) return;
     const report = await handleReconcile(s.db, s.backend, s.cfg);
-    console.log(JSON.stringify({ fn: 'reconcileBroadcasts', ...report }));
-    res.status(200).json(report);
+    // 131049 automatic retries (migration 048) ride the same 5-minute
+    // schedule; a failure here must not hide the reconcile result.
+    const retries = await handleLimitedRetries(s.db).catch((err) => ({
+      error: err instanceof Error ? err.message : String(err),
+    }));
+    console.log(JSON.stringify({ fn: 'reconcileBroadcasts', ...report, retries }));
+    res.status(200).json({ ...report, retries });
   } catch (err) {
     console.error('[reconcileBroadcasts]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'internal' });
@@ -181,6 +190,19 @@ export async function windowKeepalive(req: Req, res: Res): Promise<void> {
     res.status(200).json(report);
   } catch (err) {
     console.error('[windowKeepalive]', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'internal' });
+  }
+}
+
+export async function journeyTick(req: Req, res: Res): Promise<void> {
+  try {
+    const s = guard(req, res);
+    if (!s) return;
+    const report = await runJourneyTick(s.db, liveJourneyDeps);
+    console.log(JSON.stringify({ fn: 'journeyTick', ...report }));
+    res.status(200).json(report);
+  } catch (err) {
+    console.error('[journeyTick]', err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'internal' });
   }
 }

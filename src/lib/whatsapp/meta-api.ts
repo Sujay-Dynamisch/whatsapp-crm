@@ -20,8 +20,8 @@ import {
   type SendTimeParams,
 } from './template-send-builder'
 
-const META_API_VERSION = 'v21.0'
-const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
+export const META_API_VERSION = 'v21.0'
+export const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
 
 export interface MetaSendResult {
   messageId: string
@@ -256,6 +256,33 @@ export async function subscribeWabaToApp(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
+}
+
+export interface VerifyMetaAppArgs {
+  appId: string
+  appSecret: string
+}
+
+export interface MetaAppInfo {
+  id: string
+  name?: string
+}
+
+/**
+ * Prove an App ID / App Secret pair belongs together by reading the
+ * app with its app access token (`{app_id}|{app_secret}`). Meta
+ * answers 400 (code 190 / 101) when the secret doesn't match the id.
+ */
+export async function verifyMetaApp(args: VerifyMetaAppArgs): Promise<MetaAppInfo> {
+  const { appId, appSecret } = args
+  const url =
+    `${META_API_BASE}/${encodeURIComponent(appId)}?fields=id,name` +
+    `&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  return (await response.json()) as MetaAppInfo
 }
 
 export interface ListWabaPhoneNumbersArgs {
