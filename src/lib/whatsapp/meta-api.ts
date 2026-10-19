@@ -258,6 +258,33 @@ export async function subscribeWabaToApp(
   }
 }
 
+export interface VerifyMetaAppArgs {
+  appId: string
+  appSecret: string
+}
+
+export interface MetaAppInfo {
+  id: string
+  name?: string
+}
+
+/**
+ * Prove an App ID / App Secret pair belongs together by reading the
+ * app with its app access token (`{app_id}|{app_secret}`). Meta
+ * answers 400 (code 190 / 101) when the secret doesn't match the id.
+ */
+export async function verifyMetaApp(args: VerifyMetaAppArgs): Promise<MetaAppInfo> {
+  const { appId, appSecret } = args
+  const url =
+    `${META_API_BASE}/${encodeURIComponent(appId)}?fields=id,name` +
+    `&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  return (await response.json()) as MetaAppInfo
+}
+
 export interface ListWabaPhoneNumbersArgs {
   wabaId: string
   accessToken: string

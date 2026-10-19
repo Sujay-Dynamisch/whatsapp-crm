@@ -221,6 +221,55 @@ export async function GET(request: Request) {
   }
 }
 
+/**
+ * App Secrets saved per account (migration 051) for the numbers / WABAs
+ * this payload names. The ids come from the not-yet-verified body, but
+ * they only pick which secrets to try — the HMAC must still match one.
+ */
+async function accountAppSecretsFor(rawBody: string): Promise<string[]> {
+  let parsed: { entry?: WhatsAppWebhookEntry[] }
+  try {
+    parsed = JSON.parse(rawBody)
+  } catch {
+    return []
+  }
+  const isId = (v: unknown): v is string => typeof v === 'string' && /^\d+$/.test(v)
+  const wabaIds = new Set<string>()
+  const phoneIds = new Set<string>()
+  for (const entry of Array.isArray(parsed?.entry) ? parsed.entry : []) {
+    if (isId(entry?.id)) wabaIds.add(entry.id)
+    for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+      const pid = change?.value?.metadata?.phone_number_id
+      if (isId(pid)) phoneIds.add(pid)
+    }
+  }
+  const filters = [
+    phoneIds.size ? `phone_number_id.in.(${[...phoneIds].join(',')})` : null,
+    wabaIds.size ? `waba_id.in.(${[...wabaIds].join(',')})` : null,
+  ].filter(Boolean)
+  if (filters.length === 0) return []
+
+  const { data, error } = await supabaseAdmin()
+    .from('whatsapp_config')
+    .select('app_secret')
+    .not('app_secret', 'is', null)
+    .or(filters.join(','))
+    .limit(20)
+  if (error) {
+    console.error('[webhook] app_secret lookup failed:', error.message)
+    return []
+  }
+  const secrets: string[] = []
+  for (const row of (data ?? []) as { app_secret: string }[]) {
+    try {
+      secrets.push(decrypt(row.app_secret))
+    } catch {
+      console.error('[webhook] stored app_secret cannot be decrypted with ENCRYPTION_KEY')
+    }
+  }
+  return secrets
+}
+
 // POST - Receive messages
 export async function POST(request: Request) {
   // Read raw body first so we can HMAC-verify the exact bytes Meta
@@ -228,7 +277,12 @@ export async function POST(request: Request) {
   const rawBody = await request.text()
   const signature = request.headers.get('x-hub-signature-256')
 
-  if (!verifyMetaWebhookSignature(rawBody, signature)) {
+  // Env secrets first (no DB hit); fall back to the per-account App
+  // Secret saved from the settings form for customers on their own app.
+  const signatureOk =
+    (!!process.env.META_APP_SECRET?.trim() && verifyMetaWebhookSignature(rawBody, signature)) ||
+    verifyMetaWebhookSignature(rawBody, signature, await accountAppSecretsFor(rawBody))
+  if (!signatureOk) {
     // 401 (not 200) — we want Meta's delivery dashboard to show failures
     // loudly if a misconfiguration causes signatures to stop matching,
     // rather than silently eating events.

@@ -6,7 +6,9 @@ import {
   listWabaPhoneNumbers,
   registerPhoneNumber,
   subscribeWabaToApp,
+  verifyMetaApp,
   verifyPhoneNumber,
+  MetaApiError,
 } from '@/lib/whatsapp/meta-api'
 import {
   explainMetaError,
@@ -80,6 +82,45 @@ function metaFailure(err: unknown, step: MetaConnectStep, ctx: MetaErrorContext)
   )
 }
 
+type MetaAppCheck =
+  | { ok: true; name: string | null }
+  | { ok: false; message: string; meta: Record<string, unknown> & { field: string } }
+
+/**
+ * Check a per-account Meta App ID / App Secret pair. Returns the app's
+ * name, or an actionable message naming which value to fix.
+ */
+async function checkMetaApp(appId: string, appSecret: string): Promise<MetaAppCheck> {
+  try {
+    const info = await verifyMetaApp({ appId, appSecret })
+    if (info.id !== appId) {
+      return {
+        ok: false,
+        message: `Meta returned app ${info.id} instead of ${appId}. Re-copy the App ID from Meta → App settings → Basic.`,
+        meta: { code: null, subcode: null, fbtrace_id: null, step: 'verify_app', field: 'app_id', message: null },
+      }
+    }
+    return { ok: true, name: info.name ?? null }
+  } catch (err) {
+    const metaErr = err instanceof MetaApiError ? err : null
+    const raw = err instanceof Error ? err.message : String(err)
+    return {
+      ok: false,
+      message:
+        `Meta rejected the App ID / App Secret pair (${raw}). Copy both from Meta → App settings → Basic ` +
+        `of the app your access token was generated from — the secret must belong to App ID ${appId}.`,
+      meta: {
+        code: metaErr?.code ?? null,
+        subcode: metaErr?.subcode ?? null,
+        fbtrace_id: metaErr?.fbtraceId ?? null,
+        step: 'verify_app',
+        field: 'app_secret',
+        message: raw,
+      },
+    }
+  }
+}
+
 /**
  * GET /api/whatsapp/config
  *
@@ -122,7 +163,7 @@ export async function GET() {
 
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
-      .select('phone_number_id, waba_id, access_token, status')
+      .select('phone_number_id, waba_id, access_token, status, app_id, app_secret')
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -202,7 +243,7 @@ export async function GET() {
     if (config.waba_id) {
       try {
         const subs = await getSubscribedApps({ wabaId: config.waba_id, accessToken })
-        const state = appSubscriptionState(subs, process.env.META_APP_ID)
+        const state = appSubscriptionState(subs, config.app_id || process.env.META_APP_ID)
         wabaSubscription = {
           checked: true,
           subscribed: state.subscribed,
@@ -219,10 +260,36 @@ export async function GET() {
       }
     }
 
+    // Per-account Meta App (migration 051). Never fatal for sending,
+    // but a bad secret means every webhook from this app is rejected.
+    let metaApp: { configured: boolean; valid: boolean | null; name?: string | null; error?: string } = {
+      configured: false,
+      valid: null,
+    }
+    if (config.app_id && config.app_secret) {
+      let appSecret: string | null = null
+      try {
+        appSecret = decrypt(config.app_secret)
+      } catch {
+        metaApp = {
+          configured: true,
+          valid: false,
+          error: 'The stored App Secret cannot be decrypted with the current ENCRYPTION_KEY. Re-enter it and save.',
+        }
+      }
+      if (appSecret) {
+        const check = await checkMetaApp(config.app_id, appSecret)
+        metaApp = check.ok
+          ? { configured: true, valid: true, name: check.name }
+          : { configured: true, valid: false, error: check.message }
+      }
+    }
+
     return NextResponse.json({
       connected: true,
       phone_info: phoneInfo,
       waba_subscription: wabaSubscription,
+      meta_app: metaApp,
     })
   } catch (error) {
     console.error('Error in WhatsApp config GET:', error)
@@ -267,6 +334,8 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const { phone_number_id, waba_id, access_token, verify_token, pin } = body
+    const appId = typeof body.app_id === 'string' ? body.app_id.trim() : ''
+    const appSecretInput = typeof body.app_secret === 'string' ? body.app_secret.trim() : ''
 
     if (!access_token || !phone_number_id) {
       return NextResponse.json(
@@ -296,6 +365,21 @@ export async function POST(request: Request) {
             'WhatsApp Business Account ID must contain only digits — copy it from Meta → WhatsApp → API Setup.',
           field: 'waba_id',
         },
+        { status: 400 }
+      )
+    }
+    if (appId && !isNumericMetaId(appId)) {
+      return NextResponse.json(
+        {
+          error: 'Meta App ID must contain only digits — copy it from Meta → App settings → Basic.',
+          field: 'app_id',
+        },
+        { status: 400 }
+      )
+    }
+    if (appSecretInput && !appId) {
+      return NextResponse.json(
+        { error: 'Enter the Meta App ID that this App Secret belongs to.', field: 'app_id' },
         { status: 400 }
       )
     }
@@ -386,12 +470,54 @@ export async function POST(request: Request) {
       }
     }
 
+    // Look up any pre-existing row for this account so we know whether
+    // this number is already registered with Meta — if so we can skip
+    // /register when the user didn't provide a PIN this time around.
+    // Also lets an unchanged App Secret be kept without re-entry.
+    const { data: existing } = await supabase
+      .from('whatsapp_config')
+      .select('id, registered_at, phone_number_id, app_id, app_secret')
+      .eq('account_id', accountId)
+      .maybeSingle()
+
+    // Optional per-account Meta App (migration 051). Verified against
+    // Meta before anything is written, so a wrong secret is caught here
+    // instead of as webhooks silently failing signature checks.
+    let appSecret = appSecretInput
+    let appName: string | null = null
+    if (appId) {
+      const storedSecret = existing?.app_id === appId ? existing?.app_secret : null
+      if (!appSecret && storedSecret) {
+        try {
+          appSecret = decrypt(storedSecret)
+        } catch {
+          appSecret = ''
+        }
+      }
+      if (!appSecret) {
+        return NextResponse.json(
+          { error: `Enter the App Secret for Meta App ${appId} (Meta → App settings → Basic).`, field: 'app_secret' },
+          { status: 400 }
+        )
+      }
+      const check = await checkMetaApp(appId, appSecret)
+      if (!check.ok) {
+        return NextResponse.json(
+          { error: check.message, field: check.meta.field, meta: check.meta },
+          { status: 400 }
+        )
+      }
+      appName = check.name
+    }
+
     // Encrypt sensitive tokens before storing
     let encryptedAccessToken: string
     let encryptedVerifyToken: string | null
+    let encryptedAppSecret: string | null
     try {
       encryptedAccessToken = encrypt(access_token)
       encryptedVerifyToken = verify_token ? encrypt(verify_token) : null
+      encryptedAppSecret = appId ? encrypt(appSecret) : null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown encryption error'
       console.error('Encryption failed:', message)
@@ -403,15 +529,6 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
-
-    // Look up any pre-existing row for this account so we know whether
-    // this number is already registered with Meta — if so we can skip
-    // /register when the user didn't provide a PIN this time around.
-    const { data: existing } = await supabase
-      .from('whatsapp_config')
-      .select('id, registered_at, phone_number_id')
-      .eq('account_id', accountId)
-      .maybeSingle()
 
     const sameNumber =
       existing?.phone_number_id === phone_number_id &&
@@ -488,6 +605,42 @@ export async function POST(request: Request) {
       } catch (err) {
         return metaFailure(err, 'subscribe_waba', metaCtx)
       }
+
+      // The subscription above goes to whichever app minted the token.
+      // If that isn't the App ID entered, Meta signs this WABA's
+      // webhooks with a different secret and every one is rejected.
+      // Only a definite "not listed" fails — a token without
+      // whatsapp_business_management can't read the list at all.
+      if (appId) {
+        try {
+          const subs = await getSubscribedApps({ wabaId: waba_id, accessToken: access_token })
+          if (appSubscriptionState(subs, appId).appIdMatch === false) {
+            return NextResponse.json(
+              {
+                error:
+                  `The access token was generated from a different Meta app than App ID ${appId}, so webhooks ` +
+                  `for this number would be signed with another secret. Generate the token (System User or ` +
+                  `Embedded Signup) from app ${appId}, or enter the App ID and Secret of the app that issued it.`,
+                field: 'app_id',
+                meta: {
+                  code: null,
+                  subcode: null,
+                  fbtrace_id: null,
+                  step: 'subscribed_apps',
+                  field: 'app_id',
+                  message: 'app_id is not among the WABA subscribed_apps',
+                },
+              },
+              { status: 400 }
+            )
+          }
+        } catch (err) {
+          console.warn(
+            '[whatsapp/config] subscribed_apps check skipped:',
+            err instanceof Error ? err.message : err,
+          )
+        }
+      }
     }
 
     // Persist everything in one shot. If /register failed we still
@@ -498,6 +651,8 @@ export async function POST(request: Request) {
       waba_id: waba_id || null,
       access_token: encryptedAccessToken,
       verify_token: encryptedVerifyToken,
+      app_id: appId || null,
+      app_secret: encryptedAppSecret,
       status: registrationError ? 'disconnected' : 'connected',
       connected_at: registrationError ? null : new Date().toISOString(),
       registered_at: registrationError ? null : registeredAt,
@@ -566,6 +721,7 @@ export async function POST(request: Request) {
       // rather than claiming the number is fully live.
       registration_skipped: registrationSkipped,
       phone_info: phoneInfo,
+      meta_app: appId ? { id: appId, name: appName } : null,
     })
   } catch (error) {
     console.error('Error in WhatsApp config POST:', error)

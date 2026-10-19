@@ -59,6 +59,12 @@ type WabaSubscription = {
   app_id_match: boolean | null;
   error?: string;
 };
+type MetaAppStatus = {
+  configured: boolean;
+  valid: boolean | null;
+  name?: string | null;
+  error?: string;
+};
 
 export function WhatsAppConfig() {
   const t = useTranslations('Settings.whatsapp');
@@ -90,6 +96,7 @@ export function WhatsAppConfig() {
   const [statusMeta, setStatusMeta] = useState<MetaErrorMeta | null>(null);
   const [saveFailure, setSaveFailure] = useState<MetaFailure | null>(null);
   const [wabaSubscription, setWabaSubscription] = useState<WabaSubscription | null>(null);
+  const [metaAppStatus, setMetaAppStatus] = useState<MetaAppStatus | null>(null);
   // Guards against re-hydrating the form when the load effect below
   // re-runs for reasons unrelated to actually switching accounts —
   // e.g. Supabase's onAuthStateChange fires a token refresh (new
@@ -104,6 +111,12 @@ export function WhatsAppConfig() {
   const [verifyToken, setVerifyToken] = useState('');
   const [pin, setPin] = useState('');
   const [tokenEdited, setTokenEdited] = useState(false);
+  // Per-account Meta App (migration 051). The secret is masked like the
+  // access token; left untouched, the server keeps the stored one.
+  const [appId, setAppId] = useState('');
+  const [appSecret, setAppSecret] = useState('');
+  const [appSecretEdited, setAppSecretEdited] = useState(false);
+  const [showAppSecret, setShowAppSecret] = useState(false);
 
   // Inbound-media mirror (issue #466). Unlike everything else on this
   // page it is NOT part of handleSave: that path insists on re-entering
@@ -166,6 +179,9 @@ export function WhatsAppConfig() {
         setVerifyToken('');
         setPin('');
         setTokenEdited(false);
+        setAppId(data.app_id || '');
+        setAppSecret(data.app_secret ? MASKED_TOKEN : '');
+        setAppSecretEdited(false);
         // Undefined on a row read before migration 039 — treat that as
         // on, matching the webhook's own default.
         setMirrorMedia(data.mirror_inbound_media !== false);
@@ -177,6 +193,9 @@ export function WhatsAppConfig() {
         setVerifyToken('');
         setPin('');
         setTokenEdited(false);
+        setAppId('');
+        setAppSecret('');
+        setAppSecretEdited(false);
         setMirrorMedia(true);
       }
       // Clear any stale probe result when reloading the row.
@@ -194,6 +213,7 @@ export function WhatsAppConfig() {
             setStatusMessage('');
             setStatusMeta(null);
             setWabaSubscription(payload.waba_subscription ?? null);
+            setMetaAppStatus(payload.meta_app ?? null);
           } else {
             setConnectionStatus('disconnected');
             setResetReason(payload.needs_reset ? 'token_corrupted' : payload.reason === 'meta_api_error' ? 'meta_api_error' : null);
@@ -273,6 +293,14 @@ export function WhatsAppConfig() {
       toast.error(t('wabaIdNotNumeric'));
       return;
     }
+    if (appId.trim() && !META_ID_RE.test(appId.trim())) {
+      toast.error(t('metaAppIdNotNumeric'));
+      return;
+    }
+    if (appId.trim() && !appSecret.trim()) {
+      toast.error(t('metaAppSecretRequired'));
+      return;
+    }
     if (!config && (!accessToken.trim() || !tokenEdited)) {
       toast.error(t('accessTokenRequired'));
       return;
@@ -293,7 +321,11 @@ export function WhatsAppConfig() {
         // requires it on first save or when changing numbers; for a
         // simple token rotation, leaving it blank skips re-register.
         pin: pin.trim() || null,
+        app_id: appId.trim() || null,
       };
+      if (appSecretEdited && appSecret !== MASKED_TOKEN && appSecret.trim()) {
+        payload.app_secret = appSecret.trim();
+      }
 
       if (tokenEdited && accessToken !== MASKED_TOKEN && accessToken.trim()) {
         payload.access_token = accessToken.trim();
@@ -387,6 +419,7 @@ export function WhatsAppConfig() {
         setStatusMessage('');
         setStatusMeta(null);
         setWabaSubscription(payload.waba_subscription ?? null);
+        setMetaAppStatus(payload.meta_app ?? null);
         toast.success(
           payload.phone_info?.verified_name
             ? t('connectedTo', { name: payload.phone_info.verified_name })
@@ -398,6 +431,7 @@ export function WhatsAppConfig() {
         setStatusMessage(payload.message || '');
         setStatusMeta(payload.meta ?? null);
         setWabaSubscription(null);
+        setMetaAppStatus(null);
         toast.error(payload.message || t('apiConnectionFailed'), { duration: 10000 });
       }
     } catch (err) {
@@ -619,6 +653,18 @@ export function WhatsAppConfig() {
                   : wabaSubscription.error}
             </p>
           )}
+          {connectionStatus === 'connected' && metaAppStatus?.configured && (
+            <p
+              className={
+                'mt-1 text-xs ' +
+                (metaAppStatus.valid === false ? 'text-amber-300' : 'text-muted-foreground')
+              }
+            >
+              {metaAppStatus.valid
+                ? t('metaAppVerified', { name: metaAppStatus.name || appId })
+                : metaAppStatus.error || t('metaAppInvalid')}
+            </p>
+          )}
           {connectionStatus !== 'connected' && statusMeta && renderMetaDetails(statusMeta)}
         </Alert>
 
@@ -786,6 +832,48 @@ export function WhatsAppConfig() {
                   {t('tokenHidden')}
                 </p>
               )}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">{t('metaAppId')}</Label>
+                <Input
+                  inputMode="numeric"
+                  placeholder={t('metaAppIdPlaceholder')}
+                  value={appId}
+                  onChange={(e) => setAppId(e.target.value)}
+                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">{t('metaAppSecret')}</Label>
+                <div className="relative">
+                  <Input
+                    type={showAppSecret ? 'text' : 'password'}
+                    placeholder={t('metaAppSecretPlaceholder')}
+                    value={appSecret}
+                    onChange={(e) => {
+                      setAppSecret(e.target.value);
+                      setAppSecretEdited(true);
+                    }}
+                    onFocus={() => {
+                      if (appSecret === MASKED_TOKEN) {
+                        setAppSecret('');
+                        setAppSecretEdited(true);
+                      }
+                    }}
+                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAppSecret(!showAppSecret)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showAppSecret ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">{t('metaAppHint')}</p>
             </div>
 
             <div className="space-y-2">

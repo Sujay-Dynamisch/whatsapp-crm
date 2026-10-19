@@ -15,8 +15,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { startOfLocalDay } from '@/lib/dashboard/date-utils';
 
-const RANGES = [7, 30, 90] as const;
+const RANGES = ['today', 7, 30, 90] as const;
+type RangeOption = (typeof RANGES)[number];
 
 interface Summary {
   totals: {
@@ -77,17 +79,21 @@ function StatCard({ label, value, icon }: { label: string; value: number; icon: 
 
 export default function ButtonClicksPage() {
   const t = useTranslations('ButtonClicks');
-  const [days, setDays] = useState<(typeof RANGES)[number]>(30);
+  const [days, setDays] = useState<RangeOption>(30);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [recent, setRecent] = useState<RecentClick[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (range: number) => {
+  const load = useCallback(async (range: RangeOption) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/button-clicks?days=${range}`);
+      const fromQuery =
+        range === 'today'
+          ? `&from=${encodeURIComponent(startOfLocalDay().toISOString())}`
+          : '';
+      const res = await fetch(`/api/button-clicks?days=${range}${fromQuery}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       setSummary(data.summary);
@@ -127,7 +133,7 @@ export default function ButtonClicksPage() {
               variant={days === r ? 'default' : 'ghost'}
               onClick={() => setDays(r)}
             >
-              {t('lastDays', { days: r })}
+              {r === 'today' ? t('today') : t('lastDays', { days: r })}
             </Button>
           ))}
         </div>
