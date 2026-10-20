@@ -19,7 +19,7 @@ import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { recordButtonClick } from '@/lib/whatsapp/button-clicks'
 import { refreshQuality } from '@/lib/smart-sending/quality'
-import { processInboundLanguage } from '@/lib/language/inbound'
+import { startInboundLanguage } from '@/lib/language/inbound'
 import { dispatchJourneyInbound } from '@/lib/journeys/dispatch'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
@@ -755,6 +755,19 @@ async function processMessage(
   // See parseMessageContent for what it turns off.
   mirrorMedia: boolean
 ) {
+  // Per-step timings, logged when a message takes long to handle — the
+  // first thing to check when "the bot replies late".
+  const startedAt = Date.now()
+  const timings: Record<string, number> = {}
+  const timed = async <T>(step: string, work: () => Promise<T>): Promise<T> => {
+    const t = Date.now()
+    try {
+      return await work()
+    } finally {
+      timings[step] = Date.now() - t
+    }
+  }
+
   // Phone number OR business-scoped user ID — Meta sends only the
   // latter for a sender who has adopted a WhatsApp username (#519).
   const identity = resolveInboundIdentity(message, contact)
@@ -961,22 +974,30 @@ async function processMessage(
   // Translation + voice-note transcription (migration 049). Runs before
   // automations and the AI so a voice note's transcript can trigger
   // keyword automations and be answered by the AI. Never throws.
-  const { transcript } = await processInboundLanguage(supabaseAdmin(), {
-    accountId,
-    conversationId: conversation.id,
-    messageRowId: insertedRows[0].id as string,
-    message,
-    text: contentText,
-    accessToken,
-  })
+  // Only the voice transcript is waited for here; the translation is an
+  // extra AI call nothing below needs, so it runs alongside the flows /
+  // automations / AI reply and is awaited at the end.
+  const { transcript, translated } = await timed('language', () =>
+    startInboundLanguage(supabaseAdmin(), {
+      accountId,
+      conversationId: conversation.id,
+      messageRowId: insertedRows[0].id as string,
+      message,
+      text: contentText,
+      accessToken,
+    })
+  )
 
   // Journeys (migration 050): any customer message resumes their "wait
   // for reply" steps; a button tap can also start a journey. Never throws.
-  await dispatchJourneyInbound(supabaseAdmin(), {
-    accountId,
-    contactId: contactRecord.id,
-    buttonText: interactiveReplyId ? contentText : null,
-  })
+  await timed('journeys', () =>
+    dispatchJourneyInbound(supabaseAdmin(), {
+      accountId,
+      contactId: contactRecord.id,
+      buttonText: interactiveReplyId ? contentText : null,
+      text: contentText,
+    })
+  )
 
   // ============================================================
   // Flow runner dispatch.
@@ -997,7 +1018,7 @@ async function processMessage(
   // no active flows take the runner's early-exit "no_match" path
   // basically for free (one indexed SELECT for the active run).
   // ============================================================
-  const flowResult = await dispatchInboundToFlows({
+  const flowResult = await timed('flows', () => dispatchInboundToFlows({
     accountId,
     userId: configOwnerUserId,
     contactId: contactRecord.id,
@@ -1016,7 +1037,7 @@ async function processMessage(
             meta_message_id: message.id,
           },
     isFirstInboundMessage,
-  })
+  }))
   const flowConsumed = flowResult.consumed
 
   // Fire any automations that react to this webhook event. All dispatches
@@ -1070,6 +1091,7 @@ async function processMessage(
   // logging zero steps. `runAutomationsForTrigger` owns its own try/catch
   // and never throws; the `.catch` is belt-and-braces so one trigger
   // type's failure can't skip the rest of the loop.
+  const automationsStarted = Date.now()
   for (const triggerType of automationTriggers) {
     await runAutomationsForTrigger({
       accountId,
@@ -1084,6 +1106,7 @@ async function processMessage(
       },
     }).catch((err) => console.error('[automations] dispatch failed:', err))
   }
+  timings.automations = Date.now() - automationsStarted
 
   // AI auto-reply. Runs for text / interactive button replies that the
   // deterministic flow runner did NOT consume (flows win over the LLM),
@@ -1091,16 +1114,19 @@ async function processMessage(
   // (same reason as the webhook dispatch below); `dispatchInboundToAiReply`
   // owns its eligibility gates + try/catch and never throws.
   if (!flowConsumed && inboundText.trim()) {
-    await dispatchInboundToAiReply({
-      accountId,
-      conversationId: conversation.id,
-      contactId: contactRecord.id,
-      configOwnerUserId,
-      // Lets the bot show "typing…" (and mark the message read) while
-      // the reply is generated.
-      inboundMessageId: message.id,
-    })
+    await timed('ai_reply', () =>
+      dispatchInboundToAiReply({
+        accountId,
+        conversationId: conversation.id,
+        contactId: contactRecord.id,
+        configOwnerUserId,
+        // Lets the bot show "typing…" (and mark the message read) while
+        // the reply is generated.
+        inboundMessageId: message.id,
+      })
+    )
   }
+  const repliedAfterMs = Date.now() - startedAt
 
   // message.received webhook (public API). Awaited — not fire-and-forget
   // — because we're inside the route's `after()` block, which only keeps
@@ -1116,6 +1142,18 @@ async function processMessage(
     content_type: contentType,
     text: contentText,
   })
+
+  await timed('translation', () => translated)
+
+  // Meta's own delivery lag (message sent → webhook received) plus ours.
+  const metaLagMs = message.timestamp ? startedAt - parseInt(message.timestamp) * 1000 : null
+  if (repliedAfterMs > 5000 || (metaLagMs !== null && metaLagMs > 5000)) {
+    console.warn(
+      `[webhook] slow inbound ${message.id}: replies done after ${repliedAfterMs}ms` +
+        (metaLagMs !== null ? `, Meta delivered ${metaLagMs}ms after send` : '') +
+        ` — ${Object.entries(timings).map(([k, v]) => `${k} ${v}ms`).join(', ')}`
+    )
+  }
 }
 
 async function parseMessageContent(

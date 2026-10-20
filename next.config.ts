@@ -69,6 +69,12 @@ const nextConfig: NextConfig = {
   // Harmless outside Docker: `next start` keeps working as before.
   output: "standalone",
 
+  // The journey Code step runs QuickJS in a worker thread, and the
+  // worker require()s these from node_modules at run time. Keeping them
+  // external makes the standalone build ship them in node_modules
+  // instead of only inlining them into a server chunk.
+  serverExternalPackages: ["quickjs-emscripten-core", "@jitl/quickjs-singlefile-cjs-release-sync"],
+
   /**
    * Cross-origin dev access (Next.js 16).
    *

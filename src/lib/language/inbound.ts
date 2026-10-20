@@ -1,7 +1,8 @@
 // ============================================================
 // Inbound language pipeline (migration 049) — called by the WhatsApp
 // webhook right after a customer message is stored, before the AI
-// auto-reply runs (so the AI sees voice-note transcripts).
+// auto-reply runs (so the AI sees voice-note transcripts). The
+// translation step runs alongside the reply, not before it.
 //
 //   voice note → Whisper transcript (+ short summary when long)
 //   text / transcript → detect language → translate into the agents'
@@ -80,26 +81,45 @@ export interface InboundForLanguage {
   audio?: { id?: string; mime_type?: string };
 }
 
+type InboundLanguageArgs = {
+  accountId: string;
+  conversationId: string;
+  messageRowId: string;
+  message: InboundForLanguage;
+  /** Text already parsed from the message (null for media). */
+  text: string | null;
+  /** Decrypted WhatsApp token, to fetch voice notes from Meta. */
+  accessToken: string;
+};
+
+/** Run the whole pipeline and wait for it (transcript + translation). */
 export async function processInboundLanguage(
   db: SupabaseClient,
-  args: {
-    accountId: string;
-    conversationId: string;
-    messageRowId: string;
-    message: InboundForLanguage;
-    /** Text already parsed from the message (null for media). */
-    text: string | null;
-    /** Decrypted WhatsApp token, to fetch voice notes from Meta. */
-    accessToken: string;
-  }
+  args: InboundLanguageArgs
 ): Promise<{ transcript: string | null }> {
+  const started = await startInboundLanguage(db, args);
+  await started.translated;
+  return { transcript: started.transcript };
+}
+
+/**
+ * Resolve as soon as the voice-note transcript is ready (the bot needs
+ * it); the translation — an extra AI round trip that nothing downstream
+ * waits on — keeps running in `translated`. The webhook awaits that at
+ * the end, so customer replies aren't held up by it. Never rejects.
+ */
+export async function startInboundLanguage(
+  db: SupabaseClient,
+  args: InboundLanguageArgs
+): Promise<{ transcript: string | null; translated: Promise<void> }> {
   let transcript: string | null = null;
+  const done = { transcript, translated: Promise.resolve() };
   try {
     const disabled = await loadDisabledFeatures(db, args.accountId);
     const canTranscribe = isFeatureEnabled(disabled, 'voice_transcription');
     const canTranslate = isFeatureEnabled(disabled, 'translation');
     const isVoice = args.message.type === 'audio' && Boolean(args.message.audio?.id);
-    if (!(isVoice && canTranscribe) && !(args.text?.trim() && canTranslate)) return { transcript };
+    if (!(isVoice && canTranscribe) && !(args.text?.trim() && canTranslate)) return done;
 
     const settings = await loadLanguageSettings(db, args.accountId);
     const ai = await loadAiConfig(db, args.accountId, { requireActive: false }).catch(() => null);
@@ -109,30 +129,35 @@ export async function processInboundLanguage(
       transcript = await transcribeVoice(db, args, settings, ai);
     }
 
-    // 2. Detect + translate
+    // 2. Detect + translate (not awaited here)
     const source = (args.text?.trim() || transcript || '').trim();
     if (source && canTranslate && settings.translate_inbound && ai) {
-      const t = await translateText({ config: ai, text: source, target: settings.agent_language });
-      await db
-        .from('messages')
-        .update({ detected_language: t.language, translated_text: t.translation })
-        .eq('id', args.messageRowId);
-      if (t.language) {
+      const translated = (async () => {
+        const t = await translateText({ config: ai, text: source, target: settings.agent_language });
         await db
-          .from('conversations')
-          .update({ customer_language: t.language })
-          .eq('id', args.conversationId);
-      }
+          .from('messages')
+          .update({ detected_language: t.language, translated_text: t.translation })
+          .eq('id', args.messageRowId);
+        if (t.language) {
+          await db
+            .from('conversations')
+            .update({ customer_language: t.language })
+            .eq('id', args.conversationId);
+        }
+      })().catch((err) => {
+        console.error('[language] inbound translation failed:', err instanceof Error ? err.message : err);
+      });
+      return { transcript, translated };
     }
   } catch (err) {
     console.error('[language] inbound processing failed:', err instanceof Error ? err.message : err);
   }
-  return { transcript };
+  return { transcript, translated: Promise.resolve() };
 }
 
 async function transcribeVoice(
   db: SupabaseClient,
-  args: Parameters<typeof processInboundLanguage>[1],
+  args: InboundLanguageArgs,
   settings: StoredLanguageSettings,
   ai: AiConfig | null
 ): Promise<string | null> {

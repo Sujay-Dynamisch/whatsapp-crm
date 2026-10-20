@@ -112,6 +112,70 @@ describe('validateGraph', () => {
   });
 });
 
+describe('workflow steps (054)', () => {
+  const wire = (...nodes: JourneyNode[]) => ({ nodes });
+
+  it('switch slots follow its cases; http/code have an optional error slot', () => {
+    const sw = newNode('switch', undefined, 'sw') as JourneyNode;
+    sw.config = { value: '{{ reply.text }}', cases: [{ op: 'equals', value: 'a' }, { op: 'equals', value: 'b' }] };
+    expect(slotsFor(sw)).toEqual(['case_0', 'case_1', 'default']);
+    expect(slotsFor('http_request')).toEqual(['success', 'error']);
+
+    const t = newNode('trigger', undefined, 't') as JourneyNode;
+    const h = newNode('http_request', undefined, 'h') as JourneyNode;
+    h.config = { ...(h.config as object), url: 'https://api.example.com' } as never;
+    const e = newNode('end', undefined, 'e') as JourneyNode;
+    t.next.next = 'h';
+    h.next.success = 'e';
+    expect(validateGraph(wire(t, h, e))).toEqual([]);
+  });
+
+  it('a loop step breaks a cycle, a plain cycle does not', () => {
+    const t = newNode('trigger', undefined, 't') as JourneyNode;
+    const l = newNode('loop', undefined, 'l') as JourneyNode;
+    l.config = { items: '{{ trigger.items }}', max: 10 };
+    const s = newNode('remove_tag', undefined, 's') as JourneyNode;
+    s.config = { tag_id: 'x' };
+    const e = newNode('end', undefined, 'e') as JourneyNode;
+    t.next.next = 'l';
+    l.next = { each: 's', done: 'e' };
+    s.next.next = 'l';
+    expect(validateGraph(wire(t, l, s, e))).toEqual([]);
+  });
+
+  it('checks the new configs', () => {
+    const t = newNode('trigger', undefined, 't') as JourneyNode;
+    t.config = { trigger_type: 'schedule', mode: 'interval', every: 1, unit: 'minutes' };
+    const v = newNode('set_variable', undefined, 'v') as JourneyNode;
+    v.config = { assignments: [{ key: '2bad', value: 'x' }] };
+    const b = newNode('send_buttons', undefined, 'b') as JourneyNode;
+    b.config = { text: 'Pick', buttons: [{ title: 'This title is far too long' }] };
+    const e = newNode('end', undefined, 'e') as JourneyNode;
+    t.next.next = 'v';
+    v.next.next = 'b';
+    b.next.next = 'e';
+    const msgs = validateGraph(wire(t, v, b, e)).map((i) => `${i.nodeId}: ${i.message}`);
+    expect(msgs).toEqual(
+      expect.arrayContaining([
+        't: Choose which contacts (tag) the schedule runs for',
+        't: Run at most every 5 minutes',
+        'v: "2bad" is not a valid variable name (letters, digits, _)',
+        'b: "This title is far too long" is longer than 20 characters',
+      ])
+    );
+  });
+
+  it('webhook triggers need a phone mapping', () => {
+    const t = newNode('trigger', undefined, 't') as JourneyNode;
+    t.config = { trigger_type: 'webhook', phone: '' };
+    const e = newNode('end', undefined, 'e') as JourneyNode;
+    t.next.next = 'e';
+    expect(validateGraph(wire(t, e)).map((i) => i.message)).toContain(
+      'Map the customer phone number from the webhook data'
+    );
+  });
+});
+
 describe('triggerColumns', () => {
   it('copies only the relevant trigger config', () => {
     const g = starterGraph();

@@ -406,3 +406,195 @@ describe('helpers', () => {
     expect(triggerMatches({ trigger_config: {} }, { accountId: 'a', contactId: 'c', trigger: 'button_clicked', buttonText: 'x' })).toBe(true);
   });
 });
+
+// ============================================================
+// Workflow steps (migration 054)
+// ============================================================
+describe('workflow steps (054)', () => {
+  const node = <T extends Parameters<typeof newNode>[0]>(t: T, id: string, config?: unknown) => {
+    const n = newNode(t, undefined, id) as JourneyNode;
+    if (config) n.config = config as never;
+    return n;
+  };
+  const openWindow = () => {
+    tables.conversations[0].last_customer_message_at = T0.toISOString();
+  };
+  const httpDeps = (respond: (url: string, init: RequestInit) => Response): JourneyDeps => ({
+    ...deps,
+    checkUrl: async () => true,
+    http: async (url, init) => respond(url, init),
+  });
+  const noBody = { headers: [], query: [], body_type: 'none', body: '', form: [] };
+
+  it('passes an HTTP response into a later message', async () => {
+    openWindow();
+    const t = node('trigger', 't');
+    const h = node('http_request', 'h', {
+      method: 'POST',
+      url: 'https://api.example.com/orders/{{ trigger.order_id }}',
+      headers: [{ key: 'Authorization', value: 'Bearer k' }],
+      query: [],
+      body_type: 'json',
+      body: '{"name":"{{ contact.name }}","items":{{ trigger.items }}}',
+      form: [],
+    });
+    const s = node('send_text', 's', { text: 'Hi {{ contact.name }}, your order ships {{ nodes.h.body.eta }}.' });
+    const e = node('end', 'e');
+    t.next.next = 'h';
+    h.next.success = 's';
+    s.next.next = 'e';
+    let seen: { url: string; body: unknown; auth: string | null } | null = null;
+    const d = httpDeps((url, init) => {
+      seen = { url, body: JSON.parse(String(init.body)), auth: new Headers(init.headers).get('authorization') };
+      return new Response(JSON.stringify({ eta: 'tomorrow' }), { headers: { 'content-type': 'application/json' } });
+    });
+    const r = await enrollContact(db(), journeyWith({ nodes: [t, h, s, e] }), 'c1', d, {
+      trigger_data: { order_id: 'A-7', items: [{ sku: 'x' }] },
+    });
+    expect(r.outcome).toBe('completed');
+    expect(seen).toEqual({
+      url: 'https://api.example.com/orders/A-7',
+      body: { name: 'Asha', items: [{ sku: 'x' }] },
+      auth: 'Bearer k',
+    });
+    expect(sent).toEqual(['text:Hi Asha, your order ships tomorrow.']);
+    expect(tables.journey_events.find((x) => x.event === 'exit:success')?.data).toMatchObject({
+      status: 200,
+      body: { eta: 'tomorrow' },
+    });
+  });
+
+  it('routes a failed request to "error", or fails the run when it is not connected', async () => {
+    const make = (withError: boolean) => {
+      const t = node('trigger', 't');
+      const h = node('http_request', 'h', { method: 'GET', url: 'https://x.test', ...noBody });
+      const ok = node('end', 'ok');
+      const bad = node('add_tag', 'bad', { tag_id: 'api-down' });
+      const e = node('end', 'e');
+      t.next.next = 'h';
+      h.next.success = 'ok';
+      if (withError) h.next.error = 'bad';
+      bad.next.next = 'e';
+      return journeyWith({ nodes: [t, h, ok, bad, e] });
+    };
+    const d = httpDeps(() => new Response('nope', { status: 503 }));
+    expect((await enrollContact(db(), make(true), 'c1', d)).outcome).toBe('completed');
+    expect(tables.contact_tags).toEqual([expect.objectContaining({ tag_id: 'api-down' })]);
+
+    tables.journey_enrollments = [];
+    expect((await enrollContact(db(), make(false), 'c1', d)).outcome).toBe('failed');
+    expect(enrollment().last_error).toMatch(/503/);
+  });
+
+  it('refuses private destinations', async () => {
+    const t = node('trigger', 't');
+    const h = node('http_request', 'h', { method: 'GET', url: 'http://169.254.169.254/latest', ...noBody });
+    const e = node('end', 'e');
+    t.next.next = 'h';
+    h.next.success = 'e';
+    const r = await enrollContact(db(), journeyWith({ nodes: [t, h, e] }), 'c1', {
+      ...deps,
+      http: async () => new Response('{}'),
+    });
+    expect(r.outcome).toBe('failed');
+    expect(enrollment().last_error).toMatch(/not allowed/);
+  });
+
+  it('switch routes on an expression; set variable feeds later steps', async () => {
+    openWindow();
+    const t = node('trigger', 't');
+    const v = node('set_variable', 'v', {
+      assignments: [
+        { key: 'tier', value: '{{ trigger.total | number }}' },
+        { key: 'big', value: '{{ vars.tier }}' },
+      ],
+    });
+    const sw = node('switch', 'sw', {
+      value: '{{ vars.tier }}',
+      cases: [
+        { op: 'gte', value: '1000' },
+        { op: 'gte', value: '100' },
+      ],
+    });
+    const gold = node('send_text', 'gold', { text: 'Gold {{ vars.big }}' });
+    const silver = node('send_text', 'silver', { text: 'Silver' });
+    const other = node('end', 'other');
+    const e = node('end', 'e');
+    t.next.next = 'v';
+    v.next.next = 'sw';
+    sw.next = { case_0: 'gold', case_1: 'silver', default: 'other' };
+    gold.next.next = 'e';
+    silver.next.next = 'e';
+    await enrollContact(db(), journeyWith({ nodes: [t, v, sw, gold, silver, other, e] }), 'c1', deps, {
+      trigger_data: { total: '1500' },
+    });
+    expect(sent).toEqual(['text:Gold 1500']);
+    expect(events()).toContain('sw:exit:case_0');
+  });
+
+  it('loops over a list, one message per item', async () => {
+    openWindow();
+    const t = node('trigger', 't');
+    const l = node('loop', 'l', { items: '{{ trigger.items }}', max: 10 });
+    const s = node('send_text', 's', { text: '{{ index }}: {{ item.name | upper }}' });
+    const done = node('send_text', 'done', { text: 'All {{ nodes.l.count }} sent' });
+    const e = node('end', 'e');
+    t.next.next = 'l';
+    l.next = { each: 's', done: 'done' };
+    s.next.next = 'l';
+    done.next.next = 'e';
+    const r = await enrollContact(db(), journeyWith({ nodes: [t, l, s, done, e] }), 'c1', deps, {
+      trigger_data: { items: [{ name: 'tea' }, { name: 'cake' }] },
+    });
+    expect(r.outcome).toBe('completed');
+    expect(sent).toEqual(['text:0: TEA', 'text:1: CAKE', 'text:All 2 sent']);
+  });
+
+  it('runs code in the sandbox and uses its result', async () => {
+    openWindow();
+    const t = node('trigger', 't');
+    const c = node('code', 'c', { code: 'return { total: trigger.items.reduce((s, i) => s + i.qty, 0) };' });
+    const s = node('send_text', 's', { text: 'Total {{ nodes.c.total }}' });
+    const e = node('end', 'e');
+    t.next.next = 'c';
+    c.next.success = 's';
+    s.next.next = 'e';
+    await enrollContact(db(), journeyWith({ nodes: [t, c, s, e] }), 'c1', deps, {
+      trigger_data: { items: [{ qty: 2 }, { qty: 5 }] },
+    });
+    expect(sent).toEqual(['text:Total 7']);
+  });
+
+  it('keeps data across a wait and exposes the reply text', async () => {
+    const t = node('trigger', 't');
+    const v = node('set_variable', 'v', { assignments: [{ key: 'coupon', value: 'DIWALI20' }] });
+    const w = node('wait_for_reply', 'w', { amount: 1, unit: 'hours' });
+    const c = node('condition', 'c', { kind: 'expression', left: '{{ reply.text }}', op: 'contains', right: 'yes' });
+    const yes = node('send_text', 'yes', { text: 'Use {{ vars.coupon }}' });
+    const no = node('end', 'no');
+    const e = node('end', 'e');
+    t.next.next = 'v';
+    v.next.next = 'w';
+    w.next = { replied: 'c', timeout: 'no' };
+    c.next = { yes: 'yes', no: 'no' };
+    yes.next.next = 'e';
+    await enrollContact(db(), journeyWith({ nodes: [t, v, w, c, yes, no, e] }), 'c1', deps);
+    expect(enrollment().status).toBe('waiting');
+
+    clock = minutes(5);
+    openWindow();
+    await resumeOnReply(db(), 'acct', 'c1', deps, { text: 'Yes please!' });
+    expect(sent).toEqual(['text:Use DIWALI20']);
+    expect(enrollment().status).toBe('completed');
+  });
+});
+
+describe('inbound keyword trigger', () => {
+  it('matches any message, contains, or exact', () => {
+    const input = (text: string) => ({ accountId: 'a', contactId: 'c', trigger: 'inbound_message' as const, text });
+    expect(triggerMatches({ trigger_config: {} }, input('anything'))).toBe(true);
+    expect(triggerMatches({ trigger_config: { keyword: 'price' } }, input('What is the PRICE?'))).toBe(true);
+    expect(triggerMatches({ trigger_config: { keyword: 'price', match_type: 'exact' } }, input('price list'))).toBe(false);
+    expect(triggerMatches({ trigger_config: { keyword: 'price', match_type: 'exact' } }, input(' Price '))).toBe(true);
+  });
+});

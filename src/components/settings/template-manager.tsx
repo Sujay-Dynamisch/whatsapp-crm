@@ -14,7 +14,12 @@ import {
   RotateCcw,
   Upload,
   Sparkles,
+  Bold,
+  Italic,
+  Strikethrough,
+  Code,
 } from 'lucide-react';
+import { TemplatePreview } from './template-preview';
 import { createClient } from '@/lib/supabase/client';
 import {
   uploadAccountMedia,
@@ -164,6 +169,7 @@ export function TemplateManager() {
   // Resumable-Upload handle.
   const [uploadingHeader, setUploadingHeader] = useState(false);
   const headerFileRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   // Body variable indices — `[1, 2, 3]` for "{{1}} {{2}} {{3}}". We
   // re-run the extractor on every render to keep the sample-value rows
@@ -478,6 +484,23 @@ export function TemplateManager() {
     }));
   }
 
+  // Wrap the body selection in a WhatsApp format marker (*bold*,
+  // _italic_, ~strike~, ```mono```) and keep the same text selected.
+  function wrapBodySelection(marker: string) {
+    const el = bodyRef.current;
+    const value = form.body_text;
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    const next =
+      value.slice(0, start) + marker + value.slice(start, end) + marker + value.slice(end);
+    if (next.length > TEMPLATE_LIMITS.bodyMaxLength) return;
+    setForm({ ...form, body_text: next });
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + marker.length, end + marker.length);
+    });
+  }
+
   function addButton() {
     if (form.buttons.length >= TEMPLATE_LIMITS.maxButtonsTotal) return;
     setForm((prev) => ({
@@ -721,7 +744,7 @@ export function TemplateManager() {
           }
         }}
       >
-        <DialogContent className="bg-popover border-border sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="bg-popover border-border sm:max-w-2xl lg:max-w-5xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-popover-foreground">
               {editingId ? t('dialogEditTitle') : t('dialogNewTitle')}
@@ -740,7 +763,8 @@ export function TemplateManager() {
             </div>
           )}
 
-          <div className="space-y-4 py-2">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4 py-2 min-w-0">
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('templateName')}</Label>
               <Input
@@ -948,8 +972,34 @@ export function TemplateManager() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('bodyText')}</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-muted-foreground">{t('bodyText')}</Label>
+                <div className="flex items-center gap-0.5 rounded-md border border-border bg-muted/50 p-0.5">
+                  {(
+                    [
+                      { marker: '*', icon: Bold, label: t('formatBold') },
+                      { marker: '_', icon: Italic, label: t('formatItalic') },
+                      { marker: '~', icon: Strikethrough, label: t('formatStrike') },
+                      { marker: '```', icon: Code, label: t('formatMono') },
+                    ] as const
+                  ).map(({ marker, icon: Icon, label }) => (
+                    <button
+                      key={marker}
+                      type="button"
+                      title={label}
+                      aria-label={label}
+                      // Keep the textarea's selection — a click would blur it first.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => wrapBodySelection(marker)}
+                      className="flex size-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                    >
+                      <Icon className="size-3.5" />
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Textarea
+                ref={bodyRef}
                 placeholder={t.raw('bodyPlaceholder')}
                 value={form.body_text}
                 onChange={(e) =>
@@ -960,7 +1010,7 @@ export function TemplateManager() {
                 className="bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none"
               />
               <p className="text-[11px] text-muted-foreground">
-                {t.raw('bodyHint')}
+                {t.raw('bodyHint')} {t.raw('formatHint')}
               </p>
 
               {bodyVarCount > 0 && (
@@ -1136,6 +1186,21 @@ export function TemplateManager() {
                 </div>
               )}
             </div>
+          </div>
+
+          <aside className="space-y-2 py-2 lg:sticky lg:top-0 lg:self-start">
+            <Label className="text-muted-foreground">{t('preview')}</Label>
+            <TemplatePreview
+              headerFormat={form.header_format}
+              headerText={form.header_content}
+              headerSample={form.header_sample}
+              headerMediaUrl={form.header_media_url}
+              bodyText={form.body_text}
+              bodySamples={form.body_samples}
+              footerText={form.footer_text}
+              buttons={form.buttons}
+            />
+          </aside>
           </div>
 
       <DialogFooter className="bg-popover border-border">
