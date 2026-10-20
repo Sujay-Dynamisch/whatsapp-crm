@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { UUID_RE } from '@/lib/journeys/api';
-import { enrollContact, type JourneyRow } from '@/lib/journeys/engine';
+import { enrollContact, startContext, type JourneyRow } from '@/lib/journeys/engine';
 import { liveJourneyDeps } from '@/lib/journeys/dispatch';
 import { getUnsubscribedContactIds } from '@/lib/contacts/unsubscribe';
 
@@ -74,9 +74,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         skipped++;
         continue;
       }
-      const r = await enrollContact(db, journey as JourneyRow, contactId, liveJourneyDeps, {
-        trigger: 'manual',
-      });
+      const r = await enrollContact(db, journey as JourneyRow, contactId, liveJourneyDeps, startContext('manual'));
       if (r.enrolled) enrolled++;
       else skipped++;
     }

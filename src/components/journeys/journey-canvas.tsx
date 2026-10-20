@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -21,8 +21,9 @@ import { AlertTriangle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
-import { slotsFor, type JourneyGraph, type JourneyNode } from '@/lib/journeys/graph';
-import { NODE_ACCENT, NODE_ICON, summarize, type Lookups } from './node-meta';
+import { useTheme } from '@/hooks/use-theme';
+import { slotsFor, type JourneyGraph, type JourneyNode, type NodeConfigs } from '@/lib/journeys/graph';
+import { MUTED_SLOTS, NODE_ACCENT, NODE_ICON, summarize, type Lookups } from './node-meta';
 
 export interface NodeStats {
   entered: number;
@@ -48,11 +49,12 @@ function pct(n: number): string {
 function JourneyCard({ data, selected }: NodeProps) {
   const d = data as CardData;
   const Icon = NODE_ICON[d.node.type];
-  const slots = slotsFor(d.node.type);
+  const slots = slotsFor(d.node);
   return (
     <div
+      style={{ width: Math.max(220, slots.length * 64) }}
       className={cn(
-        'w-[220px] rounded-xl border bg-card shadow-sm transition-shadow',
+        'rounded-xl border bg-card shadow-sm transition-shadow',
         selected ? 'border-primary ring-2 ring-primary/30' : 'border-border',
         d.hasIssue && !selected && 'border-amber-500/70'
       )}
@@ -83,7 +85,7 @@ function JourneyCard({ data, selected }: NodeProps) {
         <div className="relative flex h-5 justify-around border-t border-border">
           {slots.map((slot, i) => (
             <div key={slot} className="relative flex-1 text-center">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="block truncate px-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {d.slotLabels[slot]}
               </span>
               <Handle
@@ -93,7 +95,7 @@ function JourneyCard({ data, selected }: NodeProps) {
                 style={{ left: `${((i + 0.5) / slots.length) * 100}%` }}
                 className={cn(
                   '!h-3 !w-3 !border-2 !bg-card',
-                  slot === 'no' || slot === 'timeout' ? '!border-muted-foreground' : '!border-primary'
+                  MUTED_SLOTS.has(slot) ? '!border-muted-foreground' : '!border-primary'
                 )}
               />
             </div>
@@ -106,6 +108,29 @@ function JourneyCard({ data, selected }: NodeProps) {
 
 const nodeTypes = { journey: JourneyCard };
 
+/**
+ * React Flow's own chrome (zoom controls, edge labels, dots, the
+ * connection line) drawn from the app's theme tokens, so the canvas
+ * matches light and dark mode instead of React Flow's white defaults.
+ */
+const THEME_VARS = {
+  '--xy-background-color': 'var(--background)',
+  '--xy-background-pattern-dots-color': 'color-mix(in oklab, var(--muted-foreground) 35%, transparent)',
+  '--xy-edge-stroke': 'var(--muted-foreground)',
+  '--xy-edge-stroke-selected': 'var(--primary)',
+  '--xy-connectionline-stroke': 'var(--primary)',
+  '--xy-edge-label-background-color': 'var(--card)',
+  '--xy-edge-label-color': 'var(--muted-foreground)',
+  '--xy-controls-button-background-color': 'var(--card)',
+  '--xy-controls-button-background-color-hover': 'var(--muted)',
+  '--xy-controls-button-color': 'var(--foreground)',
+  '--xy-controls-button-color-hover': 'var(--foreground)',
+  '--xy-controls-button-border-color': 'var(--border)',
+  '--xy-controls-box-shadow': '0 1px 3px rgb(0 0 0 / 0.25)',
+  '--xy-selection-background-color': 'color-mix(in oklab, var(--primary) 12%, transparent)',
+  '--xy-selection-border': '1px dashed var(--primary)',
+} as React.CSSProperties;
+
 export function JourneyCanvas({
   graph,
   onChange,
@@ -114,6 +139,7 @@ export function JourneyCanvas({
   issueNodeIds,
   selectedId,
   onSelect,
+  onOpen,
 }: {
   graph: JourneyGraph;
   onChange: (graph: JourneyGraph) => void;
@@ -121,21 +147,46 @@ export function JourneyCanvas({
   stats: Record<string, NodeStats> | null;
   issueNodeIds: Set<string>;
   selectedId: string | null;
+  /** Click / drag only selects; double-click opens the step's settings. */
   onSelect: (id: string | null) => void;
+  onOpen: (id: string) => void;
 }) {
   const t = useTranslations('Journeys');
+  const { mode } = useTheme();
+  // React Flow measures each node once and hides it until measured. The
+  // graph doesn't store sizes, so keep them here — otherwise every drag
+  // update rebuilds the nodes unmeasured and they blink.
+  const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
   const trigger = graph.nodes.find((n) => n.type === 'trigger');
   const enteredJourney = trigger ? (stats?.[trigger.id]?.entered ?? 0) : 0;
 
-  const slotLabels = useMemo(
+  const baseLabels = useMemo<Record<string, string>>(
     () => ({
       next: '',
       yes: t('slot.yes'),
       no: t('slot.no'),
       replied: t('slot.replied'),
       timeout: t('slot.timeout'),
+      each: t('slot.each'),
+      done: t('slot.done'),
+      success: t('slot.success'),
+      error: t('slot.error'),
+      default: t('slot.default'),
     }),
     [t]
+  );
+  /** Switch cases are labelled by their own label or rule. */
+  const labelsFor = useCallback(
+    (n: JourneyNode): Record<string, string> => {
+      if (n.type !== 'switch') return baseLabels;
+      const cases = (n.config as NodeConfigs['switch']).cases ?? [];
+      const labels = { ...baseLabels };
+      cases.forEach((k, i) => {
+        labels[`case_${i}`] = k.label?.trim() || (k.value ? String(k.value) : `#${i + 1}`);
+      });
+      return labels;
+    },
+    [baseLabels]
   );
 
   const rfNodes: RfNode[] = useMemo(
@@ -146,30 +197,32 @@ export function JourneyCanvas({
           id: n.id,
           type: 'journey',
           position: n.position,
+          measured: measured[n.id],
           selected: n.id === selectedId,
           deletable: n.type !== 'trigger',
           data: {
             node: n,
-            title: t(`node.${n.type}`),
+            title: n.label?.trim() || t(`node.${n.type}`),
             summary: summarize(n, t as never, lookups),
-            slotLabels,
+            slotLabels: labelsFor(n),
             stats: s,
             reach: s && enteredJourney > 0 ? s.entered / enteredJourney : null,
             hasIssue: issueNodeIds.has(n.id),
           } satisfies CardData,
         };
       }),
-    [graph.nodes, stats, selectedId, t, lookups, slotLabels, enteredJourney, issueNodeIds]
+    [graph.nodes, stats, selectedId, t, lookups, labelsFor, enteredJourney, issueNodeIds, measured]
   );
 
   const rfEdges: RfEdge[] = useMemo(() => {
     const edges: RfEdge[] = [];
     for (const n of graph.nodes) {
-      for (const slot of slotsFor(n.type)) {
+      const labels = labelsFor(n);
+      for (const slot of slotsFor(n)) {
         const target = n.next[slot];
         if (!target) continue;
         const count = stats?.[n.id]?.exits[slot];
-        const label = [slotLabels[slot as keyof typeof slotLabels], count !== undefined ? count.toLocaleString() : '']
+        const label = [labels[slot], count !== undefined ? count.toLocaleString() : '']
           .filter(Boolean)
           .join(' · ');
         edges.push({
@@ -181,18 +234,21 @@ export function JourneyCanvas({
           labelBgPadding: [4, 2],
           labelStyle: { fontSize: 10 },
           markerEnd: { type: MarkerType.ArrowClosed },
-          style: { strokeDasharray: slot === 'no' || slot === 'timeout' ? '4 3' : undefined },
+          style: { strokeDasharray: MUTED_SLOTS.has(slot) ? '4 3' : undefined },
         });
       }
     }
     return edges;
-  }, [graph.nodes, stats, slotLabels]);
+  }, [graph.nodes, stats, labelsFor]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       let next = graph;
+      const sizes: Record<string, { width: number; height: number }> = {};
       for (const ch of changes) {
-        if (ch.type === 'position' && ch.position) {
+        if (ch.type === 'dimensions' && ch.dimensions) {
+          sizes[ch.id] = ch.dimensions;
+        } else if (ch.type === 'position' && ch.position) {
           next = {
             nodes: next.nodes.map((n) =>
               n.id === ch.id ? { ...n, position: { x: Math.round(ch.position!.x), y: Math.round(ch.position!.y) } } : n
@@ -204,6 +260,7 @@ export function JourneyCanvas({
           onSelect(ch.id);
         }
       }
+      if (Object.keys(sizes).length) setMeasured((m) => ({ ...m, ...sizes }));
       if (next !== graph) onChange(next);
     },
     [graph, onChange, onSelect]
@@ -248,6 +305,10 @@ export function JourneyCanvas({
       onConnect={onConnect}
       onPaneClick={() => onSelect(null)}
       onNodeClick={(_, n) => onSelect(n.id)}
+      onNodeDoubleClick={(_, n) => onOpen(n.id)}
+      colorMode={mode}
+      style={THEME_VARS}
+      zoomOnDoubleClick={false}
       fitView
       fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
       minZoom={0.2}
@@ -255,7 +316,7 @@ export function JourneyCanvas({
       deleteKeyCode={['Backspace', 'Delete']}
     >
       <Background variant={BackgroundVariant.Dots} gap={18} size={1} />
-      <Controls showInteractive={false} />
+      <Controls showInteractive={false} className="overflow-hidden rounded-lg border border-border" />
     </ReactFlow>
   );
 }

@@ -181,6 +181,20 @@ BEGIN
     RAISE EXCEPTION 'journeys schema incomplete — migration 050 did not apply';
   END IF;
 
+  -- 054: journeys as workflows. The webhook trigger looks journeys up
+  -- by token, the run history reads journey_events.data, and the tick
+  -- claims due schedules.
+  IF (
+    SELECT count(*) FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND ((table_name = 'journeys' AND column_name IN ('webhook_token', 'next_scheduled_at'))
+        OR (table_name = 'journey_events' AND column_name = 'data'))
+  ) <> 3
+     OR to_regclass('public.idx_journeys_webhook_token') IS NULL
+     OR to_regprocedure('public.claim_scheduled_journeys(integer)') IS NULL THEN
+    RAISE EXCEPTION 'journey workflow schema incomplete — migration 054 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

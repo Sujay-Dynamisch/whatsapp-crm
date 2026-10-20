@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
-import { UUID_RE, validateGraph } from '@/lib/journeys/api';
+import { scheduleColumn, UUID_RE, validateGraph } from '@/lib/journeys/api';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -40,6 +40,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .update({
         status,
         ...(status === 'active' ? { activated_at: new Date().toISOString() } : {}),
+        // A schedule journey books its first run on activation.
+        ...scheduleColumn(journey.graph, status),
       })
       .eq('id', id)
       .eq('account_id', accountId);

@@ -11,12 +11,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { accountHasFeature } from '@/lib/features-server';
 import { engineSendTemplate, engineSendText } from '@/lib/automations/meta-send';
+import { engineSendInteractiveButtons, engineSendMedia } from '@/lib/flows/meta-send';
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write';
 
 import type { JourneyTriggerType } from './graph';
 import {
   enrollContact,
   resumeOnReply,
+  startContext,
   type JourneyDeps,
   type JourneyRow,
 } from './engine';
@@ -43,6 +45,30 @@ export const liveJourneyDeps: JourneyDeps = {
       text,
     });
   },
+  async sendMedia(ctx, cfg) {
+    await engineSendMedia({
+      accountId: ctx.accountId,
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      contactId: ctx.contactId,
+      kind: cfg.media_type,
+      link: cfg.url,
+      caption: cfg.caption,
+      filename: cfg.filename,
+    });
+  },
+  async sendButtons(ctx, cfg) {
+    await engineSendInteractiveButtons({
+      accountId: ctx.accountId,
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      contactId: ctx.contactId,
+      bodyText: cfg.text,
+      buttons: cfg.buttons,
+      headerText: cfg.header,
+      footerText: cfg.footer,
+    });
+  },
   async addTag(ctx, tagId) {
     // Plain write: a journey adding a tag does not re-fan-out tag_added
     // here, which keeps journey ↔ automation chains bounded.
@@ -61,6 +87,8 @@ export interface JourneyTriggerInput {
   trigger: JourneyTriggerType;
   tagId?: string;
   buttonText?: string;
+  /** inbound_message: the customer's text. */
+  text?: string;
 }
 
 /** Does this journey's trigger config match the event? */
@@ -70,6 +98,12 @@ export function triggerMatches(journey: Pick<JourneyRow, 'trigger_config'>, inpu
   if (input.trigger === 'button_clicked') {
     const want = cfg.button_text?.trim().toLowerCase();
     return !want || want === input.buttonText?.trim().toLowerCase();
+  }
+  if (input.trigger === 'inbound_message') {
+    const keyword = cfg.keyword?.trim().toLowerCase();
+    if (!keyword) return true;
+    const text = (input.text ?? '').trim().toLowerCase();
+    return cfg.match_type === 'exact' ? text === keyword : text.includes(keyword);
   }
   return true;
 }
@@ -91,11 +125,17 @@ export async function dispatchJourneyTrigger(
     let enrolled = 0;
     for (const journey of (data ?? []) as JourneyRow[]) {
       if (!triggerMatches(journey, input)) continue;
-      const r = await enrollContact(db, journey, input.contactId, deps, {
-        trigger: input.trigger,
-        ...(input.tagId ? { tag_id: input.tagId } : {}),
-        ...(input.buttonText ? { button_text: input.buttonText } : {}),
-      });
+      const r = await enrollContact(
+        db,
+        journey,
+        input.contactId,
+        deps,
+        startContext(input.trigger, {
+          ...(input.tagId ? { tag_id: input.tagId } : {}),
+          ...(input.buttonText ? { button_text: input.buttonText } : {}),
+          ...(input.text !== undefined ? { text: input.text } : {}),
+        })
+      );
       if (r.enrolled) enrolled++;
     }
     return enrolled;
@@ -105,15 +145,25 @@ export async function dispatchJourneyTrigger(
   }
 }
 
-/** Every inbound customer message: resume replies, then start button / first-message journeys. */
+/**
+ * Every inbound customer message: resume replies (with the reply text
+ * as {{ reply.text }}), then start message / keyword and button
+ * journeys.
+ */
 export async function dispatchJourneyInbound(
   db: SupabaseClient,
-  args: { accountId: string; contactId: string; buttonText?: string | null },
+  args: { accountId: string; contactId: string; buttonText?: string | null; text?: string | null },
   deps: JourneyDeps = liveJourneyDeps
 ): Promise<void> {
   try {
     if (!(await accountHasFeature(db, args.accountId, 'journeys'))) return;
-    await resumeOnReply(db, args.accountId, args.contactId, deps);
+    const text = args.text ?? args.buttonText ?? '';
+    await resumeOnReply(db, args.accountId, args.contactId, deps, { text, button: args.buttonText ?? null });
+    await dispatchJourneyTrigger(
+      db,
+      { accountId: args.accountId, contactId: args.contactId, trigger: 'inbound_message', text },
+      deps
+    );
     if (args.buttonText) {
       await dispatchJourneyTrigger(
         db,

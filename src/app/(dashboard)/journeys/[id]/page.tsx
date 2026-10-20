@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
+  History,
   Loader2,
   Pause,
   Play,
@@ -23,7 +24,10 @@ import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -36,7 +40,8 @@ import {
 } from '@/components/ui/dialog';
 import { JourneyCanvas, removeNode, type NodeStats } from '@/components/journeys/journey-canvas';
 import { NodeConfigSheet, type LookupLists } from '@/components/journeys/node-config-sheet';
-import { ADDABLE, NODE_ICON } from '@/components/journeys/node-meta';
+import { NODE_ICON, STEP_GROUPS } from '@/components/journeys/node-meta';
+import { RunsSheet } from '@/components/journeys/runs-sheet';
 import {
   newNode,
   slotsFor,
@@ -51,6 +56,7 @@ interface Journey {
   name: string;
   status: 'draft' | 'active' | 'paused';
   graph: JourneyGraph;
+  webhook_token?: string | null;
 }
 
 export default function JourneyEditorPage() {
@@ -65,8 +71,11 @@ export default function JourneyEditorPage() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
+  // Selected = highlighted (anchor for "Add step"); open = settings drawer.
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [lists, setLists] = useState<LookupLists>({ templates: [], tags: [], stages: [] });
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [lists, setLists] = useState<LookupLists>({ templates: [], tags: [], stages: [], members: [], customFields: [] });
+  const [runsOpen, setRunsOpen] = useState(false);
   const [stats, setStats] = useState<Record<string, NodeStats> | null>(null);
   const [showStats, setShowStats] = useState(true);
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -98,10 +107,12 @@ export default function JourneyEditorPage() {
     if (!accountId) return;
     const supabase = createClient();
     (async () => {
-      const [tpl, tags, stages] = await Promise.all([
+      const [tpl, tags, stages, members, fields] = await Promise.all([
         supabase.from('message_templates').select('name, language').eq('account_id', accountId).eq('status', 'APPROVED').order('name'),
         supabase.from('tags').select('id, name').eq('account_id', accountId).order('name'),
         supabase.from('pipeline_stages').select('id, name, position, pipeline_id, pipelines!inner(name, account_id)').eq('pipelines.account_id', accountId).order('position'),
+        supabase.from('profiles').select('user_id, full_name').eq('account_id', accountId).order('full_name'),
+        supabase.from('custom_fields').select('id, field_name').eq('account_id', accountId).order('field_name'),
       ]);
       setLists({
         templates: (tpl.data ?? []).map((r) => ({ name: r.name as string, language: (r.language as string) ?? 'en_US' })),
@@ -110,6 +121,8 @@ export default function JourneyEditorPage() {
           const p = (Array.isArray(s.pipelines) ? s.pipelines[0] : s.pipelines) as { name?: string } | null;
           return { id: s.id as string, name: s.name as string, pipeline_id: s.pipeline_id as string, pipeline_name: p?.name ?? '' };
         }),
+        members: (members.data ?? []).map((m) => ({ id: m.user_id as string, name: (m.full_name as string) || (m.user_id as string).slice(0, 8) })),
+        customFields: (fields.data ?? []).map((f) => ({ id: f.id as string, name: f.field_name as string })),
       });
     })();
   }, [accountId]);
@@ -134,10 +147,12 @@ export default function JourneyEditorPage() {
     () => ({
       tags: new Map(lists.tags.map((tag) => [tag.id, tag.name])),
       stages: new Map(lists.stages.map((s) => [s.id, `${s.pipeline_name} → ${s.name}`])),
+      members: new Map(lists.members.map((m) => [m.id, m.name])),
     }),
     [lists]
   );
   const selected = graph.nodes.find((n) => n.id === selectedId) ?? null;
+  const opened = graph.nodes.find((n) => n.id === openId) ?? null;
 
   const update = useCallback((next: JourneyGraph) => {
     setGraph(next);
@@ -154,13 +169,14 @@ export default function JourneyEditorPage() {
     let nodes = [...graph.nodes, node as JourneyNode];
     // Wire it from the anchor's first free slot, so adding is one tap.
     if (anchor) {
-      const free = slotsFor(anchor.type).find((s) => !anchor.next[s]);
+      const free = slotsFor(anchor).find((s) => !anchor.next[s]);
       if (free) {
         nodes = nodes.map((n) => (n.id === anchor.id ? { ...n, next: { ...n.next, [free]: node.id } } : n));
       }
     }
     update({ nodes });
     setSelectedId(node.id);
+    setOpenId(node.id);
   }
 
   async function save(): Promise<boolean> {
@@ -285,22 +301,34 @@ export default function JourneyEditorPage() {
               <Plus className="h-4 w-4" />
               {t('editor.addStep')}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {ADDABLE.map((type) => {
-                const Icon = NODE_ICON[type];
-                return (
-                  <DropdownMenuItem key={type} onClick={() => addStep(type)} className="gap-2">
-                    <Icon className="h-4 w-4" />
-                    {t(`node.${type}`)}
-                  </DropdownMenuItem>
-                );
-              })}
+            <DropdownMenuContent align="end" className="max-h-[70vh] w-56 overflow-y-auto">
+              {STEP_GROUPS.map((group, gi) => (
+                <DropdownMenuGroup key={group.key}>
+                  {gi > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuLabel>{t(`stepGroup.${group.key}`)}</DropdownMenuLabel>
+                  {group.types.map((type) => {
+                    const Icon = NODE_ICON[type];
+                    return (
+                      <DropdownMenuItem key={type} onClick={() => addStep(type)} className="gap-2">
+                        <Icon className="h-4 w-4" />
+                        {t(`node.${type}`)}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuGroup>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
           {journey.status !== 'draft' && (
             <Button size="sm" variant={showStats ? 'secondary' : 'outline'} onClick={() => setShowStats((v) => !v)}>
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">{t('editor.stats')}</span>
+            </Button>
+          )}
+          {journey.status !== 'draft' && (
+            <Button size="sm" variant="outline" onClick={() => setRunsOpen(true)}>
+              <History className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('editor.runs')}</span>
             </Button>
           )}
           {isActive && (
@@ -345,20 +373,34 @@ export default function JourneyEditorPage() {
           issueNodeIds={issueNodeIds}
           selectedId={selectedId}
           onSelect={setSelectedId}
+          onOpen={(nodeId) => {
+            setSelectedId(nodeId);
+            setOpenId(nodeId);
+          }}
         />
       </div>
 
       <NodeConfigSheet
-        node={selected}
+        node={opened}
+        graph={graph}
+        journeyId={id}
         lists={lists}
         issues={issues}
+        webhookUrl={
+          journey.webhook_token && typeof window !== 'undefined'
+            ? `${window.location.origin}/api/journeys/hooks/${journey.webhook_token}`
+            : null
+        }
         onChange={(node) => update({ nodes: graph.nodes.map((n) => (n.id === node.id ? node : n)) })}
         onDelete={(nodeId) => {
           update(removeNode(graph, nodeId));
           setSelectedId(null);
+          setOpenId(null);
         }}
-        onClose={() => setSelectedId(null)}
+        onClose={() => setOpenId(null)}
       />
+
+      <RunsSheet journeyId={id} graph={graph} open={runsOpen} onOpenChange={setRunsOpen} />
 
       <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
         <DialogContent className="sm:max-w-md">

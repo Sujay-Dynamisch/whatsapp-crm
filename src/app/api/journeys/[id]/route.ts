@@ -8,14 +8,21 @@
 import { NextResponse } from 'next/server';
 
 import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/account';
-import { isGraphShape, triggerColumns, UUID_RE, validateGraph } from '@/lib/journeys/api';
+import {
+  isGraphShape,
+  newWebhookToken,
+  scheduleColumn,
+  triggerColumns,
+  UUID_RE,
+  validateGraph,
+} from '@/lib/journeys/api';
 
 interface Params {
   params: Promise<{ id: string }>;
 }
 
 const COLUMNS =
-  'id, name, description, status, trigger_type, trigger_config, graph, allow_reentry, activated_at, created_at, updated_at';
+  'id, name, description, status, trigger_type, trigger_config, graph, allow_reentry, activated_at, created_at, updated_at, webhook_token, next_scheduled_at';
 
 export async function GET(_req: Request, { params }: Params) {
   try {
@@ -48,7 +55,7 @@ export async function PUT(request: Request, { params }: Params) {
 
     const { data: current } = await supabase
       .from('journeys')
-      .select('status')
+      .select('status, webhook_token')
       .eq('id', id)
       .eq('account_id', accountId)
       .maybeSingle();
@@ -81,7 +88,11 @@ export async function PUT(request: Request, { params }: Params) {
         }
       }
       patch.graph = body.graph;
-      Object.assign(patch, triggerColumns(body.graph));
+      const trigger = triggerColumns(body.graph);
+      Object.assign(patch, trigger, scheduleColumn(body.graph, current.status));
+      // The hook URL is stable once issued, so an external system keeps
+      // working across edits (and across switching trigger types).
+      if (trigger.trigger_type === 'webhook' && !current.webhook_token) patch.webhook_token = newWebhookToken();
     }
 
     const { data, error } = await supabase
