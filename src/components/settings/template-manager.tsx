@@ -356,7 +356,13 @@ export function TemplateManager() {
         );
         const suffix =
           data.errors.length > 3 ? `, +${data.errors.length - 3} more` : '';
-        toast.error(t('toastSyncFailed', { preview: preview.join(', ') + suffix }));
+        // Names alone don't say why — log every error and show the first
+        // database message so the cause is visible without devtools.
+        console.error('[templates/sync] failed rows:', data.errors);
+        toast.error(t('toastSyncFailed', { preview: preview.join(', ') + suffix }), {
+          description: data.errors[0]?.message,
+          duration: 15000,
+        });
       }
       if (data.truncated) {
         // Use error (not warning) so the message survives long
