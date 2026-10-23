@@ -125,6 +125,7 @@ export function summarize(node: JourneyNode, t: T, lookups: Lookups): string {
     case 'wait':
     case 'wait_for_reply': {
       const cfg = c as NodeConfigs['wait'];
+      if (node.type === 'wait' && cfg.until?.trim()) return clip(t('summary.waitUntil', { until: cfg.until }));
       return t(node.type === 'wait' ? 'summary.wait' : 'summary.waitReply', {
         amount: cfg.amount,
         unit: t(`unit.${cfg.unit}`),

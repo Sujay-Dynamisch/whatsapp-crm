@@ -240,7 +240,7 @@ export async function loadContact(
 ): Promise<Record<string, unknown>> {
   const { data } = await db
     .from('contacts')
-    .select('id, name, phone, email, company, created_at')
+    .select('*')
     .eq('id', e.contact_id)
     .eq('account_id', e.account_id)
     .maybeSingle();
@@ -501,7 +501,15 @@ async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepR
     case 'wait':
     case 'wait_for_reply': {
       const cfg = node.config as NodeConfigs['wait'];
-      const until = new Date(now.getTime() + durationMs(cfg.amount, cfg.unit));
+      let until = new Date(now.getTime() + durationMs(cfg.amount, cfg.unit));
+      // "Wait until": resume at a computed time (past = next tick), capped at 90 days.
+      if (node.type === 'wait' && cfg.until?.trim()) {
+        const raw = evaluateValue(cfg.until, await rt.scope());
+        const at = new Date(raw instanceof Date ? raw.getTime() : String(raw ?? ''));
+        if (!Number.isNaN(at.getTime())) {
+          until = new Date(Math.min(at.getTime(), now.getTime() + durationMs(90, 'days')));
+        }
+      }
       context.wait_started_at = now.toISOString();
       await patchEnrollment(db, e.id, {
         status: 'waiting',

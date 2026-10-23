@@ -108,14 +108,14 @@ export default function JourneyEditorPage() {
     const supabase = createClient();
     (async () => {
       const [tpl, tags, stages, members, fields] = await Promise.all([
-        supabase.from('message_templates').select('name, language').eq('account_id', accountId).eq('status', 'APPROVED').order('name'),
+        supabase.from('message_templates').select('name, language, body_text').eq('account_id', accountId).eq('status', 'APPROVED').order('name'),
         supabase.from('tags').select('id, name').eq('account_id', accountId).order('name'),
         supabase.from('pipeline_stages').select('id, name, position, pipeline_id, pipelines!inner(name, account_id)').eq('pipelines.account_id', accountId).order('position'),
         supabase.from('profiles').select('user_id, full_name').eq('account_id', accountId).order('full_name'),
         supabase.from('custom_fields').select('id, field_name').eq('account_id', accountId).order('field_name'),
       ]);
       setLists({
-        templates: (tpl.data ?? []).map((r) => ({ name: r.name as string, language: (r.language as string) ?? 'en_US' })),
+        templates: (tpl.data ?? []).map((r) => ({ name: r.name as string, language: (r.language as string) ?? 'en_US', body_text: (r.body_text as string) ?? '' })),
         tags: (tags.data ?? []) as { id: string; name: string }[],
         stages: (stages.data ?? []).map((s) => {
           const p = (Array.isArray(s.pipelines) ? s.pipelines[0] : s.pipelines) as { name?: string } | null;

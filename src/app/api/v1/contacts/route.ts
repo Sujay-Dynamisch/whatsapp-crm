@@ -9,6 +9,7 @@
 // ============================================================
 
 import { requireApiKey } from '@/lib/auth/api-context';
+import { dispatchJourneyTrigger } from '@/lib/journeys/dispatch';
 import { ok, okList, fail, toApiErrorResponse } from '@/lib/api/v1/respond';
 import {
   parseListParams,
@@ -132,6 +133,15 @@ export async function POST(request: Request) {
         id,
         body.tags.filter((t): t is string => typeof t === 'string')
       );
+    }
+
+    // Start this account's "contact created" journeys for new contacts.
+    if (created) {
+      await dispatchJourneyTrigger(ctx.supabase, {
+        accountId: ctx.accountId,
+        contactId: id,
+        trigger: 'contact_created',
+      });
     }
 
     const contact = await getContactById(ctx.supabase, ctx.accountId, id);
