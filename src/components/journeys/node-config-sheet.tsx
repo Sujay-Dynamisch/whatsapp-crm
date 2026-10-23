@@ -36,7 +36,7 @@ import { ExprInput, ExprTextarea, KeyValueList } from './expression-input';
 import { NODE_ACCENT, NODE_ICON } from './node-meta';
 
 export interface LookupLists {
-  templates: { name: string; language: string }[];
+  templates: { name: string; language: string; body_text?: string }[];
   tags: { id: string; name: string }[];
   stages: { id: string; name: string; pipeline_id: string; pipeline_name: string }[];
   members: { id: string; name: string }[];
@@ -341,7 +341,14 @@ Content-Type: application/json
       break;
     }
     case 'wait':
-      body = <Field label={t('form.waitFor')}>{duration()}</Field>;
+      body = (
+        <>
+          <Field label={t('form.waitFor')}>{duration()}</Field>
+          <Field label={t('form.waitUntil')} help={t('form.waitUntilHelp')}>
+            <ExprInput value={String(c.until ?? '')} onChange={(until) => set({ until })} suggestions={suggestions} />
+          </Field>
+        </>
+      );
       break;
     case 'wait_for_reply':
       body = (
@@ -558,7 +565,17 @@ Content-Type: application/json
       break;
     case 'send_template': {
       const cfg = c as NodeConfigs['send_template'];
-      const params = cfg.params ?? [];
+      // Number of {{n}} placeholders the template's body needs (null = unknown).
+      const placeholderCount = (name: string, language: string) => {
+        const tpl = lists.templates.find((x) => x.name === name && x.language === language);
+        if (tpl?.body_text == null) return null;
+        return Math.max(0, ...[...tpl.body_text.matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1])));
+      };
+      const required = cfg.template_name ? placeholderCount(cfg.template_name, cfg.language ?? '') : null;
+      const params = required === null
+        ? cfg.params ?? []
+        : Array.from({ length: required }, (_, i) => cfg.params?.[i] ?? '');
+      const fieldOptions = suggestions.filter((s) => s.group === 'contact');
       body = (
         <>
           <Field label={t('form.template')}>
@@ -567,7 +584,12 @@ Content-Type: application/json
               value={`${cfg.template_name}|${cfg.language ?? ''}`}
               onChange={(e) => {
                 const [name, language] = e.target.value.split('|');
-                set({ template_name: name, language });
+                const n = name ? placeholderCount(name, language) : null;
+                set({
+                  template_name: name,
+                  language,
+                  ...(n !== null && { params: Array.from({ length: n }, (_, i) => cfg.params?.[i] ?? '') }),
+                });
               }}
             >
               <option value="|">{t('form.chooseTemplate')}</option>
@@ -580,24 +602,43 @@ Content-Type: application/json
           </Field>
           <div className="space-y-2">
             <Label>{t('form.params')}</Label>
-            {params.map((p, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <span className="w-10 shrink-0 font-mono text-xs text-muted-foreground">{`{{${i + 1}}}`}</span>
-                <ExprInput
-                  className="min-w-0 flex-1"
-                  value={p}
-                  onChange={(v) => set({ params: params.map((x, j) => (j === i ? v : x)) })}
-                  suggestions={suggestions}
-                />
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-7" onClick={() => set({ params: params.filter((_, j) => j !== i) })} aria-label="Remove">
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            ))}
-            <Button type="button" variant="outline" size="sm" onClick={() => set({ params: [...params, ''] })}>
-              <Plus className="h-3.5 w-3.5" />
-              {t('form.addParam')}
-            </Button>
+            {params.map((p, i) => {
+              const setParam = (v: string) => set({ params: params.map((x, j) => (j === i ? v : x)) });
+              const field = fieldOptions.find((s) => p === `{{ ${s.path} }}`);
+              return (
+                <div key={i} className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-10 shrink-0 font-mono text-xs text-muted-foreground">{`{{${i + 1}}}`}</span>
+                    <select
+                      className={`${selectClass} min-w-0 flex-1`}
+                      value={field ? p : ''}
+                      onChange={(e) => setParam(e.target.value)}
+                    >
+                      <option value="">{t('form.customValue')}</option>
+                      {fieldOptions.map((s) => (
+                        <option key={s.path} value={`{{ ${s.path} }}`}>
+                          {s.hint ?? s.path}
+                        </option>
+                      ))}
+                    </select>
+                    {required === null && (
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-7" onClick={() => set({ params: params.filter((_, j) => j !== i) })} aria-label="Remove">
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  {!field && (
+                    <ExprInput className="ml-[46px] min-w-0" value={p} onChange={setParam} suggestions={suggestions} />
+                  )}
+                </div>
+              );
+            })}
+            {required === null && (
+              <Button type="button" variant="outline" size="sm" onClick={() => set({ params: [...params, ''] })}>
+                <Plus className="h-3.5 w-3.5" />
+                {t('form.addParam')}
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground">{t('form.templateParamsHelp')}</p>
           </div>
         </>

@@ -117,7 +117,8 @@ export interface KeyValue {
 
 export interface NodeConfigs {
   trigger: TriggerConfig;
-  wait: { amount: number; unit: DurationUnit };
+  /** `until`: optional expression → date/time to resume at; amount/unit is the fallback. */
+  wait: { amount: number; unit: DurationUnit; until?: string };
   wait_for_reply: { amount: number; unit: DurationUnit };
   condition: {
     kind: ConditionKind;
