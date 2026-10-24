@@ -91,11 +91,17 @@ export interface JourneyTriggerInput {
   buttonText?: string;
   /** inbound_message: the customer's text. */
   text?: string;
+  /** contact_created: 'api' (public API) or 'whatsapp' (inbox auto-created on a first message). */
+  source?: 'api' | 'whatsapp';
 }
 
 /** Does this journey's trigger config match the event? */
 export function triggerMatches(journey: Pick<JourneyRow, 'trigger_config'>, input: JourneyTriggerInput): boolean {
   const cfg = journey.trigger_config ?? {};
+  if (input.trigger === 'contact_created') {
+    const want = cfg.contact_source;
+    return want !== 'api' && want !== 'whatsapp' ? true : want === input.source;
+  }
   if (input.trigger === 'tag_added') return Boolean(cfg.tag_id) && cfg.tag_id === input.tagId;
   if (input.trigger === 'button_clicked') {
     const want = cfg.button_text?.trim().toLowerCase();

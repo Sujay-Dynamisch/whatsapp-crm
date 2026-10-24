@@ -23,6 +23,7 @@ import {
   CONTACT_FIELDS,
   HTTP_METHODS,
   TRIGGER_TYPES,
+  CONTACT_SOURCES,
   UNARY_OPS,
   type CompareOp,
   type DurationUnit,
@@ -225,6 +226,17 @@ export function NodeConfigSheet({
               ))}
             </select>
           </Field>
+          {cfg.trigger_type === 'contact_created' && (
+            <Field label={t('form.contactSource')} help={t('form.contactSourceHelp')}>
+              <select className={selectClass} value={cfg.contact_source ?? 'any'} onChange={(e) => set({ contact_source: e.target.value })}>
+                {CONTACT_SOURCES.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`form.contactSourceOption.${s}`)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           {cfg.trigger_type === 'tag_added' && <Field label={t('form.tag')}>{tagSelect(cfg.tag_id)}</Field>}
           {cfg.trigger_type === 'button_clicked' && (
             <Field label={t('form.buttonText')}>

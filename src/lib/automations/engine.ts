@@ -88,6 +88,9 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
         contactId: input.contactId,
         trigger: journeyTrigger,
         tagId: input.context?.tag_id,
+        // new_contact_created only fires when the inbox auto-creates a
+        // contact from a first WhatsApp message.
+        ...(journeyTrigger === 'contact_created' ? { source: 'whatsapp' as const } : {}),
       })
     }
 

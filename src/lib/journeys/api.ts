@@ -20,6 +20,9 @@ export function triggerColumns(graph: JourneyGraph): {
     if (v !== undefined) trigger_config[key] = v;
   };
   switch (cfg.trigger_type) {
+    case 'contact_created':
+      put('contact_source', cfg.contact_source === 'api' || cfg.contact_source === 'whatsapp' ? cfg.contact_source : undefined);
+      break;
     case 'tag_added':
       put('tag_id', str(cfg.tag_id));
       break;

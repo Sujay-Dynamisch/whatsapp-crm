@@ -73,7 +73,7 @@ function build(tag: Record<(typeof TAGS)[number], string>): JourneyGraph {
   // ---------- Registration → Msg 1 → Msg 2 / Msg 3 → 7 AM check-in ----------
   // Global overrides: STOP always ends the run (engine); paid / manually_closed
   // (kill switch) end it via exit tags.
-  add('trigger', 'trigger', 'Contact added (API)', { trigger_type: 'contact_created', exit_tag_ids: [tag.paid, tag.manually_closed] }, { next: 'settings' });
+  add('trigger', 'trigger', 'Contact added (API)', { trigger_type: 'contact_created', contact_source: 'api', exit_tag_ids: [tag.paid, tag.manually_closed] }, { next: 'settings' });
   add('settings', 'set_variable', 'Settings (edit me)', {
     assignments: [
       { key: 'webinar_link', value: 'https://PASTE-WEBINAR-LINK' },
