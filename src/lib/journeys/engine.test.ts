@@ -705,3 +705,14 @@ describe('journey message log, retries and fallbacks (migration 056)', () => {
     expect(planRetry({ ...base, kind: 'text', retryUntil: null })).toBeNull();
   });
 });
+
+describe('contact_created source filter', () => {
+  const input = (source?: 'api' | 'whatsapp') => ({ accountId: 'acct', contactId: 'c1', trigger: 'contact_created' as const, source });
+  it('any source by default; "api" / "whatsapp" only match that source', () => {
+    expect(triggerMatches({ trigger_config: {} }, input('whatsapp'))).toBe(true);
+    expect(triggerMatches({ trigger_config: { contact_source: 'any' } }, input('api'))).toBe(true);
+    expect(triggerMatches({ trigger_config: { contact_source: 'api' } }, input('api'))).toBe(true);
+    expect(triggerMatches({ trigger_config: { contact_source: 'api' } }, input('whatsapp'))).toBe(false);
+    expect(triggerMatches({ trigger_config: { contact_source: 'whatsapp' } }, input('api'))).toBe(false);
+  });
+});

@@ -91,6 +91,9 @@ export interface ScheduleConfig {
   timezone?: string;
 }
 
+export type ContactSource = 'any' | 'api' | 'whatsapp';
+export const CONTACT_SOURCES: ContactSource[] = ['any', 'api', 'whatsapp'];
+
 export interface TriggerConfig extends Partial<ScheduleConfig> {
   trigger_type: JourneyTriggerType;
   /** tag_added; schedule audience. */
@@ -105,6 +108,8 @@ export interface TriggerConfig extends Partial<ScheduleConfig> {
   name?: string;
   /** webhook: prefix for national numbers without a country code, e.g. "91". */
   default_country_code?: string;
+  /** contact_created: where the contact came from — the public API, the inbox (first WhatsApp message), or either. */
+  contact_source?: ContactSource;
   /** Any trigger: stop a run as soon as the contact has one of these tags (e.g. paid, closed). */
   exit_tag_ids?: string[];
 }

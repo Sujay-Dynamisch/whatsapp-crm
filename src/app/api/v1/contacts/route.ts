@@ -141,6 +141,7 @@ export async function POST(request: Request) {
         accountId: ctx.accountId,
         contactId: id,
         trigger: 'contact_created',
+        source: 'api',
       });
     }
 
