@@ -7,6 +7,7 @@ import {
   interpolate,
   resumeOnReply,
   runJourneyTick,
+  stopEnrollment,
   type JourneyDeps,
   type JourneyRow,
 } from './engine';
@@ -714,5 +715,26 @@ describe('contact_created source filter', () => {
     expect(triggerMatches({ trigger_config: { contact_source: 'api' } }, input('api'))).toBe(true);
     expect(triggerMatches({ trigger_config: { contact_source: 'api' } }, input('whatsapp'))).toBe(false);
     expect(triggerMatches({ trigger_config: { contact_source: 'whatsapp' } }, input('api'))).toBe(false);
+  });
+});
+
+describe('stop a run by hand', () => {
+  it('stops a waiting run so nothing else is sent, and refuses finished or foreign runs', async () => {
+    const j = journeyWith(nurtureGraph());
+    await enrollContact(db(), j, 'c1', deps);
+    const id = String(enrollment().id);
+    const args = { enrollmentId: id, journeyId: 'j1', accountId: 'acct', reason: 'Stopped by Asha', now: minutes(5) };
+
+    expect(await stopEnrollment(db(), { ...args, accountId: 'other' })).toBe('not_found');
+    expect(await stopEnrollment(db(), args)).toBe('stopped');
+    expect(enrollment()).toMatchObject({ status: 'exited', last_error: 'Stopped by Asha' });
+    expect(events()).toContain('wfr:exited');
+
+    clock = minutes(10);
+    expect(await resumeOnReply(db(), 'acct', 'c1', deps, { text: 'hi' })).toBe(0);
+    clock = minutes(24 * 60 * 3);
+    await runJourneyTick(db(), deps);
+    expect(sent).toEqual(['template:welcome:Asha']);
+    expect(await stopEnrollment(db(), args)).toBe('finished');
   });
 });

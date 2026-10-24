@@ -1,4 +1,5 @@
 'use client';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -77,7 +78,7 @@ export default function JourneysPage() {
   }
 
   async function remove(j: JourneySummary) {
-    if (!window.confirm(t('list.deleteConfirm', { name: j.name }))) return;
+    if (!(await confirmDialog({ title: t('list.deleteConfirm', { name: j.name }), action: 'delete' }))) return;
     const res = await fetch(`/api/journeys/${j.id}`, { method: 'DELETE' });
     if (!res.ok) {
       toast.error(t('list.deleteFailed'));

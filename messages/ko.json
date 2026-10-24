@@ -2261,6 +2261,12 @@
       "saveFailed": "저장하지 못했습니다: {error}"
     }
   },
+  "Dialog": {
+    "confirm": "확인",
+    "cancel": "취소",
+    "save": "저장",
+    "delete": "삭제"
+  },
   "Journeys": {
     "status": {
       "draft": "초안",
@@ -2608,6 +2614,18 @@
       "failed": "실패",
       "variables": "변수",
       "triggerData": "트리거 데이터",
+      "stop": "실행 중지",
+      "stopConfirm": "{name}의 여정을 중지할까요? 이 여정의 메시지를 더 이상 받지 않습니다.",
+      "stopped": "{name}의 여정을 중지했습니다",
+      "stopFailed": "이 실행을 중지할 수 없습니다",
+      "loadFailed": "이 실행을 불러오지 못했습니다 — 다시 시도하세요",
+      "yes": "예",
+      "no": "아니요",
+      "none": "—",
+      "raw": "원본 데이터 보기",
+      "details": "세부 정보",
+      "inProgress": "진행 중",
+      "outcome": { "done": "완료", "waitDone": "대기 완료", "error": "오류", "yes": "예", "no": "아니요", "replied": "답장함", "timeout": "시간 내 답장 없음", "each": "다음 항목", "loopDone": "모두 완료", "option": "옵션 {n}", "noMatch": "기타 답장", "sendFailed": "전송 안 됨", "stopped": "중지됨" },
       "messages": {
         "title": "보낸 메시지",
         "content": "메시지 보기",

@@ -979,6 +979,47 @@ export async function resumeOnReply(
   return resumed;
 }
 
+export type StopOutcome = 'stopped' | 'not_found' | 'busy' | 'finished';
+
+/**
+ * Stop one contact's run by hand (run history → "Stop run"). Only a
+ * waiting run is stopped, atomically, so it can't race the tick or a
+ * reply; a run that is executing a step right now reports 'busy'.
+ * Pending template retries of the run are dropped by the retry pass
+ * (it skips exited runs).
+ */
+export async function stopEnrollment(
+  db: SupabaseClient,
+  args: { enrollmentId: string; journeyId: string; accountId: string; reason: string; now: Date }
+): Promise<StopOutcome> {
+  const { data: row } = await db
+    .from('journey_enrollments')
+    .select('id, journey_id, status, current_node_id')
+    .eq('id', args.enrollmentId)
+    .eq('journey_id', args.journeyId)
+    .eq('account_id', args.accountId)
+    .maybeSingle();
+  if (!row) return 'not_found';
+  if (row.status === 'active') return 'busy';
+  if (row.status !== 'waiting') return 'finished';
+
+  const { data: claimed } = await db
+    .from('journey_enrollments')
+    .update({
+      status: 'exited',
+      wait_kind: null,
+      locked_at: null,
+      last_error: args.reason.slice(0, 1000),
+      completed_at: args.now.toISOString(),
+    })
+    .eq('id', row.id)
+    .eq('status', 'waiting')
+    .select('id');
+  if (!claimed?.length) return 'busy';
+  await logEvent(db, { id: row.id as string, journey_id: row.journey_id as string }, (row.current_node_id as string) ?? 'trigger', 'exited', args.reason);
+  return 'stopped';
+}
+
 export interface TickReport {
   claimed: number;
   outcomes: Record<AdvanceOutcome, number>;

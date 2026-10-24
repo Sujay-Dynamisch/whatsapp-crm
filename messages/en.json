@@ -2261,6 +2261,12 @@
       "saveFailed": "Could not save: {error}"
     }
   },
+  "Dialog": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete"
+  },
   "Journeys": {
     "status": {
       "draft": "Draft",
@@ -2608,6 +2614,18 @@
       "failed": "Failed",
       "variables": "Variables",
       "triggerData": "Trigger data",
+      "stop": "Stop run",
+      "stopConfirm": "Stop the journey for {name}? They won’t get any more messages from this journey.",
+      "stopped": "Journey stopped for {name}",
+      "stopFailed": "Could not stop this run",
+      "loadFailed": "Could not load this run — try again",
+      "yes": "Yes",
+      "no": "No",
+      "none": "—",
+      "raw": "Show raw data",
+      "details": "Details",
+      "inProgress": "In progress",
+      "outcome": { "done": "Done", "waitDone": "Wait finished", "error": "Error", "yes": "Yes", "no": "No", "replied": "Replied", "timeout": "No reply in time", "each": "Next item", "loopDone": "All done", "option": "Option {n}", "noMatch": "Other reply", "sendFailed": "Not sent", "stopped": "Stopped" },
       "messages": {
         "title": "Messages sent",
         "content": "Show message",

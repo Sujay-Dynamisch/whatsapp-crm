@@ -1,4 +1,5 @@
 "use client";
+import { promptDialog } from "@/components/ui/confirm-dialog";
 
 import {
   useState,
@@ -335,9 +336,7 @@ export function MessageComposer({
       toast.error(result.error);
       return;
     }
-    const title = window
-      .prompt(t("quickReplyNamePrompt"))
-      ?.trim();
+    const title = (await promptDialog({ title: t("quickReplyNamePrompt"), maxLength: 100 }))?.trim();
     if (!title) return;
     setSavingQuickReply(true);
     try {

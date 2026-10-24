@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 
 /**
  * Single source of truth for the flow editor's state.
@@ -402,7 +403,7 @@ export function FlowEditorProvider({
 
   // ---- Delete ----
   const deleteFlow = useCallback(async () => {
-    const yes = window.confirm(t("deleteConfirm", { name: state.name }));
+    const yes = await confirmDialog({ title: t("deleteConfirm", { name: state.name }), action: "delete" });
     if (!yes) return;
     try {
       const res = await fetch(`/api/flows/${initialFlow.id}`, {

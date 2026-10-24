@@ -2261,6 +2261,12 @@
       "saveFailed": "No se pudo guardar: {error}"
     }
   },
+  "Dialog": {
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar"
+  },
   "Journeys": {
     "status": {
       "draft": "Borrador",
@@ -2608,6 +2614,18 @@
       "failed": "Falló",
       "variables": "Variables",
       "triggerData": "Datos del disparador",
+      "stop": "Detener",
+      "stopConfirm": "¿Detener el recorrido para {name}? No recibirá más mensajes de este recorrido.",
+      "stopped": "Recorrido detenido para {name}",
+      "stopFailed": "No se pudo detener esta ejecución",
+      "loadFailed": "No se pudo cargar esta ejecución — inténtalo de nuevo",
+      "yes": "Sí",
+      "no": "No",
+      "none": "—",
+      "raw": "Ver datos sin procesar",
+      "details": "Detalles",
+      "inProgress": "En curso",
+      "outcome": { "done": "Hecho", "waitDone": "Espera terminada", "error": "Error", "yes": "Sí", "no": "No", "replied": "Respondió", "timeout": "Sin respuesta a tiempo", "each": "Siguiente elemento", "loopDone": "Todo listo", "option": "Opción {n}", "noMatch": "Otra respuesta", "sendFailed": "No enviado", "stopped": "Detenido" },
       "messages": {
         "title": "Mensajes enviados",
         "content": "Ver mensaje",
