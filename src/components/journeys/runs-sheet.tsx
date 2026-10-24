@@ -20,7 +20,34 @@ interface RunRow {
   completed_at: string | null;
   contact_name: string | null;
   contact_phone: string | null;
+  messages?: Record<MessageStatus, number> | null;
 }
+
+type MessageStatus = 'sent' | 'delivered' | 'read' | 'failed';
+
+/** One message the run sent (journey_messages, migration 056). */
+interface RunMessage {
+  id: string;
+  node_id: string;
+  kind: 'template' | 'text' | 'media' | 'buttons' | 'retry' | 'fallback';
+  template_name: string | null;
+  content_text: string | null;
+  status: MessageStatus;
+  error_code: number | null;
+  error_title: string | null;
+  error_details: string | null;
+  attempt: number;
+  next_retry_at: string | null;
+  resolved: 'retried' | 'fallback_sent' | 'expired' | 'superseded' | 'opted_out' | null;
+  created_at: string;
+}
+
+const MESSAGE_STATUS_CLASS: Record<MessageStatus, string> = {
+  sent: 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  delivered: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  read: 'border-emerald-600/50 bg-emerald-600/15 text-emerald-700 dark:text-emerald-300',
+  failed: 'border-destructive/40 bg-destructive/10 text-destructive',
+};
 
 interface RunEvent {
   id: number;
@@ -34,6 +61,7 @@ interface RunEvent {
 interface RunDetail {
   run: RunRow & { context: Record<string, unknown>; next_run_at: string | null };
   events: RunEvent[];
+  messages?: RunMessage[];
 }
 
 const STATUS_CLASS: Record<RunRow['status'], string> = {
@@ -83,6 +111,7 @@ function foldEvents(events: RunEvent[]): StepRow[] {
       rows.push(row);
     }
     if (e.event === 'log') row.logs = e.detail;
+    else if (e.event === 'send_failed' || e.event === 'exited') row.detail = e.detail;
     else if (e.event === 'failed') {
       row.failed = true;
       row.detail = e.detail;
@@ -193,6 +222,17 @@ export function RunsSheet({
                             {when(r.entered_at)} · {t('runs.steps', { count: r.steps_taken })}
                             {r.last_error ? ` · ${r.last_error}` : ''}
                           </span>
+                          {r.messages && (
+                            <span className="mt-1 flex flex-wrap gap-1">
+                              {(['sent', 'delivered', 'read', 'failed'] as const)
+                                .filter((k) => r.messages![k] > 0)
+                                .map((k) => (
+                                  <span key={k} className={cn('rounded-full border px-1.5 py-px text-[10px] font-medium', MESSAGE_STATUS_CLASS[k])}>
+                                    {t(`runs.messages.count.${k}`, { count: r.messages![k] })}
+                                  </span>
+                                ))}
+                            </span>
+                          )}
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                       </button>
@@ -217,6 +257,53 @@ export function RunsSheet({
               </div>
               {detail.run.last_error && (
                 <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{detail.run.last_error}</p>
+              )}
+
+              {detail.messages && detail.messages.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium">{t('runs.messages.title')}</p>
+                  <ol className="space-y-1.5">
+                    {detail.messages.map((m) => {
+                      const node = byId.get(m.node_id);
+                      return (
+                        <li key={m.id} className="space-y-1 rounded-lg border border-border p-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className={cn('shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium', MESSAGE_STATUS_CLASS[m.status])}>
+                              {t(`runs.messages.status.${m.status}`)}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-sm">{node?.label?.trim() || m.template_name || m.node_id}</span>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">{when(m.created_at)}</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            {t(`runs.messages.kind.${m.kind}`)}
+                            {m.template_name ? ` · ${m.template_name}` : ''}
+                            {m.attempt > 1 ? ` · ${t('runs.messages.attempt', { n: m.attempt })}` : ''}
+                          </p>
+                          {m.status === 'failed' && (
+                            <p className="text-xs text-destructive">
+                              {m.error_code ? `[${m.error_code}] ` : ''}
+                              {m.error_title}
+                              {m.error_details ? ` — ${m.error_details}` : ''}
+                            </p>
+                          )}
+                          {m.resolved ? (
+                            <p className="text-[11px] text-muted-foreground">{t(`runs.messages.resolved.${m.resolved}`)}</p>
+                          ) : m.status === 'failed' && m.next_retry_at ? (
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400">{t('runs.messages.retryAt', { when: when(m.next_retry_at) })}</p>
+                          ) : m.status === 'failed' && m.content_text ? (
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400">{t('runs.messages.awaitingReply')}</p>
+                          ) : null}
+                          {m.content_text && (
+                            <details>
+                              <summary className="cursor-pointer text-[11px] text-muted-foreground">{t('runs.messages.content')}</summary>
+                              <pre className="mt-1 whitespace-pre-wrap rounded-md bg-muted/60 p-2 text-[11px] leading-snug">{m.content_text}</pre>
+                            </details>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
               )}
 
               <ol className="space-y-1.5">

@@ -11,6 +11,7 @@ import {
   type JourneyRow,
 } from './engine';
 import { triggerMatches } from './dispatch';
+import { applyJourneyMessageStatus, metaErrorCode, planRetry, sendJourneyFallbacks } from './messages';
 
 // ============================================================
 // In-memory PostgREST stand-in: enough of the query surface for the
@@ -81,6 +82,9 @@ function fakeDb(): SupabaseClient {
         eq: (c: string, v: unknown) => (preds.push((r) => r[c] === v), b),
         in: (c: string, vs: unknown[]) => (preds.push((r) => vs.includes(r[c])), b),
         gte: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) >= v), b),
+        lte: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) <= v), b),
+        gt: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) > v), b),
+        is: (c: string, v: unknown) => (preds.push((r) => (r[c] ?? null) === v), b),
         limit: (n: number) => ((limitN = n), b),
         order: () => b,
         single: () => ((single = 'one'), b),
@@ -113,9 +117,11 @@ const deps: JourneyDeps = {
   sendTemplate: async (_ctx, cfg) => {
     if (failSendWith) throw failSendWith;
     sent.push(`template:${cfg.template_name}:${(cfg.params ?? []).join('|')}`);
+    return { whatsapp_message_id: `wamid-${sent.length}`, content_text: `${cfg.template_name} body` };
   },
   sendText: async (_ctx, text) => {
     sent.push(`text:${text}`);
+    return { whatsapp_message_id: `wamid-${sent.length}` };
   },
   addTag: async (ctx, tagId) => {
     tables.contact_tags.push({ id: `ct-${++seq}`, contact_id: ctx.contactId, tag_id: tagId });
@@ -342,11 +348,15 @@ describe('failures and safety', () => {
     expect(sent).toEqual([]);
   });
 
-  it('a failed send fails the enrollment (logged on the step)', async () => {
-    failSendWith = new Error('Meta: template not approved');
+  it('a failed template send is logged and the run carries on', async () => {
+    failSendWith = new Error('(#132001) Template name does not exist in the translation');
     const j = journeyWith(nurtureGraph());
-    expect((await enrollContact(db(), j, 'c1', deps)).outcome).toBe('failed');
-    expect(enrollment()).toMatchObject({ status: 'failed', last_error: 'Meta: template not approved' });
+    expect((await enrollContact(db(), j, 'c1', deps)).outcome).toBe('waiting');
+    expect(enrollment()).toMatchObject({ status: 'waiting', current_node_id: 'wfr' });
+    expect(events()).toContain('welcome:send_failed');
+    expect(tables.journey_messages).toEqual([
+      expect.objectContaining({ node_id: 'welcome', kind: 'template', status: 'failed', error_code: 132001, next_retry_at: null }),
+    ]);
   });
 
   it('stops a runaway graph instead of spinning forever', async () => {
@@ -596,5 +606,102 @@ describe('inbound keyword trigger', () => {
     expect(triggerMatches({ trigger_config: { keyword: 'price' } }, input('What is the PRICE?'))).toBe(true);
     expect(triggerMatches({ trigger_config: { keyword: 'price', match_type: 'exact' } }, input('price list'))).toBe(false);
     expect(triggerMatches({ trigger_config: { keyword: 'price', match_type: 'exact' } }, input(' Price '))).toBe(true);
+  });
+});
+
+describe('journey message log, retries and fallbacks (migration 056)', () => {
+  const ecosystem = { code: 131049, title: 'This message was not delivered to maintain healthy ecosystem engagement.', details: null };
+  const msgs = () => tables.journey_messages ?? [];
+
+  it('logs each send with its Meta id and follows delivery status forward only', async () => {
+    const j = journeyWith(nurtureGraph());
+    await enrollContact(db(), j, 'c1', deps);
+    expect(msgs()).toEqual([
+      expect.objectContaining({ node_id: 'welcome', kind: 'template', status: 'sent', wa_message_id: 'wamid-1', content_text: 'welcome body' }),
+    ]);
+    await applyJourneyMessageStatus(db(), 'wamid-1', 'read', null, clock);
+    await applyJourneyMessageStatus(db(), 'wamid-1', 'delivered', null, clock);
+    expect(msgs()[0].status).toBe('read');
+  });
+
+  it('131049 schedules a retry; the tick re-sends the same template and resolves the failed one', async () => {
+    const j = journeyWith(nurtureGraph());
+    await enrollContact(db(), j, 'c1', deps);
+    await applyJourneyMessageStatus(db(), 'wamid-1', 'failed', ecosystem, clock);
+    expect(msgs()[0]).toMatchObject({ status: 'failed', error_code: 131049, next_retry_at: minutes(240).toISOString() });
+
+    clock = minutes(30);
+    await runJourneyTick(db(), deps);
+    expect(sent).toEqual(['template:welcome:Asha']); // not due yet
+
+    // The reply wait timed out at 60 min; park it far away so only the retry is due.
+    enrollment().next_run_at = minutes(10_000).toISOString();
+    clock = minutes(241);
+    const report = await runJourneyTick(db(), deps);
+    expect(report.retries).toMatchObject({ retried: 1 });
+    expect(sent).toEqual(['template:welcome:Asha', 'template:welcome:Asha']);
+    expect(msgs()[0]).toMatchObject({ resolved: 'retried', next_retry_at: null });
+    expect(msgs()[1]).toMatchObject({ kind: 'retry', attempt: 2, status: 'sent', parent_id: msgs()[0].id });
+  });
+
+  it('drops a due retry once a newer message of the run went out', async () => {
+    const j = journeyWith(nurtureGraph());
+    await enrollContact(db(), j, 'c1', deps);
+    msgs()[0].retry_until = minutes(100_000).toISOString(); // keep it inside its retry window
+    await applyJourneyMessageStatus(db(), 'wamid-1', 'failed', ecosystem, clock);
+    clock = minutes(60);
+    await runJourneyTick(db(), deps); // reply timeout → waits 1 day
+    clock = minutes(60 + 24 * 60);
+    await runJourneyTick(db(), deps); // reminder sent (newer message), retry due too
+    expect(msgs().find((m) => m.node_id === 'welcome')).toMatchObject({ resolved: 'superseded' });
+    expect(sent.filter((s) => s.startsWith('template:welcome'))).toHaveLength(1);
+  });
+
+  it('re-sends an undelivered template as text when the customer writes, without consuming the reply', async () => {
+    const j = journeyWith(nurtureGraph());
+    await enrollContact(db(), j, 'c1', deps);
+    await applyJourneyMessageStatus(db(), 'wamid-1', 'failed', ecosystem, clock);
+    clock = minutes(5);
+    const handled = await sendJourneyFallbacks(db(), { accountId: 'acct', contactId: 'c1', inboundText: 'hi', now: clock }, (_row, text) =>
+      deps.sendText({ accountId: 'acct', userId: 'user-1', contactId: 'c1', conversationId: 'conv1' }, text)
+    );
+    expect(sent).toEqual(['template:welcome:Asha', 'text:welcome body']);
+    expect(msgs()[0]).toMatchObject({ resolved: 'fallback_sent' });
+    expect(msgs()[1]).toMatchObject({ kind: 'fallback', parent_id: msgs()[0].id, status: 'sent' });
+    expect(await resumeOnReply(db(), 'acct', 'c1', deps, { text: 'hi' }, handled)).toBe(0);
+    expect(enrollment()).toMatchObject({ status: 'waiting', current_node_id: 'wfr' });
+  });
+
+  it('a STOP reply ends the run instead of answering it', async () => {
+    const j = journeyWith(nurtureGraph());
+    await enrollContact(db(), j, 'c1', deps);
+    clock = minutes(5);
+    await resumeOnReply(db(), 'acct', 'c1', deps, { text: 'STOP' });
+    expect(enrollment()).toMatchObject({ status: 'exited', last_error: 'Contact opted out (STOP)' });
+    expect(tables.contact_tags).toEqual([]);
+  });
+
+  it('an exit tag (e.g. paid) stops the run before its next step', async () => {
+    const g = nurtureGraph();
+    (g.nodes[0].config as { exit_tag_ids?: string[] }).exit_tag_ids = ['paid'];
+    const j = journeyWith(g);
+    await enrollContact(db(), j, 'c1', deps);
+    tables.contact_tags.push({ id: 'p', contact_id: 'c1', tag_id: 'paid' });
+    clock = minutes(60);
+    await runJourneyTick(db(), deps);
+    expect(enrollment().status).toBe('exited');
+    expect(sent).toEqual(['template:welcome:Asha']);
+  });
+
+  it('parses Meta error codes and plans retries inside the allowed window', () => {
+    expect(metaErrorCode('(#132001) Template name does not exist')).toBe(132001);
+    expect(metaErrorCode('[131049] not delivered')).toBe(131049);
+    expect(metaErrorCode('Meta API error: 500')).toBeNull();
+    const base = { kind: 'template' as const, attempt: 1, errorCode: 131049, now: T0 };
+    expect(planRetry({ ...base, retryUntil: null })).toBe(minutes(240).toISOString());
+    expect(planRetry({ ...base, retryUntil: minutes(120).toISOString() })).toBeNull();
+    expect(planRetry({ ...base, attempt: 3, retryUntil: null })).toBeNull();
+    expect(planRetry({ ...base, errorCode: 132001, retryUntil: null })).toBeNull();
+    expect(planRetry({ ...base, kind: 'text', retryUntil: null })).toBeNull();
   });
 });

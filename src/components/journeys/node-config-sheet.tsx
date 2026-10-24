@@ -336,6 +336,29 @@ Content-Type: application/json
               </Field>
             </>
           )}
+          {lists.tags.length > 0 && (
+            <Field label={t('form.exitTags')} help={t('form.exitTagsHelp')}>
+              <div className="flex flex-wrap gap-1.5">
+                {lists.tags.map((tag) => {
+                  const ids = cfg.exit_tag_ids ?? [];
+                  const on = ids.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => set({ exit_tag_ids: on ? ids.filter((x) => x !== tag.id) : [...ids, tag.id] })}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-xs',
+                        on ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'
+                      )}
+                    >
+                      {tag.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+          )}
         </>
       );
       break;
@@ -641,6 +664,9 @@ Content-Type: application/json
             )}
             <p className="text-xs text-muted-foreground">{t('form.templateParamsHelp')}</p>
           </div>
+          <Field label={t('form.retryUntil')} help={t('form.retryUntilHelp')}>
+            <ExprInput value={String(cfg.retry_until ?? '')} onChange={(retry_until) => set({ retry_until })} suggestions={suggestions} />
+          </Field>
         </>
       );
       break;

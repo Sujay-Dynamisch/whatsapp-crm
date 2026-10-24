@@ -2457,6 +2457,10 @@
       "code": "JavaScript",
       "codeHelp": "Use contact, trigger, nodes, vars, reply, item e retorne um valor; os passos seguintes o leem como nodes.{id}. Sem rede nem arquivos; limite de 2 segundos.",
       "templateParamsHelp": "Valores para as variáveis numeradas do modelo, em ordem. Use o botão de variáveis para preenchê-los.",
+      "exitTags": "Parar quando o contato receber",
+      "exitTagsHelp": "Etiquetas que encerram esta jornada para um contato imediatamente (ex.: pago, fechado). Quem responder STOP é sempre parado.",
+      "retryUntil": "Tentar novamente até (opcional)",
+      "retryUntilHelp": "Se a Meta não entregar este modelo, ele é reenviado e enviado como texto quando o contato escrever, até esta data/hora. Vazio = 24 horas.",
       "textHelp2": "Use o botão de variáveis para personalizar a mensagem. A formatação do WhatsApp como *negrito* funciona.",
       "mediaType": "Tipo",
       "mediaUrl": "URL da mídia",
@@ -2601,6 +2605,17 @@
       "failed": "Falhou",
       "variables": "Variáveis",
       "triggerData": "Dados do gatilho",
+      "messages": {
+        "title": "Mensagens enviadas",
+        "content": "Ver mensagem",
+        "attempt": "tentativa {n}",
+        "retryAt": "Nova tentativa em {when}",
+        "awaitingReply": "Será reenviada como texto quando o contato escrever",
+        "count": { "sent": "{count} enviadas", "delivered": "{count} entregues", "read": "{count} lidas", "failed": "{count} com falha" },
+        "status": { "sent": "Enviada", "delivered": "Entregue", "read": "Lida", "failed": "Falhou" },
+        "kind": { "template": "Modelo", "text": "Texto", "media": "Mídia", "buttons": "Botões", "retry": "Nova tentativa do modelo", "fallback": "Enviada como texto (alternativa)" },
+        "resolved": { "retried": "Reenviada — veja a próxima tentativa", "fallback_sent": "Reenviada como texto quando o contato escreveu", "expired": "Sem nova tentativa — tarde demais", "superseded": "Ignorada — uma mensagem mais recente foi enviada", "opted_out": "Descartada — o contato cancelou" }
+      },
       "status": {
         "active": "Em andamento",
         "waiting": "Aguardando",

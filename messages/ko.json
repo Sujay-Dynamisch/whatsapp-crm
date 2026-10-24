@@ -2457,6 +2457,10 @@
       "code": "JavaScript",
       "codeHelp": "contact, trigger, nodes, vars, reply, item을 사용해 값을 반환하세요. 이후 단계에서 nodes.{id}로 읽습니다. 네트워크와 파일 접근 불가, 2초 제한.",
       "templateParamsHelp": "템플릿의 번호가 붙은 자리 표시자에 들어갈 값을 순서대로 입력하세요. 변수 버튼으로 채울 수 있습니다.",
+      "exitTags": "연락처에 이 태그가 붙으면 중지",
+      "exitTagsHelp": "이 태그가 붙으면 해당 연락처의 여정을 즉시 종료합니다(예: 결제 완료, 종료). STOP으로 답한 연락처는 항상 중지됩니다.",
+      "retryUntil": "재시도 기한(선택)",
+      "retryUntilHelp": "Meta가 이 템플릿을 전달하지 못하면 이 날짜/시간까지 재시도하고, 연락처가 메시지를 보내면 텍스트로 다시 보냅니다. 비워 두면 24시간.",
       "textHelp2": "변수 버튼으로 메시지를 개인화하세요. *굵게* 같은 WhatsApp 서식이 적용됩니다.",
       "mediaType": "유형",
       "mediaUrl": "미디어 URL",
@@ -2601,6 +2605,17 @@
       "failed": "실패",
       "variables": "변수",
       "triggerData": "트리거 데이터",
+      "messages": {
+        "title": "보낸 메시지",
+        "content": "메시지 보기",
+        "attempt": "{n}번째 시도",
+        "retryAt": "{when}에 다시 시도",
+        "awaitingReply": "연락처가 다음에 메시지를 보내면 텍스트로 다시 보냅니다",
+        "count": { "sent": "{count}건 전송", "delivered": "{count}건 전달", "read": "{count}건 읽음", "failed": "{count}건 실패" },
+        "status": { "sent": "전송됨", "delivered": "전달됨", "read": "읽음", "failed": "실패" },
+        "kind": { "template": "템플릿", "text": "텍스트", "media": "미디어", "buttons": "버튼", "retry": "템플릿 재시도", "fallback": "텍스트로 전송(대체)" },
+        "resolved": { "retried": "재시도함 — 다음 시도 참조", "fallback_sent": "연락처가 메시지를 보낸 후 텍스트로 재전송", "expired": "재시도 안 함 — 너무 늦음", "superseded": "건너뜀 — 더 최근 메시지를 보냄", "opted_out": "제외 — 연락처가 수신 거부함" }
+      },
       "status": {
         "active": "실행 중",
         "waiting": "대기 중",

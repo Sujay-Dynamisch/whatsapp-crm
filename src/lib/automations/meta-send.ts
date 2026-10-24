@@ -51,14 +51,20 @@ interface SendTemplateArgs {
   params?: string[]
 }
 
-export async function engineSendText(args: SendTextArgs): Promise<{ whatsapp_message_id: string }> {
+export async function engineSendText(args: SendTextArgs): Promise<SendViaMetaResult> {
   return sendViaMeta({ ...args, kind: 'text' })
 }
 
 export async function engineSendTemplate(
   args: SendTemplateArgs,
-): Promise<{ whatsapp_message_id: string }> {
+): Promise<SendViaMetaResult> {
   return sendViaMeta({ ...args, kind: 'template' })
+}
+
+interface SendViaMetaResult {
+  whatsapp_message_id: string
+  /** What the customer sees — the template body with params filled in. */
+  content_text: string | null
 }
 
 interface SendInteractiveArgs {
@@ -108,7 +114,7 @@ type SendInput =
   | (SendTextArgs & { kind: 'text' })
   | (SendTemplateArgs & { kind: 'template' })
 
-async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: string }> {
+async function sendViaMeta(input: SendInput): Promise<SendViaMetaResult> {
   const db = supabaseAdmin()
 
   // Scope the contact + config lookups by account_id, not user_id.
@@ -252,5 +258,5 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     })
     .eq('id', input.conversationId)
 
-  return { whatsapp_message_id: waMessageId }
+  return { whatsapp_message_id: waMessageId, content_text: content_text ?? null }
 }

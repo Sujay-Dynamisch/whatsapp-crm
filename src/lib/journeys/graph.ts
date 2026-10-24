@@ -105,6 +105,8 @@ export interface TriggerConfig extends Partial<ScheduleConfig> {
   name?: string;
   /** webhook: prefix for national numbers without a country code, e.g. "91". */
   default_country_code?: string;
+  /** Any trigger: stop a run as soon as the contact has one of these tags (e.g. paid, closed). */
+  exit_tag_ids?: string[];
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -143,7 +145,8 @@ export interface NodeConfigs {
     timeout_s?: number;
   };
   code: { code: string };
-  send_template: { template_name: string; language?: string; params?: string[] };
+  /** `retry_until`: optional expression → last moment an undelivered template may be retried / re-sent as text (default 24 h). */
+  send_template: { template_name: string; language?: string; params?: string[]; retry_until?: string };
   send_text: { text: string };
   send_media: { media_type: 'image' | 'video' | 'document'; url: string; caption?: string; filename?: string };
   send_buttons: { text: string; header?: string; footer?: string; buttons: { title: string }[] };
