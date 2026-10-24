@@ -15,6 +15,55 @@ const STOP = 'Reply STOP to opt out.';
 const qr = (...texts: string[]) => texts.map((text) => ({ type: 'QUICK_REPLY' as const, text }));
 
 const TEMPLATES: TemplatePayload[] = [
+  // UTILITY versions of the messages the lead asked for (registration,
+  // reminders for that webinar, a rebooked session). Meta's 131049
+  // per-user limit only applies to MARKETING templates, and Meta moved
+  // sg_webinar_confirmation to Marketing because of its promotional
+  // lines — so these are strictly informational. Same params as the
+  // marketing versions; use-utility-templates.ts switches the journey
+  // once Meta approves them AS UTILITY.
+  {
+    name: 'sg_registration_confirmed',
+    category: 'Utility',
+    language: 'en_US',
+    header_type: 'text',
+    header_content: 'Registration Confirmed',
+    body_text: [
+      'Hi {{1}},',
+      'Your registration for the Transformation Webinar with Swapnil Gautam is confirmed.',
+      '📅 Date: {{2}}\n🕒 Time: {{3}}\n🔗 Join link: {{4}}',
+      'Please keep this message to join the session.',
+    ].join('\n\n'),
+    sample_values: { body: ['Priya', 'Mon, 26 Oct 2026', '8:00 PM IST', 'https://example.com/webinar'] },
+  },
+  {
+    name: 'sg_webinar_session_reminder',
+    category: 'Utility',
+    language: 'en_US',
+    header_type: 'text',
+    header_content: 'Webinar Reminder',
+    body_text: [
+      'Hi {{1}},',
+      'This is a reminder that the Transformation Webinar you registered for is {{2}}.',
+      '📅 {{3}}\n🕒 {{4}}\n🔗 Join link: {{5}}',
+      'See you there.',
+    ].join('\n\n'),
+    sample_values: { body: ['Priya', 'starting in 1 hour', 'Mon, 26 Oct 2026', '8:00 PM IST', 'https://example.com/webinar'] },
+  },
+  {
+    name: 'sg_webinar_session_rebooked',
+    category: 'Utility',
+    language: 'en_US',
+    header_type: 'text',
+    header_content: 'Your New Webinar Session',
+    body_text: [
+      'Hi {{1}},',
+      'As requested, you are now registered for the next Transformation Webinar session.',
+      '📅 Date: {{2}}\n🕒 Time: {{3}}\n🔗 Join link: {{4}}',
+      'See you there.',
+    ].join('\n\n'),
+    sample_values: { body: ['Priya', 'Tue, 27 Oct 2026', '8:00 PM IST', 'https://example.com/webinar'] },
+  },
   // T1–T4 as specified in the PDF (header + buttons). The account's older
   // registration_confirmation / reminder_for_webinar / trigger_sent_at_7 /
   // triggered_when_lead_selects_option_3 lack them; use-pdf-templates.ts
