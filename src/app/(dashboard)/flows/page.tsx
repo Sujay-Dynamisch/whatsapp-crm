@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -178,7 +179,7 @@ export default function FlowsPage() {
   }
 
   async function handleDelete(flow: FlowRow) {
-    const yes = window.confirm(t("deleteConfirm", { name: flow.name }));
+    const yes = await confirmDialog({ title: t("deleteConfirm", { name: flow.name }), action: "delete" });
     if (!yes) return;
     try {
       const res = await fetch(`/api/flows/${flow.id}`, { method: "DELETE" });

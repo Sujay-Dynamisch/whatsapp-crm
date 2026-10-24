@@ -1,4 +1,5 @@
 'use client';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -152,9 +153,10 @@ export function CustomFieldsPanel() {
 
   async function handleDelete(field: CustomField) {
     if (
-      !window.confirm(
-        t('deleteConfirm', { name: field.field_name })
-      )
+      !(await confirmDialog({
+        title: t('deleteConfirm', { name: field.field_name }),
+        action: 'delete',
+      }))
     ) {
       return;
     }

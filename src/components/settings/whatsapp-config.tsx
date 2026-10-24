@@ -1,4 +1,5 @@
 'use client';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { toast } from 'sonner';
@@ -470,7 +471,7 @@ export function WhatsAppConfig() {
   }
 
   async function handleReset() {
-    if (!confirm(t('resetConfirm'))) {
+    if (!(await confirmDialog({ title: t('resetConfirm'), destructive: true }))) {
       return;
     }
 

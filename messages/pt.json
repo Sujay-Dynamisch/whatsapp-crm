@@ -2261,6 +2261,12 @@
       "saveFailed": "Não foi possível salvar: {error}"
     }
   },
+  "Dialog": {
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "delete": "Excluir"
+  },
   "Journeys": {
     "status": {
       "draft": "Rascunho",
@@ -2608,6 +2614,18 @@
       "failed": "Falhou",
       "variables": "Variáveis",
       "triggerData": "Dados do gatilho",
+      "stop": "Parar",
+      "stopConfirm": "Parar a jornada para {name}? Não receberá mais mensagens desta jornada.",
+      "stopped": "Jornada parada para {name}",
+      "stopFailed": "Não foi possível parar esta execução",
+      "loadFailed": "Não foi possível carregar esta execução — tente novamente",
+      "yes": "Sim",
+      "no": "Não",
+      "none": "—",
+      "raw": "Ver dados brutos",
+      "details": "Detalhes",
+      "inProgress": "Em andamento",
+      "outcome": { "done": "Concluído", "waitDone": "Espera concluída", "error": "Erro", "yes": "Sim", "no": "Não", "replied": "Respondeu", "timeout": "Sem resposta a tempo", "each": "Próximo item", "loopDone": "Tudo concluído", "option": "Opção {n}", "noMatch": "Outra resposta", "sendFailed": "Não enviado", "stopped": "Parado" },
       "messages": {
         "title": "Mensagens enviadas",
         "content": "Ver mensagem",
