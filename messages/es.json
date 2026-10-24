@@ -2457,6 +2457,10 @@
       "code": "JavaScript",
       "codeHelp": "Usa contact, trigger, nodes, vars, reply, item y devuelve un valor; los pasos siguientes lo leen como nodes.{id}. Sin red ni archivos; límite de 2 segundos.",
       "templateParamsHelp": "Valores para las variables numeradas de la plantilla, en orden. Usa el botón de variables para rellenarlos.",
+      "exitTags": "Detener cuando el contacto reciba",
+      "exitTagsHelp": "Etiquetas que terminan este recorrido para un contacto de inmediato (p. ej. pagado, cerrado). Quien responda STOP siempre se detiene.",
+      "retryUntil": "Reintentar hasta (opcional)",
+      "retryUntilHelp": "Si Meta no entrega esta plantilla, se reintenta y se reenvía como texto cuando el contacto escriba, hasta esta fecha/hora. Vacío = 24 horas.",
       "textHelp2": "Usa el botón de variables para personalizar el mensaje. Funciona el formato de WhatsApp como *negrita*.",
       "mediaType": "Tipo",
       "mediaUrl": "URL del archivo",
@@ -2601,6 +2605,17 @@
       "failed": "Falló",
       "variables": "Variables",
       "triggerData": "Datos del disparador",
+      "messages": {
+        "title": "Mensajes enviados",
+        "content": "Ver mensaje",
+        "attempt": "intento {n}",
+        "retryAt": "Se reintentará el {when}",
+        "awaitingReply": "Se reenviará como texto cuando el contacto escriba",
+        "count": { "sent": "{count} enviados", "delivered": "{count} entregados", "read": "{count} leídos", "failed": "{count} fallidos" },
+        "status": { "sent": "Enviado", "delivered": "Entregado", "read": "Leído", "failed": "Fallido" },
+        "kind": { "template": "Plantilla", "text": "Texto", "media": "Multimedia", "buttons": "Botones", "retry": "Reintento de plantilla", "fallback": "Enviado como texto (respaldo)" },
+        "resolved": { "retried": "Reintentado — ver el siguiente intento", "fallback_sent": "Reenviado como texto cuando el contacto escribió", "expired": "No reintentado — ya era tarde", "superseded": "Omitido — se envió un mensaje más reciente", "opted_out": "Descartado — el contacto se dio de baja" }
+      },
       "status": {
         "active": "En curso",
         "waiting": "En espera",

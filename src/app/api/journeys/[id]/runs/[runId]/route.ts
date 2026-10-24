@@ -32,10 +32,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       .order('id', { ascending: true })
       .limit(1000);
 
+    // Every message this run sent and what happened to it (migration 056).
+    const { data: messages } = await supabase
+      .from('journey_messages')
+      .select('id, node_id, kind, template_name, content_text, status, error_code, error_title, error_details, attempt, parent_id, retry_until, next_retry_at, resolved, created_at, updated_at')
+      .eq('enrollment_id', runId)
+      .eq('account_id', accountId)
+      .order('created_at', { ascending: true })
+      .limit(500);
+
     const c = (Array.isArray(run.contacts) ? run.contacts[0] : run.contacts) as { name?: string; phone?: string } | null;
     return NextResponse.json({
       run: { ...run, contacts: undefined, contact_name: c?.name ?? null, contact_phone: c?.phone ?? null },
       events: events ?? [],
+      messages: messages ?? [],
     });
   } catch (error) {
     return toErrorResponse(error);

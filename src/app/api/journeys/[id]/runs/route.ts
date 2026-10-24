@@ -30,10 +30,36 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const { data, error } = await q;
     if (error) throw error;
+
+    // Message outcome counts per run (migration 056) for the list badges.
+    const ids = (data ?? []).map((r) => r.id);
+    const counts = new Map<string, { sent: number; delivered: number; read: number; failed: number }>();
+    if (ids.length) {
+      const { data: msgs } = await supabase
+        .from('journey_messages')
+        .select('enrollment_id, status, resolved')
+        .eq('account_id', accountId)
+        .in('enrollment_id', ids)
+        .limit(5000);
+      for (const m of (msgs ?? []) as { enrollment_id: string; status: string; resolved: string | null }[]) {
+        const c = counts.get(m.enrollment_id) ?? { sent: 0, delivered: 0, read: 0, failed: 0 };
+        // A failed message that was later retried / re-sent counts via its follow-up.
+        if (m.status === 'failed' && m.resolved && m.resolved !== 'expired') continue;
+        if (m.status in c) c[m.status as keyof typeof c]++;
+        counts.set(m.enrollment_id, c);
+      }
+    }
+
     return NextResponse.json({
       runs: (data ?? []).map((r) => {
         const c = (Array.isArray(r.contacts) ? r.contacts[0] : r.contacts) as { name?: string; phone?: string } | null;
-        return { ...r, contacts: undefined, contact_name: c?.name ?? null, contact_phone: c?.phone ?? null };
+        return {
+          ...r,
+          contacts: undefined,
+          contact_name: c?.name ?? null,
+          contact_phone: c?.phone ?? null,
+          messages: counts.get(r.id) ?? null,
+        };
       }),
     });
   } catch (error) {

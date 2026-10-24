@@ -2457,6 +2457,10 @@
       "code": "JavaScript",
       "codeHelp": "Use contact, trigger, nodes, vars, reply, item and return a value — later steps read it as nodes.{id}. No network or file access; 2-second limit.",
       "templateParamsHelp": "Values for the template’s numbered placeholders, in order. Use the variable button to fill them from contact or step data.",
+      "exitTags": "Stop the run when the contact gets",
+      "exitTagsHelp": "Tap tags that end this journey for a contact right away (e.g. paid, closed). Contacts who reply STOP are always stopped.",
+      "retryUntil": "Retry until (optional)",
+      "retryUntilHelp": "If Meta doesn’t deliver this template, it is retried and re-sent as text when the contact writes — until this date/time. Empty = 24 hours.",
       "textHelp2": "Use the variable button to personalise the message. WhatsApp formatting like *bold* works.",
       "mediaType": "Type",
       "mediaUrl": "Media URL",
@@ -2601,6 +2605,17 @@
       "failed": "Failed",
       "variables": "Variables",
       "triggerData": "Trigger data",
+      "messages": {
+        "title": "Messages sent",
+        "content": "Show message",
+        "attempt": "attempt {n}",
+        "retryAt": "Will retry at {when}",
+        "awaitingReply": "Will be re-sent as text when the contact next messages",
+        "count": { "sent": "{count} sent", "delivered": "{count} delivered", "read": "{count} read", "failed": "{count} failed" },
+        "status": { "sent": "Sent", "delivered": "Delivered", "read": "Read", "failed": "Failed" },
+        "kind": { "template": "Template", "text": "Text", "media": "Media", "buttons": "Buttons", "retry": "Template retry", "fallback": "Sent as text (fallback)" },
+        "resolved": { "retried": "Retried — see the next attempt", "fallback_sent": "Re-sent as text after the contact messaged", "expired": "Not retried — too late to be useful", "superseded": "Skipped — a newer message was sent", "opted_out": "Dropped — the contact opted out" }
+      },
       "status": {
         "active": "Running",
         "waiting": "Waiting",

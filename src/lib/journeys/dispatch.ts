@@ -15,8 +15,10 @@ import { engineSendInteractiveButtons, engineSendMedia } from '@/lib/flows/meta-
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write';
 
 import type { JourneyTriggerType } from './graph';
+import { sendJourneyFallbacks } from './messages';
 import {
   enrollContact,
+  ensureConversation,
   resumeOnReply,
   startContext,
   type JourneyDeps,
@@ -26,7 +28,7 @@ import {
 export const liveJourneyDeps: JourneyDeps = {
   now: () => new Date(),
   async sendTemplate(ctx, cfg) {
-    await engineSendTemplate({
+    return engineSendTemplate({
       accountId: ctx.accountId,
       userId: ctx.userId,
       conversationId: ctx.conversationId,
@@ -37,7 +39,7 @@ export const liveJourneyDeps: JourneyDeps = {
     });
   },
   async sendText(ctx, text) {
-    await engineSendText({
+    return engineSendText({
       accountId: ctx.accountId,
       userId: ctx.userId,
       conversationId: ctx.conversationId,
@@ -46,7 +48,7 @@ export const liveJourneyDeps: JourneyDeps = {
     });
   },
   async sendMedia(ctx, cfg) {
-    await engineSendMedia({
+    return engineSendMedia({
       accountId: ctx.accountId,
       userId: ctx.userId,
       conversationId: ctx.conversationId,
@@ -58,7 +60,7 @@ export const liveJourneyDeps: JourneyDeps = {
     });
   },
   async sendButtons(ctx, cfg) {
-    await engineSendInteractiveButtons({
+    return engineSendInteractiveButtons({
       accountId: ctx.accountId,
       userId: ctx.userId,
       conversationId: ctx.conversationId,
@@ -158,7 +160,26 @@ export async function dispatchJourneyInbound(
   try {
     if (!(await accountHasFeature(db, args.accountId, 'journeys'))) return;
     const text = args.text ?? args.buttonText ?? '';
-    await resumeOnReply(db, args.accountId, args.contactId, deps, { text, button: args.buttonText ?? null });
+    // The 24-hour window just opened: re-send undelivered journey
+    // templates (e.g. Meta's 131049 "healthy ecosystem engagement") as text.
+    const fellBack = await sendJourneyFallbacks(
+      db,
+      { accountId: args.accountId, contactId: args.contactId, inboundText: text, now: deps.now() },
+      async (row, body) => {
+        const { data: j } = await db.from('journeys').select('created_by').eq('id', row.journey_id).maybeSingle();
+        const userId = (j?.created_by as string | null) ?? null;
+        return deps.sendText(
+          {
+            accountId: args.accountId,
+            userId: userId ?? '',
+            contactId: args.contactId,
+            conversationId: await ensureConversation(db, args.accountId, args.contactId, userId),
+          },
+          body
+        );
+      }
+    );
+    await resumeOnReply(db, args.accountId, args.contactId, deps, { text, button: args.buttonText ?? null }, fellBack);
     await dispatchJourneyTrigger(
       db,
       { accountId: args.accountId, contactId: args.contactId, trigger: 'inbound_message', text },

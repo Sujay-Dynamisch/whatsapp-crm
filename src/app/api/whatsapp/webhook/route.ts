@@ -21,6 +21,7 @@ import { recordButtonClick } from '@/lib/whatsapp/button-clicks'
 import { refreshQuality } from '@/lib/smart-sending/quality'
 import { startInboundLanguage } from '@/lib/language/inbound'
 import { dispatchJourneyInbound } from '@/lib/journeys/dispatch'
+import { applyJourneyMessageStatus } from '@/lib/journeys/messages'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -539,6 +540,10 @@ async function handleStatusUpdate(status: {
   if (msgErr) {
     console.error('Error updating message status:', msgErr)
   }
+
+  // 1b) Journey message log (migration 056): status + retry scheduling
+  //     for messages sent by a journey run. Best effort, never throws.
+  await applyJourneyMessageStatus(supabaseAdmin(), status.id, status.status, failure)
 
   // Webhook fan-out for this status change happens at the END of this
   // handler (after the broadcast mirror below), so a slow subscriber

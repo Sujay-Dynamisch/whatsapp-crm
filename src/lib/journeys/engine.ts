@@ -35,6 +35,17 @@ import {
 import { compare, evaluateValue, renderTemplate, type ExprScope } from './expressions';
 import { HttpStepError, runHttpRequest, type HttpFetch } from './http';
 import type { CodeResult } from './sandbox';
+import {
+  DEFAULT_RETRY_WINDOW_MS,
+  recordJourneyMessage,
+  runJourneyRetries,
+  type JourneyMessageKind,
+  type RecordInput,
+  type RetryReport,
+  type SendResult,
+} from './messages';
+import { isUnsubscribeText } from '@/lib/contacts/unsubscribe';
+import { resolveTemplateRow, templateContentText } from '@/lib/whatsapp/template-body';
 
 export interface JourneyRow {
   id: string;
@@ -72,14 +83,16 @@ export interface SendContext {
 
 export interface JourneyDeps {
   now(): Date;
-  sendTemplate(ctx: SendContext, cfg: NodeConfigs['send_template']): Promise<void>;
-  sendText(ctx: SendContext, text: string): Promise<void>;
+  // Senders return the Meta message id (and the text sent) when they can,
+  // so the run's message log can follow delivery (journey_messages).
+  sendTemplate(ctx: SendContext, cfg: NodeConfigs['send_template']): Promise<SendResult | void>;
+  sendText(ctx: SendContext, text: string): Promise<SendResult | void>;
   addTag(ctx: Omit<SendContext, 'conversationId'>, tagId: string): Promise<void>;
-  sendMedia?(ctx: SendContext, cfg: NodeConfigs['send_media']): Promise<void>;
+  sendMedia?(ctx: SendContext, cfg: NodeConfigs['send_media']): Promise<SendResult | void>;
   sendButtons?(
     ctx: SendContext,
     cfg: { text: string; header?: string; footer?: string; buttons: { id: string; title: string }[] }
-  ): Promise<void>;
+  ): Promise<SendResult | void>;
   /** HTTP step transport + destination check (tests stub these). */
   http?: HttpFetch;
   checkUrl?: (url: string) => Promise<boolean>;
@@ -389,6 +402,21 @@ export async function advanceEnrollment(
     await patchEnrollment(db, e.id, { status: 'exited', locked_at: null, wait_kind: null, completed_at: deps.now().toISOString() });
     return 'exited';
   }
+  // Global stops: the contact opted out (STOP / 'unsubscribe' tag) or got
+  // one of the journey's exit tags (e.g. paid / closed) — no more steps.
+  const stop = await stopReason(db, journey, e, resumeSlot === 'replied' ? context.reply?.text : null);
+  if (stop) {
+    await logEvent(db, e, node?.id ?? e.current_node_id ?? 'trigger', 'exited', stop);
+    await patchEnrollment(db, e.id, {
+      status: 'exited',
+      locked_at: null,
+      wait_kind: null,
+      last_error: stop,
+      context,
+      completed_at: deps.now().toISOString(),
+    });
+    return 'exited';
+  }
   if (!node) return fail(e.current_node_id ?? 'unknown', 'The step this contact was on no longer exists');
 
   // Leave the wait we're resuming from.
@@ -421,6 +449,13 @@ export async function advanceEnrollment(
     scope,
     invalidateContact: () => {
       contact = null;
+    },
+    record: async (nodeId, input) => {
+      await recordJourneyMessage(
+        db,
+        { ...input, account_id: e.account_id, journey_id: e.journey_id, enrollment_id: e.id, contact_id: e.contact_id, node_id: nodeId },
+        deps.now()
+      );
     },
   };
 
@@ -473,6 +508,59 @@ interface Runtime {
   sendCtx: () => Promise<SendContext>;
   scope: () => Promise<ExprScope>;
   invalidateContact: () => void;
+  /** Log a sent / failed message of this run (journey_messages). */
+  record: (nodeId: string, input: Omit<RecordInput, 'account_id' | 'journey_id' | 'enrollment_id' | 'contact_id' | 'node_id'>) => Promise<void>;
+}
+
+/** Why this run must stop before its next step, or null. Never throws. */
+async function stopReason(
+  db: SupabaseClient,
+  journey: JourneyRow,
+  e: EnrollmentRow,
+  replyText: string | null | undefined
+): Promise<string | null> {
+  if (isUnsubscribeText(replyText)) return 'Contact opted out (STOP)';
+  try {
+    const exitIds = (findTrigger(journey.graph)?.config as TriggerConfig | undefined)?.exit_tag_ids ?? [];
+    const { data } = await db.from('contact_tags').select('tag_id, tags(name)').eq('contact_id', e.contact_id);
+    for (const row of (data ?? []) as { tag_id: string; tags?: { name?: string } | { name?: string }[] | null }[]) {
+      const tag = Array.isArray(row.tags) ? row.tags[0] : row.tags;
+      const name = tag?.name?.trim() ?? '';
+      if (name.toLowerCase() === 'unsubscribe') return 'Contact opted out (unsubscribe tag)';
+      if (exitIds.includes(row.tag_id)) return `Stopped: contact has the "${name || row.tag_id}" tag`;
+    }
+  } catch {
+    // A failed lookup must not stop a healthy run.
+  }
+  return null;
+}
+
+/** Until when a template step may be retried / re-sent as text (ISO). */
+function retryUntil(expr: string | undefined, scope: ExprScope, now: Date): string {
+  if (expr?.trim()) {
+    const raw = evaluateValue(expr, scope);
+    const at = new Date(raw instanceof Date ? raw.getTime() : String(raw ?? ''));
+    if (!Number.isNaN(at.getTime())) return at.toISOString();
+  }
+  return new Date(now.getTime() + DEFAULT_RETRY_WINDOW_MS).toISOString();
+}
+
+/** Run a free-form send and log it (failed sends are logged, then rethrown). */
+async function trackSend(
+  rt: Runtime,
+  nodeId: string,
+  kind: JourneyMessageKind,
+  content: string | null,
+  send: () => Promise<SendResult | void>
+): Promise<SendResult> {
+  try {
+    const sent = (await send()) || {};
+    await rt.record(nodeId, { kind, content_text: sent.content_text ?? content, wa_message_id: sent.whatsapp_message_id ?? null, status: 'sent' });
+    return sent;
+  } catch (err) {
+    await rt.record(nodeId, { kind, content_text: content, status: 'failed', error: err instanceof Error ? err.message : String(err) });
+    throw err;
+  }
 }
 
 /** A step failure that carries data for the run history. */
@@ -600,8 +688,33 @@ async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepR
       const cfg = node.config as NodeConfigs['send_template'];
       const s = await rt.scope();
       const params = (cfg.params ?? []).map((p) => renderTemplate(p, s));
-      await deps.sendTemplate(await rt.sendCtx(), { ...cfg, params });
-      return { slot: 'next', output: { template: cfg.template_name, params } };
+      const logged = {
+        kind: 'template' as const,
+        template_name: cfg.template_name,
+        language: cfg.language ?? null,
+        params,
+        retry_until: retryUntil(cfg.retry_until, s, now),
+      };
+      try {
+        const sent = (await deps.sendTemplate(await rt.sendCtx(), { ...cfg, params })) || {};
+        await rt.record(node.id, { ...logged, content_text: sent.content_text ?? null, wa_message_id: sent.whatsapp_message_id ?? null, status: 'sent' });
+        return { slot: 'next', output: { template: cfg.template_name, params, message_id: sent.whatsapp_message_id ?? null } };
+      } catch (err) {
+        // A template Meta refused doesn't end the run: it is logged (and
+        // retried / re-sent as text later when possible) and the journey
+        // carries on, so the contact still gets the next steps.
+        const message = err instanceof Error ? err.message : String(err);
+        let content: string | null = null;
+        try {
+          content = templateContentText((await resolveTemplateRow(db, e.account_id, cfg.template_name, cfg.language)).row, params);
+        } catch {
+          // body unavailable — no text fallback for this one
+        }
+        await rt.record(node.id, { ...logged, content_text: content, status: 'failed', error: message });
+        if (node.next?.error) return { slot: 'error', output: { template: cfg.template_name, params, error: message } };
+        await logEvent(db, e, node.id, 'send_failed', message.slice(0, 1000));
+        return { slot: 'next', output: { template: cfg.template_name, params, error: message } };
+      }
     }
 
     case 'send_text': {
@@ -609,8 +722,9 @@ async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepR
       if (!(await windowOpen(db, e, now))) throw new Error(WINDOW_CLOSED);
       const text = renderTemplate(cfg.text, await rt.scope());
       if (!text.trim()) throw new Error('The message is empty after filling in the variables');
-      await deps.sendText(await rt.sendCtx(), text);
-      return { slot: 'next', output: { text } };
+      const sendCtx = await rt.sendCtx();
+      const sent = await trackSend(rt, node.id, 'text', text, () => deps.sendText(sendCtx, text));
+      return { slot: 'next', output: { text, message_id: sent.whatsapp_message_id ?? null } };
     }
 
     case 'send_media': {
@@ -626,7 +740,8 @@ async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepR
         caption: cfg.caption ? renderTemplate(cfg.caption, s) : undefined,
         filename: cfg.filename ? renderTemplate(cfg.filename, s) : undefined,
       };
-      await deps.sendMedia(await rt.sendCtx(), sent);
+      const mediaCtx = await rt.sendCtx();
+      await trackSend(rt, node.id, 'media', sent.caption ?? `[${sent.media_type}] ${url}`, () => deps.sendMedia!(mediaCtx, sent));
       return { slot: 'next', output: sent };
     }
 
@@ -640,12 +755,15 @@ async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepR
         .filter((b) => b.title);
       if (buttons.length === 0) throw new Error('No button has a title after filling in the variables');
       const text = renderTemplate(cfg.text, s);
-      await deps.sendButtons(await rt.sendCtx(), {
-        text,
-        header: cfg.header ? renderTemplate(cfg.header, s) : undefined,
-        footer: cfg.footer ? renderTemplate(cfg.footer, s) : undefined,
-        buttons,
-      });
+      const buttonsCtx = await rt.sendCtx();
+      await trackSend(rt, node.id, 'buttons', text, () =>
+        deps.sendButtons!(buttonsCtx, {
+          text,
+          header: cfg.header ? renderTemplate(cfg.header, s) : undefined,
+          footer: cfg.footer ? renderTemplate(cfg.footer, s) : undefined,
+          buttons,
+        })
+      );
       return { slot: 'next', output: { text, buttons: buttons.map((b) => b.title) } };
     }
 
@@ -821,7 +939,9 @@ export async function resumeOnReply(
   accountId: string,
   contactId: string,
   deps: JourneyDeps,
-  reply: { text?: string | null; button?: string | null } = {}
+  reply: { text?: string | null; button?: string | null } = {},
+  /** Runs that just got an undelivered message re-sent as text — this reply isn't an answer to it. */
+  skip: Set<string> = new Set()
 ): Promise<number> {
   const { data: waiting } = await db
     .from('journey_enrollments')
@@ -833,6 +953,7 @@ export async function resumeOnReply(
 
   let resumed = 0;
   for (const row of (waiting ?? []) as EnrollmentRow[]) {
+    if (skip.has(row.id) && !isUnsubscribeText(reply.text)) continue;
     // Claim atomically — the tick may be timing this one out right now.
     const { data: claimed } = await db
       .from('journey_enrollments')
@@ -863,6 +984,7 @@ export interface TickReport {
   outcomes: Record<AdvanceOutcome, number>;
   errors: string[];
   schedules?: { ran: number; enrolled: number };
+  retries?: RetryReport;
 }
 
 /** Advance due timers, reply timeouts and crashed steps, then due schedules. */
@@ -891,6 +1013,26 @@ export async function runJourneyTick(db: SupabaseClient, deps: JourneyDeps): Pro
     } catch (err) {
       report.errors.push(`${row.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  // Failed templates whose retry is due (journey_messages, migration 056).
+  try {
+    report.retries = await runJourneyRetries(db, deps.now(), async (row) => {
+      const journey = journeys.get(row.journey_id) ?? (await loadJourney(db, row.journey_id));
+      const ctx: SendContext = {
+        accountId: row.account_id,
+        userId: journey?.created_by ?? '',
+        contactId: row.contact_id,
+        conversationId: await ensureConversation(db, row.account_id, row.contact_id, journey?.created_by ?? null),
+      };
+      return deps.sendTemplate(ctx, {
+        template_name: row.template_name ?? '',
+        language: row.language ?? undefined,
+        params: row.params ?? [],
+      });
+    });
+  } catch (err) {
+    report.errors.push(`retries: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   // Schedules are a separate concern; a failure there must not lose the
