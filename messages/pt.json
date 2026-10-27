@@ -1837,6 +1837,20 @@
         "template": "📋 Modelo"
       }
     },
+    "leadSync": {
+      "title": "Sincronização de cadastros do site",
+      "desc": "A cada minuto, novos cadastros do site são adicionados como contatos e iniciam a jornada \"contato criado\". Desative durante os testes para não adicionar dados.",
+      "statusOn": "Ativada — importando novos cadastros",
+      "statusOff": "Desativada — nada é importado",
+      "enableConfirm": "Ativar a sincronização de cadastros?",
+      "enableConfirmDesc": "Novos cadastros do site a partir da última hora serão adicionados como contatos e iniciarão a jornada (mensagens de WhatsApp serão enviadas).",
+      "enabled": "Sincronização ativada",
+      "disabled": "Sincronização desativada",
+      "saveFailed": "Não foi possível atualizar a sincronização",
+      "lastRun": "Última execução {time}:",
+      "lastReport": "{fetched} obtidos, {created} adicionados, {existing} já existiam.",
+      "lastError": "falhou — {error}"
+    },
     "apiKeys": {
       "title": "Chaves de API",
       "description": "As chaves autenticam a API REST pública (<apiCode>/api/v1</apiCode>) para que você crie suas próprias automações. Envie-as como <headerCode>Authorization: Bearer &lt;key&gt;</headerCode>.",
@@ -2528,7 +2542,14 @@
       "open": "Abrir",
       "delete": "Excluir",
       "deleteConfirm": "Excluir “{name}”? Os contatos nela vão parar.",
-      "deleteFailed": "Não foi possível excluir a jornada"
+      "deleteFailed": "Não foi possível excluir a jornada",
+      "searchPlaceholder": "Buscar jornadas…",
+      "clearSearch": "Limpar busca",
+      "all": "Todas",
+      "noResults": "Nenhuma jornada encontrada",
+      "noResultsHint": "Tente outro nome ou filtro de status.",
+      "actions": "Ações da jornada",
+      "deleted": "“{name}” excluída"
     },
     "op": {
       "equals": "é",
@@ -2618,6 +2639,13 @@
       "stopConfirm": "Parar a jornada para {name}? Não receberá mais mensagens desta jornada.",
       "stopped": "Jornada parada para {name}",
       "stopFailed": "Não foi possível parar esta execução",
+      "searchPlaceholder": "Buscar por nome ou telefone do contato…",
+      "noResults": "Nenhuma execução corresponde à busca.",
+      "delete": "Excluir",
+      "deleteConfirm": "Excluir a execução de {name}?",
+      "deleteConfirmDesc": "O histórico de etapas e o registro de mensagens são removidos. Uma execução em espera não continuará.",
+      "deleteFailed": "Não foi possível excluir a execução",
+      "deleted": "Execução de {name} excluída",
       "loadFailed": "Não foi possível carregar esta execução — tente novamente",
       "yes": "Sim",
       "no": "Não",

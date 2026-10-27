@@ -1837,6 +1837,20 @@
         "template": "📋 Plantilla"
       }
     },
+    "leadSync": {
+      "title": "Sincronización de registros del sitio web",
+      "desc": "Cada minuto, los nuevos registros del sitio web se añaden como contactos e inician el journey \"contacto creado\". Desactívala durante las pruebas para no añadir datos.",
+      "statusOn": "Activada — importando nuevos registros",
+      "statusOff": "Desactivada — no se importa nada",
+      "enableConfirm": "¿Activar la sincronización de registros?",
+      "enableConfirmDesc": "Los nuevos registros del sitio web desde la última hora se añadirán como contactos e iniciarán el journey (se enviarán mensajes de WhatsApp).",
+      "enabled": "Sincronización activada",
+      "disabled": "Sincronización desactivada",
+      "saveFailed": "No se pudo actualizar la sincronización",
+      "lastRun": "Última ejecución {time}:",
+      "lastReport": "{fetched} obtenidos, {created} añadidos, {existing} ya existían.",
+      "lastError": "falló — {error}"
+    },
     "apiKeys": {
       "title": "Claves de API",
       "description": "Las claves autentican la API REST pública (<apiCode>/api/v1</apiCode>) para que construyas tus propias automatizaciones. Envíalas como <headerCode>Authorization: Bearer &lt;key&gt;</headerCode>.",
@@ -2528,7 +2542,14 @@
       "open": "Abrir",
       "delete": "Eliminar",
       "deleteConfirm": "¿Eliminar “{name}”? Los contactos en él se detendrán.",
-      "deleteFailed": "No se pudo eliminar el recorrido"
+      "deleteFailed": "No se pudo eliminar el recorrido",
+      "searchPlaceholder": "Buscar journeys…",
+      "clearSearch": "Borrar búsqueda",
+      "all": "Todos",
+      "noResults": "Ningún journey coincide",
+      "noResultsHint": "Prueba otro nombre o filtro de estado.",
+      "actions": "Acciones del journey",
+      "deleted": "Se eliminó “{name}”"
     },
     "op": {
       "equals": "es",
@@ -2618,6 +2639,13 @@
       "stopConfirm": "¿Detener el recorrido para {name}? No recibirá más mensajes de este recorrido.",
       "stopped": "Recorrido detenido para {name}",
       "stopFailed": "No se pudo detener esta ejecución",
+      "searchPlaceholder": "Buscar por nombre o teléfono del contacto…",
+      "noResults": "Ninguna ejecución coincide con la búsqueda.",
+      "delete": "Eliminar",
+      "deleteConfirm": "¿Eliminar la ejecución de {name}?",
+      "deleteConfirmDesc": "Se eliminan su historial de pasos y su registro de mensajes. Una ejecución en espera no continuará.",
+      "deleteFailed": "No se pudo eliminar la ejecución",
+      "deleted": "Se eliminó la ejecución de {name}",
       "loadFailed": "No se pudo cargar esta ejecución — inténtalo de nuevo",
       "yes": "Sí",
       "no": "No",

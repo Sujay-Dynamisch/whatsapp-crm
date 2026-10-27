@@ -42,6 +42,7 @@ import {
 } from '@/lib/api-keys/scopes';
 import { useTranslations } from 'next-intl';
 import { SettingsPanelHead } from './settings-panel-head';
+import { LeadSyncCard } from './lead-sync-card';
 
 interface ApiKey {
   id: string;
@@ -266,6 +267,8 @@ export function ApiKeysSettings() {
           </CardContent>
         </Card>
       )}
+
+      <LeadSyncCard />
 
       <CreateKeyDialog
         open={createOpen}

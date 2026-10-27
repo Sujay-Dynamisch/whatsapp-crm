@@ -1837,6 +1837,20 @@
         "template": "📋 Template"
       }
     },
+    "leadSync": {
+      "title": "Website registrations sync",
+      "desc": "Every minute, new registrations from the website are added as contacts and start the \"contact created\" journey. Turn off while testing to avoid adding data.",
+      "statusOn": "On — importing new registrations",
+      "statusOff": "Off — nothing is imported",
+      "enableConfirm": "Turn on registrations sync?",
+      "enableConfirmDesc": "New website registrations from the last hour onward will be added as contacts and start the journey (WhatsApp messages will be sent).",
+      "enabled": "Registrations sync turned on",
+      "disabled": "Registrations sync turned off",
+      "saveFailed": "Could not update the sync",
+      "lastRun": "Last run {time}:",
+      "lastReport": "{fetched} fetched, {created} added, {existing} already existed.",
+      "lastError": "failed — {error}"
+    },
     "apiKeys": {
       "title": "API keys",
       "description": "Keys authenticate the public REST API (<apiCode>/api/v1</apiCode>) so you can build your own automations. Send them as <headerCode>Authorization: Bearer &lt;key&gt;</headerCode>.",
@@ -2528,7 +2542,14 @@
       "open": "Open",
       "delete": "Delete",
       "deleteConfirm": "Delete “{name}”? Contacts in it will stop.",
-      "deleteFailed": "Could not delete the journey"
+      "deleteFailed": "Could not delete the journey",
+      "searchPlaceholder": "Search journeys…",
+      "clearSearch": "Clear search",
+      "all": "All",
+      "noResults": "No matching journeys",
+      "noResultsHint": "Try another name or status filter.",
+      "actions": "Journey actions",
+      "deleted": "Deleted “{name}”"
     },
     "op": {
       "equals": "is",
@@ -2618,6 +2639,13 @@
       "stopConfirm": "Stop the journey for {name}? They won’t get any more messages from this journey.",
       "stopped": "Journey stopped for {name}",
       "stopFailed": "Could not stop this run",
+      "searchPlaceholder": "Search by contact name or phone…",
+      "noResults": "No runs match this search.",
+      "delete": "Delete",
+      "deleteConfirm": "Delete the run for {name}?",
+      "deleteConfirmDesc": "Its step history and message log are removed. A waiting run will not continue.",
+      "deleteFailed": "Could not delete the run",
+      "deleted": "Deleted the run for {name}",
       "loadFailed": "Could not load this run — try again",
       "yes": "Yes",
       "no": "No",
