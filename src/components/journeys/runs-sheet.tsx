@@ -2,12 +2,14 @@
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, ChevronRight, CircleStop, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ChevronRight, CircleStop, Loader2, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import type { JourneyGraph, JourneyNode, NodeConfigs } from '@/lib/journeys/graph';
 import { NODE_ACCENT, NODE_ICON } from './node-meta';
@@ -258,18 +260,50 @@ export function RunsSheet({
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [openStep, setOpenStep] = useState<number | null>(null);
+  const { canEditSettings } = useAuth();
+  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Debounce typing into the server-side contact search.
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(query.trim()), 300);
+    return () => clearTimeout(id);
+  }, [query]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const qs = filter === 'all' ? '' : `?status=${filter}`;
-      const res = await fetch(`/api/journeys/${journeyId}/runs${qs}`);
+      const qs = new URLSearchParams();
+      if (filter !== 'all') qs.set('status', filter);
+      if (search) qs.set('q', search);
+      const res = await fetch(`/api/journeys/${journeyId}/runs${qs.size ? `?${qs}` : ''}`);
       const data = await res.json().catch(() => ({}));
       setRuns(res.ok ? data.runs : []);
     } finally {
       setLoading(false);
     }
-  }, [journeyId, filter]);
+  }, [journeyId, filter, search]);
+
+  /** Delete a run with its step and message log (admins). */
+  async function deleteRun(run: RunRow) {
+    const who = run.contact_name || run.contact_phone || t('runs.run');
+    if (!(await confirmDialog({ title: t('runs.deleteConfirm', { name: who }), description: t('runs.deleteConfirmDesc'), action: 'delete' }))) return;
+    setDeletingId(run.id);
+    try {
+      const res = await fetch(`/api/journeys/${journeyId}/runs/${run.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || t('runs.deleteFailed'));
+        return;
+      }
+      toast.success(t('runs.deleted', { name: who }));
+      setRuns((list) => list?.filter((r) => r.id !== run.id) ?? null);
+      if (detail?.run.id === run.id) setDetail(null);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   useEffect(() => {
     if (open && !detail) void load();
@@ -332,6 +366,25 @@ export function RunsSheet({
         <div className="space-y-3 px-4 pb-6">
           {!detail ? (
             <>
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t('runs.searchPlaceholder')}
+                  className="h-9 rounded-full pr-8 pl-9"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    aria-label={t('list.clearSearch')}
+                    className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-1.5">
                 {FILTERS.map((f) => (
                   <button
@@ -355,20 +408,20 @@ export function RunsSheet({
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               ) : runs.length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted-foreground">{t('runs.empty')}</p>
+                <p className="py-10 text-center text-sm text-muted-foreground">{search ? t('runs.noResults') : t('runs.empty')}</p>
               ) : (
                 <ul
                   aria-busy={loading}
                   className={cn('divide-y divide-border rounded-lg border border-border transition-opacity', loading && !openingId && 'opacity-60')}
                 >
                   {runs.map((r) => (
-                    <li key={r.id}>
+                    <li key={r.id} className={cn('group flex items-center', deletingId === r.id && 'pointer-events-none opacity-50')}>
                       <button
                         type="button"
                         onClick={() => openRun(r.id)}
                         disabled={openingId !== null}
                         className={cn(
-                          'flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 disabled:cursor-wait',
+                          'flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 disabled:cursor-wait',
                           openingId === r.id && 'bg-muted/50'
                         )}
                       >
@@ -399,6 +452,17 @@ export function RunsSheet({
                           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                         )}
                       </button>
+                      {canEditSettings && r.status !== 'active' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="mr-2 h-8 w-8 shrink-0 text-muted-foreground opacity-100 hover:bg-destructive/10 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                          onClick={() => deleteRun(r)}
+                          aria-label={t('runs.delete')}
+                        >
+                          {deletingId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -437,6 +501,18 @@ export function RunsSheet({
                   >
                     {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleStop className="h-3.5 w-3.5" />}
                     {t('runs.stop')}
+                  </Button>
+                )}
+                {canEditSettings && detail.run.status !== 'active' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => deleteRun(detail.run)}
+                    disabled={deletingId !== null || stopping}
+                  >
+                    {deletingId === detail.run.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    {t('runs.delete')}
                   </Button>
                 )}
               </div>

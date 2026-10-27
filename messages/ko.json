@@ -1837,6 +1837,20 @@
         "template": "📋 템플릿"
       }
     },
+    "leadSync": {
+      "title": "웹사이트 등록 동기화",
+      "desc": "1분마다 웹사이트의 새 등록이 연락처로 추가되고 \"연락처 생성\" 여정이 시작됩니다. 테스트 중에는 데이터가 추가되지 않도록 꺼 두세요.",
+      "statusOn": "켜짐 — 새 등록을 가져오는 중",
+      "statusOff": "꺼짐 — 가져오지 않음",
+      "enableConfirm": "등록 동기화를 켜시겠습니까?",
+      "enableConfirmDesc": "최근 1시간 이후의 새 웹사이트 등록이 연락처로 추가되고 여정이 시작됩니다(WhatsApp 메시지가 발송됩니다).",
+      "enabled": "등록 동기화를 켰습니다",
+      "disabled": "등록 동기화를 껐습니다",
+      "saveFailed": "동기화를 업데이트할 수 없습니다",
+      "lastRun": "마지막 실행 {time}:",
+      "lastReport": "{fetched}개 가져옴, {created}개 추가, {existing}개 이미 있음.",
+      "lastError": "실패 — {error}"
+    },
     "apiKeys": {
       "title": "API 키",
       "description": "키는 공개 REST API(<apiCode>/api/v1</apiCode>)를 인증해 직접 자동화를 구축할 수 있게 해줍니다. <headerCode>Authorization: Bearer &lt;key&gt;</headerCode> 형식으로 전송하세요.",
@@ -2528,7 +2542,14 @@
       "open": "열기",
       "delete": "삭제",
       "deleteConfirm": "“{name}”을(를) 삭제할까요? 진행 중인 연락처가 중단됩니다.",
-      "deleteFailed": "여정을 삭제하지 못했습니다"
+      "deleteFailed": "여정을 삭제하지 못했습니다",
+      "searchPlaceholder": "여정 검색…",
+      "clearSearch": "검색 지우기",
+      "all": "전체",
+      "noResults": "일치하는 여정이 없습니다",
+      "noResultsHint": "다른 이름이나 상태 필터를 사용해 보세요.",
+      "actions": "여정 작업",
+      "deleted": "“{name}”을(를) 삭제했습니다"
     },
     "op": {
       "equals": "같음",
@@ -2618,6 +2639,13 @@
       "stopConfirm": "{name}의 여정을 중지할까요? 이 여정의 메시지를 더 이상 받지 않습니다.",
       "stopped": "{name}의 여정을 중지했습니다",
       "stopFailed": "이 실행을 중지할 수 없습니다",
+      "searchPlaceholder": "연락처 이름 또는 전화번호로 검색…",
+      "noResults": "검색과 일치하는 실행이 없습니다.",
+      "delete": "삭제",
+      "deleteConfirm": "{name}의 실행을 삭제하시겠습니까?",
+      "deleteConfirmDesc": "단계 기록과 메시지 기록이 삭제됩니다. 대기 중인 실행은 계속되지 않습니다.",
+      "deleteFailed": "실행을 삭제할 수 없습니다",
+      "deleted": "{name}의 실행을 삭제했습니다",
       "loadFailed": "이 실행을 불러오지 못했습니다 — 다시 시도하세요",
       "yes": "예",
       "no": "아니요",

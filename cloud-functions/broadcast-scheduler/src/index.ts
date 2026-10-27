@@ -11,7 +11,8 @@
 // header is defence in depth on top of that.
 //
 //   windowKeepalive     ← Cloud Scheduler (*/5 min) — 24h-window check-ins
-//   journeyTick         ← Cloud Scheduler (every minute) — journey waits / timeouts
+//   journeyTick         ← Cloud Scheduler (every minute) — journey waits / timeouts,
+//                         plus the external lead sync (src/lib/lead-sync)
 //
 // Plain exported (req, res) handlers — the Node runtime wraps them in
 // the Functions Framework automatically, so no runtime dependency.
@@ -39,6 +40,7 @@ import {
 import { runWindowKeepalive } from '@/lib/conversations/window-keepalive';
 import { runJourneyTick } from '@/lib/journeys/engine';
 import { liveJourneyDeps } from '@/lib/journeys/dispatch';
+import { runLeadSync } from '@/lib/lead-sync/registrations';
 
 // Shared app modules (flows/ai admin clients used by engineSendText)
 // read the Next.js variable name.
@@ -198,8 +200,13 @@ export async function journeyTick(req: Req, res: Res): Promise<void> {
   try {
     const s = guard(req, res);
     if (!s) return;
+    // Import new external registrations first so their journeys start
+    // this tick. A source outage must not block journey processing.
+    const leadSync = await runLeadSync(s.db).catch((err) => ({
+      error: err instanceof Error ? err.message : String(err),
+    }));
     const report = await runJourneyTick(s.db, liveJourneyDeps);
-    console.log(JSON.stringify({ fn: 'journeyTick', ...report }));
+    console.log(JSON.stringify({ fn: 'journeyTick', ...report, leadSync }));
     res.status(200).json(report);
   } catch (err) {
     console.error('[journeyTick]', err);

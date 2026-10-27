@@ -2,11 +2,16 @@
 // GET /api/journeys/[id]/runs/[runId]   (migration 054)
 // One run: its context (step outputs, variables) and every event with
 // the data each step produced — the execution view.
+//
+// DELETE removes the run with its events and messages (cascade). Admins
+// only; a run executing a step right now ('active') is refused. A
+// waiting run is simply gone, so the engine never resumes it.
 // ============================================================
 
 import { NextResponse } from 'next/server';
 
-import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
+import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/account';
+import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { UUID_RE } from '@/lib/journeys/api';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string; runId: string }> }) {
@@ -47,6 +52,39 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       events: events ?? [],
       messages: messages ?? [],
     });
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string; runId: string }> }) {
+  try {
+    const { accountId } = await requireRole('admin');
+    const { id, runId } = await params;
+    if (!UUID_RE.test(id) || !UUID_RE.test(runId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+
+    // Only the engine (service role) writes enrollments; scope by account.
+    const db = supabaseAdmin();
+    const { data: deleted, error } = await db
+      .from('journey_enrollments')
+      .delete()
+      .eq('id', runId)
+      .eq('journey_id', id)
+      .eq('account_id', accountId)
+      .neq('status', 'active')
+      .select('id');
+    if (error) throw error;
+    if (deleted?.length) return NextResponse.json({ deleted: true });
+
+    const { data: still } = await db
+      .from('journey_enrollments')
+      .select('id')
+      .eq('id', runId)
+      .eq('journey_id', id)
+      .eq('account_id', accountId)
+      .maybeSingle();
+    if (!still) return NextResponse.json({ error: 'Run not found' }, { status: 404 });
+    return NextResponse.json({ error: 'This run is executing a step right now — try again in a moment' }, { status: 409 });
   } catch (error) {
     return toErrorResponse(error);
   }

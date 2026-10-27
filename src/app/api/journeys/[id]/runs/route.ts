@@ -15,18 +15,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { supabase, accountId } = await getCurrentAccount();
     const { id } = await params;
     if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
-    const status = new URL(request.url).searchParams.get('status');
+    const params_ = new URL(request.url).searchParams;
+    const status = params_.get('status');
+    // Contact name/phone search; strip PostgREST filter syntax characters.
+    const search = (params_.get('q') ?? '').replace(/[^\p{L}\p{N} +@.\-_]/gu, '').trim();
 
     let q = supabase
       .from('journey_enrollments')
       .select(
-        'id, contact_id, status, current_node_id, steps_taken, last_error, entered_at, completed_at, updated_at, contacts(name, phone)'
+        `id, contact_id, status, current_node_id, steps_taken, last_error, entered_at, completed_at, updated_at, contacts${search ? '!inner' : ''}(name, phone)`
       )
       .eq('journey_id', id)
       .eq('account_id', accountId)
       .order('entered_at', { ascending: false })
       .limit(50);
     if (status && STATUSES.includes(status)) q = q.eq('status', status);
+    if (search) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`, { referencedTable: 'contacts' });
 
     const { data, error } = await q;
     if (error) throw error;
