@@ -36,6 +36,7 @@ describe('feature registry', () => {
       'voice_transcription',
       'api_access',
       'button_analytics',
+      'callbacks',
     ]);
   });
 });
@@ -108,6 +109,8 @@ describe('featureForPath', () => {
     ['/api/account/api-keys/abc', 'api_access'],
     ['/button-clicks', 'button_analytics'],
     ['/api/button-clicks', 'button_analytics'],
+    ['/callbacks', 'callbacks'],
+    ['/api/callbacks/abc', 'callbacks'],
     ['/api/delivery-settings', 'smart_sending'],
     ['/api/whatsapp/quality', 'smart_sending'],
     ['/api/language-settings', 'ai_agents'],

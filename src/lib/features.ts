@@ -31,6 +31,7 @@ export const FEATURES = [
   'voice_transcription',
   'api_access',
   'button_analytics',
+  'callbacks',
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -92,6 +93,10 @@ export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
   button_analytics: {
     label: 'Button click analytics',
     description: 'Track which template and interactive buttons customers tap.',
+  },
+  callbacks: {
+    label: 'Callback requests',
+    description: 'Callbacks page, sidebar badge and owner/admin notifications when a contact asks for a call.',
   },
   api_access: {
     label: 'API & webhooks',
@@ -158,6 +163,7 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/agents', feature: 'ai_agents' },
   { prefix: '/journeys', feature: 'journeys' },
   { prefix: '/button-clicks', feature: 'button_analytics' },
+  { prefix: '/callbacks', feature: 'callbacks' },
   // Internal APIs
   { prefix: '/api/whatsapp/broadcast', feature: 'broadcasts' },
   { prefix: '/api/automations', feature: 'automations' },
@@ -167,6 +173,7 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/api/conversations/window-keepalive', feature: 'window_keepalive' },
   { prefix: '/api/account/api-keys', feature: 'api_access' },
   { prefix: '/api/button-clicks', feature: 'button_analytics' },
+  { prefix: '/api/callbacks', feature: 'callbacks' },
   { prefix: '/api/delivery-settings', feature: 'smart_sending' },
   { prefix: '/api/whatsapp/quality', feature: 'smart_sending' },
   { prefix: '/api/language-settings', feature: 'ai_agents' },

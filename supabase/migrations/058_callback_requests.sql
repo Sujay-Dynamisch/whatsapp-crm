@@ -7,6 +7,10 @@
 -- request opens a new row. Each new request notifies the account's
 -- owner and admins (notifications type 'callback_requested').
 --
+-- Gated by the 'callbacks' account feature (045): while it's off no
+-- requests open, nobody is notified, and reads/updates are blocked by
+-- RESTRICTIVE policies.
+--
 -- Idempotent — safe to re-run.
 -- ============================================================
 
@@ -41,6 +45,14 @@ DROP POLICY IF EXISTS callback_requests_update ON callback_requests;
 CREATE POLICY callback_requests_update ON callback_requests FOR UPDATE
   USING (is_account_member(account_id, 'agent'));
 
+DROP POLICY IF EXISTS feature_gate_select ON callback_requests;
+CREATE POLICY feature_gate_select ON callback_requests AS RESTRICTIVE FOR SELECT TO authenticated
+  USING (public.account_has_feature(account_id, 'callbacks'));
+
+DROP POLICY IF EXISTS feature_gate_update ON callback_requests;
+CREATE POLICY feature_gate_update ON callback_requests AS RESTRICTIVE FOR UPDATE TO authenticated
+  USING (public.account_has_feature(account_id, 'callbacks'));
+
 -- Notifications learn a second type.
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
 ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
@@ -69,6 +81,11 @@ BEGIN
 
   SELECT * INTO v_contact FROM contacts WHERE id = NEW.contact_id;
   IF v_contact.id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Module switched off for this account by the system admin.
+  IF NOT public.account_has_feature(v_contact.account_id, 'callbacks') THEN
     RETURN NEW;
   END IF;
 
