@@ -491,7 +491,14 @@ export function AiConfig() {
                 disabled={disabled || !autoReplyEnabled}
               >
                 <SelectTrigger id="ai-handoff">
-                  <SelectValue />
+                  {/* Base UI renders the raw value (a user id) unless given the label. */}
+                  <SelectValue>
+                    {(() => {
+                      if (!handoffAgentId) return t('handoffQueue');
+                      const m = members.find((x) => x.user_id === handoffAgentId);
+                      return m ? memberLabel(m) : '…';
+                    })()}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={HANDOFF_QUEUE}>
