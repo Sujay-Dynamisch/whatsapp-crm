@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
     claim: true as boolean,
     updatePayload: null as Record<string, unknown> | null,
     rpcCalls: [] as { name: string; args: unknown }[],
+    // Successive answers to "newest customer message id"; empty → this inbound.
+    latestInboundIds: [] as string[],
   },
 }))
 
@@ -41,6 +43,20 @@ vi.mock('./admin-client', () => ({
           in: () => chain,
           limit: () =>
             Promise.resolve({ data: h.state.autoResponders, error: null }),
+        }
+        return chain
+      }
+      if (table === 'messages') {
+        // newest customer message → burst check (#double-reply)
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          order: () => chain,
+          limit: () => chain,
+          maybeSingle: () => {
+            const id = h.state.latestInboundIds.shift() ?? 'wamid.inbound-1'
+            return Promise.resolve({ data: { message_id: id }, error: null })
+          },
         }
         return chain
       }
@@ -73,6 +89,7 @@ const ARGS = {
   contactId: 'contact-1',
   configOwnerUserId: 'user-1',
   inboundMessageId: 'wamid.inbound-1',
+  settleMs: 0,
 }
 
 function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
@@ -100,6 +117,7 @@ beforeEach(() => {
   h.state.claim = true
   h.state.updatePayload = null
   h.state.rpcCalls = []
+  h.state.latestInboundIds = []
   h.loadAiConfig.mockResolvedValue(aiConfig())
   h.buildConversationContext.mockResolvedValue([{ role: 'user', content: 'hi' }])
   h.retrieveKnowledge.mockResolvedValue([])
@@ -200,6 +218,22 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     expect(h.generateReply).not.toHaveBeenCalled()
     expect(h.engineSendText).not.toHaveBeenCalled()
     expect(h.sendTypingIndicator).not.toHaveBeenCalled()
+  })
+})
+
+describe('dispatchInboundToAiReply — message bursts', () => {
+  it('leaves the answer to the newest message when the customer kept typing', async () => {
+    h.state.latestInboundIds = ['wamid.inbound-2']
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('drops its reply when a new message arrived while the LLM ran', async () => {
+    h.state.latestInboundIds = ['wamid.inbound-1', 'wamid.inbound-2']
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.generateReply).toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
   })
 })
 

@@ -995,7 +995,8 @@ async function processMessage(
 
   // Journeys (migration 050): any customer message resumes their "wait
   // for reply" steps; a button tap can also start a journey. Never throws.
-  await timed('journeys', () =>
+  // When a journey handled it, its predefined reply answers — skip the AI.
+  const journeyHandled = await timed('journeys', () =>
     dispatchJourneyInbound(supabaseAdmin(), {
       accountId,
       contactId: contactRecord.id,
@@ -1114,11 +1115,12 @@ async function processMessage(
   timings.automations = Date.now() - automationsStarted
 
   // AI auto-reply. Runs for text / interactive button replies that the
-  // deterministic flow runner did NOT consume (flows win over the LLM),
-  // and only when the account has enabled it. Awaited inside `after()`
+  // deterministic flow runner or a journey did NOT consume (flows and
+  // journeys' predefined replies win over the LLM), and only when the
+  // account has enabled it. Awaited inside `after()`
   // (same reason as the webhook dispatch below); `dispatchInboundToAiReply`
   // owns its eligibility gates + try/catch and never throws.
-  if (!flowConsumed && inboundText.trim()) {
+  if (!flowConsumed && !journeyHandled && inboundText.trim()) {
     await timed('ai_reply', () =>
       dispatchInboundToAiReply({
         accountId,

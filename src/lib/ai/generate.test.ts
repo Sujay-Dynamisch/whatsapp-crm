@@ -192,3 +192,21 @@ describe('generateReply — Anthropic', () => {
     expect(body.messages).toHaveLength(1)
   })
 })
+
+describe('parseGeneration — structured (n8n-style) output', () => {
+  it('unwraps the reply so customers never see JSON', () => {
+    expect(
+      parseGeneration('{ "intent": "WEBINAR_INFO", "reply": "Hi! 👋 Happy to help.", "requires_human": false }').text,
+    ).toBe('Hi! 👋 Happy to help.')
+  })
+
+  it('handles a fenced JSON block and requires_human → handoff', () => {
+    const r = parseGeneration('```json\n{"intent":"CALLBACK","reply":"Our team will call you.","requires_human":true}\n```')
+    expect(r).toMatchObject({ text: 'Our team will call you.', handoff: true })
+  })
+
+  it('leaves ordinary text and non-reply JSON untouched', () => {
+    expect(parseGeneration('Price is {as discussed}').text).toBe('Price is {as discussed}')
+    expect(parseGeneration('{"a":1}').text).toBe('{"a":1}')
+  })
+})

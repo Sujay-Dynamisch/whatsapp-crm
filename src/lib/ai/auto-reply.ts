@@ -15,6 +15,26 @@ import { sendTypingIndicator } from '@/lib/whatsapp/meta-api'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 import { accountHasFeature } from '@/lib/features-server'
 
+/** How long a burst of customer messages may take before the AI answers. */
+const BURST_SETTLE_MS = 4000
+
+/** True when the customer sent another message after `inboundMessageId`. */
+async function newerInboundExists(
+  db: ReturnType<typeof supabaseAdmin>,
+  conversationId: string,
+  inboundMessageId: string,
+): Promise<boolean> {
+  const { data } = await db
+    .from('messages')
+    .select('message_id')
+    .eq('conversation_id', conversationId)
+    .eq('sender_type', 'customer')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return !!data?.message_id && data.message_id !== inboundMessageId
+}
+
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
   accountId: string
@@ -27,6 +47,8 @@ interface DispatchArgs {
    *  a typing indicator (which also marks it read) is shown while the
    *  reply is generated. Optional so older callers keep working. */
   inboundMessageId?: string
+  /** Burst settle wait before answering (tests pass 0). */
+  settleMs?: number
 }
 
 /**
@@ -57,6 +79,7 @@ export async function dispatchInboundToAiReply(
     contactId,
     configOwnerUserId,
     inboundMessageId,
+    settleMs = BURST_SETTLE_MS,
   } = args
 
   try {
@@ -96,6 +119,16 @@ export async function dispatchInboundToAiReply(
     // Cheap early-out; the authoritative cap check is the atomic claim
     // below (this read can race a concurrent inbound).
     if (conv.ai_reply_count >= config.autoReplyMaxPerConversation) return
+
+    // Customers often send 2–3 messages in a burst ("Hello" / "Can I get
+    // more info?"). Each inbound runs this, and each would answer the
+    // whole thread — near-identical double replies. Let the burst settle
+    // and leave the answer to the newest message's run (its context has
+    // all of them); skipping here also saves the LLM call.
+    if (inboundMessageId) {
+      if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs))
+      if (await newerInboundExists(db, conversationId, inboundMessageId)) return
+    }
 
     const messages = await buildConversationContext(db, conversationId)
     if (messages.length === 0) return
@@ -206,6 +239,9 @@ export async function dispatchInboundToAiReply(
       return
     }
     if (claimed !== true) return // lost the per-conversation cap race
+
+    // A message that arrived while the LLM ran gets its own (fuller) reply.
+    if (inboundMessageId && (await newerInboundExists(db, conversationId, inboundMessageId))) return
 
     await engineSendText({
       accountId,

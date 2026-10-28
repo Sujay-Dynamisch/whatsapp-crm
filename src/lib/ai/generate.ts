@@ -74,7 +74,29 @@ export function parseGeneration(
   raw: string,
   usage: AiUsage | null = null,
 ): GenerateResult {
-  const handoff = raw.includes(HANDOFF_SENTINEL)
-  const text = raw.split(HANDOFF_SENTINEL).join('').trim()
+  let handoff = raw.includes(HANDOFF_SENTINEL)
+  let text = raw.split(HANDOFF_SENTINEL).join('').trim()
+  // Prompts written for n8n-style parsers make the model answer as
+  // `{"intent": …, "reply": "…", "requires_human": …}`. Never send that
+  // JSON to a customer — unwrap the reply and honour requires_human.
+  const structured = parseStructuredReply(text)
+  if (structured) {
+    text = structured.reply
+    handoff = handoff || structured.requiresHuman
+  }
   return { text, handoff, usage }
+}
+
+function parseStructuredReply(
+  text: string,
+): { reply: string; requiresHuman: boolean } | null {
+  const body = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+  if (!body.startsWith('{') || !body.endsWith('}')) return null
+  try {
+    const obj = JSON.parse(body) as Record<string, unknown>
+    if (typeof obj.reply !== 'string') return null
+    return { reply: obj.reply.trim(), requiresHuman: obj.requires_human === true }
+  } catch {
+    return null
+  }
 }
