@@ -11,9 +11,10 @@ import { getNotificationPermission, readBrowserNotifyPref } from "@/lib/notifica
  * Open (not Done) callback requests for the sidebar badge (migration 058).
  * RLS scopes reads to the user's account. Mounted once (sidebar), so it
  * also announces new requests: a toast, plus a desktop notification when
- * the device opted into browser notifications.
+ * the device opted into browser notifications. Idle (0, no realtime)
+ * while the account's "callbacks" feature is off.
  */
-export function useOpenCallbacks(): number {
+export function useOpenCallbacks(enabled = true): number {
   const [count, setCount] = useState(0);
   const t = useTranslations("Callbacks");
   // Latest translator for the long-lived realtime callback.
@@ -26,6 +27,7 @@ export function useOpenCallbacks(): number {
   }, [t, router]);
 
   useEffect(() => {
+    if (!enabled) return;
     const supabase = createClient();
     let cancelled = false;
 
@@ -69,7 +71,7 @@ export function useOpenCallbacks(): number {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [enabled]);
 
-  return count;
+  return enabled ? count : 0;
 }
