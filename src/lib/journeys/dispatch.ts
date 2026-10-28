@@ -157,14 +157,19 @@ export async function dispatchJourneyTrigger(
  * Every inbound customer message: resume replies (with the reply text
  * as {{ reply.text }}), then start message / keyword and button
  * journeys.
+ *
+ * Returns true when a journey handled the message (resumed a reply
+ * wait, re-sent a fallback, or started a run). The journey's own
+ * predefined replies then answer it, so the caller skips the AI
+ * auto-reply — no double answer and no LLM tokens spent.
  */
 export async function dispatchJourneyInbound(
   db: SupabaseClient,
   args: { accountId: string; contactId: string; buttonText?: string | null; text?: string | null },
   deps: JourneyDeps = liveJourneyDeps
-): Promise<void> {
+): Promise<boolean> {
   try {
-    if (!(await accountHasFeature(db, args.accountId, 'journeys'))) return;
+    if (!(await accountHasFeature(db, args.accountId, 'journeys'))) return false;
     const text = args.text ?? args.buttonText ?? '';
     // The 24-hour window just opened: re-send undelivered journey
     // templates (e.g. Meta's 131049 "healthy ecosystem engagement") as text.
@@ -185,20 +190,27 @@ export async function dispatchJourneyInbound(
         );
       }
     );
-    await resumeOnReply(db, args.accountId, args.contactId, deps, { text, button: args.buttonText ?? null }, fellBack);
-    await dispatchJourneyTrigger(
-      db,
-      { accountId: args.accountId, contactId: args.contactId, trigger: 'inbound_message', text },
-      deps
-    );
-    if (args.buttonText) {
-      await dispatchJourneyTrigger(
+    let handled = fellBack.size > 0;
+    handled =
+      (await resumeOnReply(db, args.accountId, args.contactId, deps, { text, button: args.buttonText ?? null }, fellBack)) > 0 ||
+      handled;
+    handled =
+      (await dispatchJourneyTrigger(
         db,
-        { accountId: args.accountId, contactId: args.contactId, trigger: 'button_clicked', buttonText: args.buttonText },
+        { accountId: args.accountId, contactId: args.contactId, trigger: 'inbound_message', text },
         deps
-      );
+      )) > 0 || handled;
+    if (args.buttonText) {
+      handled =
+        (await dispatchJourneyTrigger(
+          db,
+          { accountId: args.accountId, contactId: args.contactId, trigger: 'button_clicked', buttonText: args.buttonText },
+          deps
+        )) > 0 || handled;
     }
+    return handled;
   } catch (err) {
     console.error('[journeys] inbound dispatch failed:', err instanceof Error ? err.message : err);
+    return false;
   }
 }
