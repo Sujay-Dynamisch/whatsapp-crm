@@ -392,10 +392,11 @@ export function RunsSheet({
                     type="button"
                     onClick={() => setFilter(f)}
                     className={cn(
-                      'rounded-full border px-2.5 py-1 text-xs font-medium',
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
                       filter === f ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'
                     )}
                   >
+                    {loading && !openingId && filter === f && <Loader2 className="h-3 w-3 animate-spin" />}
                     {t(`runs.filter.${f}`)}
                   </button>
                 ))}

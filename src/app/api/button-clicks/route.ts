@@ -12,7 +12,7 @@ import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 
 const RANGES = [7, 30, 90, 365];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const RECENT_LIMIT = 100;
+const RECENT_LIMIT = 500;
 
 export async function GET(request: Request) {
   try {

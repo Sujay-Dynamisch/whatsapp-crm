@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { useOpenCallbacks } from "@/hooks/use-open-callbacks";
 import {
   Bell,
   Bot,
@@ -19,6 +20,7 @@ import {
   Radio,
   Route,
   MousePointerClick,
+  PhoneCall,
   Settings,
   Shield,
   ShieldCheck,
@@ -105,6 +107,7 @@ const navItems: NavItem[] = [
   { href: "/pipelines", labelKey: "pipelines", icon: GitBranch, feature: "pipelines" },
   { href: "/broadcasts", labelKey: "broadcasts", icon: Radio, feature: "broadcasts" },
   { href: "/button-clicks", labelKey: "buttonClicks", icon: MousePointerClick, feature: "button_analytics" },
+  { href: "/callbacks", labelKey: "callbacks", icon: PhoneCall },
   { href: "/automations", labelKey: "automations", icon: Zap, feature: "automations" },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, feature: "flows" },
   { href: "/journeys", labelKey: "journeys", icon: Route, feature: "journeys" },
@@ -131,6 +134,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const isSysAdmin = isSystemAdmin(user?.email, profile?.role);
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
+  const openCallbacks = useOpenCallbacks();
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -239,6 +243,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               // viewing this section".
               const showNotificationBadge =
                 item.href === "/notifications" && unreadNotifications > 0;
+              // Requests still waiting for a call.
+              const showCallbackBadge = item.href === "/callbacks" && openCallbacks > 0;
 
               return (
                 <li key={item.href}>
@@ -277,6 +283,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                         className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
                       >
                         {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                      </span>
+                    )}
+                    {showCallbackBadge && (
+                      <span
+                        aria-label={t("openCallbacks", { count: openCallbacks })}
+                        className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white"
+                      >
+                        {openCallbacks > 99 ? "99+" : openCallbacks}
                       </span>
                     )}
                   </Link>
