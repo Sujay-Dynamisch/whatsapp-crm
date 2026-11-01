@@ -2911,5 +2911,120 @@
       "feedFailing": "웹사이트 리드 피드가 실패 중입니다 — 새 등록이 들어오지 않습니다.",
       "open": "열기"
     }
+  },
+  "Permissions": {
+    "redirected": "역할에 {area} 권한이 없어 대시보드로 이동했습니다.",
+    "noAccessTitle": "역할에 포함되지 않음",
+    "noAccessDesc": "역할({role})에 {area} 권한이 없습니다. 필요하면 관리자에게 요청하세요.",
+    "viewOnly": "보기 전용 — 역할({role})은 {area}을(를) 볼 수 있지만 변경할 수 없습니다.",
+    "levels": {
+      "none": "없음",
+      "view": "보기",
+      "edit": "편집"
+    },
+    "presets": {
+      "sales": "영업 담당",
+      "support": "지원 담당",
+      "marketing": "마케팅",
+      "manager": "읽기 전용 관리자"
+    },
+    "saveFailed": "역할을 저장하지 못했습니다",
+    "roleUpdated": "“{name}” 역할을 업데이트했습니다",
+    "roleCreated": "“{name}” 역할을 만들었습니다",
+    "editRole": "“{name}” 역할 편집",
+    "newRole": "새 역할",
+    "editorDesc": "이 역할의 사용자가 보고 변경할 수 있는 것을 선택하세요. 역할은 기본 역할을 바탕으로 하며 권한을 줄이기만 할 수 있습니다.",
+    "startFrom": "시작:",
+    "name": "역할 이름",
+    "namePlaceholder": "예: 영업 담당",
+    "baseRole": "기본 역할",
+    "baseHint": {
+      "admin": "관리자는 팀과 설정을 포함해 모든 곳에서 편집 권한을 받을 수 있습니다.",
+      "agent": "상담원은 일상 업무를 편집할 수 있고, 설정·템플릿·AI·팀·API는 최대 보기입니다.",
+      "viewer": "뷰어는 아무것도 변경하지 않으며 최대 보기 권한입니다."
+    },
+    "description": "설명",
+    "optional": "선택",
+    "descriptionPlaceholder": "이 역할의 용도는?",
+    "accessTitle": "영역별 권한",
+    "allTo": "모두 {level}",
+    "featureOff": "이 계정에서 꺼짐",
+    "aboveBase": "{base} 기본 역할로는 불가능",
+    "cancel": "취소",
+    "save": "저장",
+    "create": "역할 만들기",
+    "deleteConfirm": "“{name}” 역할을 삭제할까요?",
+    "deleteFailed": "역할을 삭제하지 못했습니다",
+    "roleDeleted": "“{name}” 역할을 삭제했습니다",
+    "rolesTitle": "역할",
+    "rolesHint": "사용자 지정 역할은 각 사용자가 CRM의 어떤 부분을 보고 변경할 수 있는지 정합니다. 없는 멤버는 기본 제공 역할을 유지합니다.",
+    "noRoles": "아직 사용자 지정 역할이 없습니다 — 모두 기본 제공 역할입니다.",
+    "basedOn": "{base} 기반",
+    "usage": "{members, plural, =0 {멤버 없음} other {멤버 #명}}{invites, plural, =0 {} other { · 대기 중인 초대 #개}}",
+    "edit": "편집",
+    "delete": "삭제",
+    "customRoles": "사용자 지정 역할",
+    "areas": {
+      "inbox": {
+        "label": "받은편지함",
+        "desc": "대화, 메시지 보내기, AI 초안"
+      },
+      "contacts": {
+        "label": "연락처",
+        "desc": "연락처, 태그, 메모, 사용자 지정 필드 값"
+      },
+      "pipelines": {
+        "label": "파이프라인 및 거래",
+        "desc": "파이프라인, 단계, 거래"
+      },
+      "broadcasts": {
+        "label": "브로드캐스트",
+        "desc": "대량 템플릿 캠페인"
+      },
+      "templates": {
+        "label": "메시지 템플릿",
+        "desc": "WhatsApp 템플릿과 캐러셀"
+      },
+      "automations": {
+        "label": "자동화",
+        "desc": "트리거 기반 자동화"
+      },
+      "flows": {
+        "label": "플로우",
+        "desc": "챗봇 플로우"
+      },
+      "journeys": {
+        "label": "여정",
+        "desc": "고객 여정과 실행"
+      },
+      "ai_agents": {
+        "label": "AI 에이전트",
+        "desc": "AI 설정, 지식 베이스, 플레이그라운드"
+      },
+      "callbacks": {
+        "label": "콜백",
+        "desc": "콜백 요청"
+      },
+      "button_clicks": {
+        "label": "버튼 클릭",
+        "desc": "버튼 클릭 분석"
+      },
+      "failed_messages": {
+        "label": "실패한 메시지",
+        "desc": "실패한 메시지, 건너뛴 등록, 상태"
+      },
+      "settings": {
+        "label": "계정 설정",
+        "desc": "WhatsApp 연결, 필드, 빠른 답장, 발송, 언어"
+      },
+      "members": {
+        "label": "팀 및 역할",
+        "desc": "멤버, 초대, 역할"
+      },
+      "api_access": {
+        "label": "API 및 웹훅",
+        "desc": "API 키와 발신 웹훅"
+      }
+    }
   }
 }

@@ -27,6 +27,7 @@ import {
   inviteUrl,
 } from "@/lib/auth/invitations";
 import { isAccountRole } from "@/lib/auth/roles";
+import { UUID_RE } from "@/lib/journeys/api";
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -140,15 +141,18 @@ export async function GET() {
   try {
     const ctx = await requireRole("admin");
 
-    const { data, error } = await ctx.supabase
-      .from("account_invitations")
-      .select(
-        "id, role, label, created_by_user_id, created_at, expires_at, accepted_at, accepted_by_user_id",
-      )
-      .eq("account_id", ctx.accountId)
-      .is("accepted_at", null)
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false });
+    const load = (columns: string) =>
+      ctx.supabase
+        .from("account_invitations")
+        .select(columns)
+        .eq("account_id", ctx.accountId)
+        .is("accepted_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false });
+    const base = "id, role, label, created_by_user_id, created_at, expires_at, accepted_at, accepted_by_user_id";
+    // custom_role_id arrives with migration 062.
+    let { data, error } = await load(`${base}, custom_role_id`);
+    if (error && /custom_role_id/.test(error.message)) ({ data, error } = await load(base));
 
     if (error) {
       console.error("[GET /api/account/invitations] fetch error:", error);
@@ -179,10 +183,26 @@ export async function POST(request: Request) {
     if (!limit.success) return rateLimitResponse(limit);
 
     const body = (await request.json().catch(() => null)) as
-      | { role?: unknown; expiresInDays?: unknown; label?: unknown }
+      | { role?: unknown; custom_role_id?: unknown; expiresInDays?: unknown; label?: unknown }
       | null;
 
-    const role = body?.role;
+    let role = body?.role;
+    // Invite with a custom role (migration 062): its base role is the role.
+    let customRoleId: string | null = null;
+    if (body?.custom_role_id !== undefined && body.custom_role_id !== null) {
+      if (typeof body.custom_role_id !== "string" || !UUID_RE.test(body.custom_role_id)) {
+        return NextResponse.json({ error: "'custom_role_id' must be a role id" }, { status: 400 });
+      }
+      const { data: custom } = await ctx.supabase
+        .from("account_custom_roles")
+        .select("id, base_role")
+        .eq("id", body.custom_role_id)
+        .eq("account_id", ctx.accountId)
+        .maybeSingle();
+      if (!custom) return NextResponse.json({ error: "Role not found" }, { status: 400 });
+      customRoleId = custom.id as string;
+      role = custom.base_role;
+    }
     if (!isAccountRole(role) || role === "owner") {
       // The DB CHECK already rejects 'owner', but failing fast
       // here gives a clearer 400 than the eventual constraint
@@ -222,11 +242,12 @@ export async function POST(request: Request) {
         account_id: ctx.accountId,
         token_hash: hash,
         role,
+        ...(customRoleId ? { custom_role_id: customRoleId } : {}),
         created_by_user_id: ctx.userId,
         label,
         expires_at: expiresAt.toISOString(),
       })
-      .select("id, role, label, expires_at, created_at")
+      .select(customRoleId ? "id, role, custom_role_id, label, expires_at, created_at" : "id, role, label, expires_at, created_at")
       .single();
 
     if (error || !data) {

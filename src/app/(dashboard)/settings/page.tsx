@@ -20,7 +20,8 @@ import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { SmartSendingPanel } from '@/components/settings/smart-sending-panel';
 import { LanguagePanel } from '@/components/settings/language-panel';
-import { FeatureUnavailable } from '@/components/layout/feature-gate';
+import { FeatureUnavailable, NoAccess, ViewOnlyNotice } from '@/components/layout/feature-gate';
+import { SETTINGS_SECTION_AREA } from '@/lib/auth/permissions';
 import {
   resolveSection,
   SECTION_FEATURE,
@@ -46,7 +47,7 @@ export default function SettingsPage() {
 function SettingsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { defaultCurrency, hasFeature } = useAuth();
+  const { defaultCurrency, hasFeature, can } = useAuth();
   const { mode } = useTheme();
   const t = useTranslations('Settings');
 
@@ -55,6 +56,7 @@ function SettingsPageInner() {
   // app sidebar/header working. Legacy tab values (tags, custom-fields)
   // resolve onto their new home; unknown/empty → the Overview landing.
   const section = resolveSection(searchParams.get('tab'));
+  const sectionArea = SETTINGS_SECTION_AREA[section];
 
   const go = (next: SettingsSection) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -105,8 +107,13 @@ function SettingsPageInner() {
         <div className="min-w-0">
           {SECTION_FEATURE[section] && !hasFeature(SECTION_FEATURE[section]!) ? (
             <FeatureUnavailable feature={SECTION_FEATURE[section]!} />
+          ) : sectionArea && !can(sectionArea) ? (
+            <NoAccess area={sectionArea} />
           ) : (
-            panel[section]
+            <>
+              {sectionArea && !can(sectionArea, 'edit') && <ViewOnlyNotice area={sectionArea} />}
+              {panel[section]}
+            </>
           )}
         </div>
       </div>

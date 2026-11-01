@@ -21,6 +21,7 @@ import {
   type AccountRole,
 } from "@/lib/auth/roles";
 import { isFeatureEnabled, type Feature } from "@/lib/features";
+import { atLeast, levelFor, parseAccess, type AccessLevel, type Area, type MyAccess } from "@/lib/auth/permissions";
 
 interface Profile {
   id: string;
@@ -139,6 +140,14 @@ interface AuthContextValue {
    * the real rule regardless of what the UI shows.
    */
   hasFeature: (feature: Feature) => boolean;
+  /** The caller's custom role (migration 062), or null when on a built-in role. */
+  access: MyAccess | null;
+  /**
+   * Whether the caller's role reaches `level` in `area`. Always true
+   * without a custom role (built-in roles keep their own checks); the
+   * server enforces the real rule regardless of what the UI shows.
+   */
+  can: (area: Area, level?: AccessLevel) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -172,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [account, setAccount] = useState<AccountSummary | null>(null);
+  const [access, setAccess] = useState<MyAccess | null>(null);
   const [loading, setLoading] = useState(true);
   // Why the account/role couldn't be established, when it couldn't.
   // Null on the happy path.
@@ -308,6 +318,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           account_role: accountRole,
         });
         setAccount(accountRow);
+        // Custom role (migration 062). An older schema has no such RPC:
+        // treat as no custom role (built-in role rules apply).
+        const { data: perms, error: permsErr } = await supabase.rpc("my_permissions");
+        setAccess(permsErr ? null : parseAccess(perms));
         if (!data.account_id || !accountRole) {
           // The row exists but carries no tenancy. Migration 017 made
           // both columns NOT NULL for new signups, so this is a user
@@ -393,6 +407,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastFetchedUserIdRef.current = null;
         setProfile(null);
         setAccount(null);
+        setAccess(null);
         setProfileLoading(false);
       }
 
@@ -412,6 +427,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setAccount(null);
+    setAccess(null);
     window.location.href = "/login";
   }, []);
 
@@ -445,6 +461,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [disabledFeatures],
   );
 
+  const can = useCallback(
+    (area: Area, level: AccessLevel = "view") => atLeast(levelFor(access, area), level),
+    [access],
+  );
+
   // Signed out is not a broken account — the shell redirects to /login
   // before anything reads this.
   const accountStatus: AccountStatus = !user
@@ -472,6 +493,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accountStatusDetail: statusDetail,
         ...derived,
         hasFeature,
+        access,
+        can,
       }}
     >
       {children}
@@ -515,6 +538,8 @@ export function useAuth(): AuthContextValue {
       canEditSettings: false,
       canSendMessages: false,
       hasFeature: () => true,
+      access: null,
+      can: () => true,
     };
   }
   return ctx;

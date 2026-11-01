@@ -2911,5 +2911,120 @@
       "feedFailing": "El feed de leads del sitio está fallando — no llegan nuevos registros.",
       "open": "Abrir"
     }
+  },
+  "Permissions": {
+    "redirected": "Tu rol no incluye {area}, así que te llevamos al panel.",
+    "noAccessTitle": "No forma parte de tu rol",
+    "noAccessDesc": "Tu rol ({role}) no incluye {area}. Pídeselo a un administrador si lo necesitas.",
+    "viewOnly": "Solo lectura — tu rol ({role}) puede ver {area} pero no cambiar nada.",
+    "levels": {
+      "none": "Ninguno",
+      "view": "Ver",
+      "edit": "Editar"
+    },
+    "presets": {
+      "sales": "Agente de ventas",
+      "support": "Agente de soporte",
+      "marketing": "Marketing",
+      "manager": "Gerente (solo lectura)"
+    },
+    "saveFailed": "No se pudo guardar el rol",
+    "roleUpdated": "Rol “{name}” actualizado",
+    "roleCreated": "Rol “{name}” creado",
+    "editRole": "Editar rol “{name}”",
+    "newRole": "Nuevo rol",
+    "editorDesc": "Elige qué pueden ver y cambiar las personas con este rol. Un rol parte de un rol base y solo puede quitarle acceso.",
+    "startFrom": "Empezar desde:",
+    "name": "Nombre del rol",
+    "namePlaceholder": "p. ej. Agente de ventas",
+    "baseRole": "Rol base",
+    "baseHint": {
+      "admin": "Los administradores pueden tener edición en todo, incluidos equipo y ajustes.",
+      "agent": "Los agentes pueden editar el trabajo diario; ajustes, plantillas, IA, equipo y API como mucho ver.",
+      "viewer": "Los lectores nunca cambian nada — como mucho ver."
+    },
+    "description": "Descripción",
+    "optional": "opcional",
+    "descriptionPlaceholder": "¿Para qué es este rol?",
+    "accessTitle": "Acceso por área",
+    "allTo": "Todo {level}",
+    "featureOff": "desactivado en esta cuenta",
+    "aboveBase": "No es posible con el rol base {base}",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "create": "Crear rol",
+    "deleteConfirm": "¿Eliminar el rol “{name}”?",
+    "deleteFailed": "No se pudo eliminar el rol",
+    "roleDeleted": "Rol “{name}” eliminado",
+    "rolesTitle": "Roles",
+    "rolesHint": "Los roles personalizados deciden qué partes del CRM puede ver y cambiar cada persona. Quien no tiene uno conserva su rol integrado.",
+    "noRoles": "Aún no hay roles personalizados — todos tienen un rol integrado.",
+    "basedOn": "Basado en {base}",
+    "usage": "{members, plural, =0 {Sin miembros} one {# miembro} other {# miembros}}{invites, plural, =0 {} one { · # invitación pendiente} other { · # invitaciones pendientes}}",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "customRoles": "Roles personalizados",
+    "areas": {
+      "inbox": {
+        "label": "Bandeja de entrada",
+        "desc": "Conversaciones, envío de mensajes, borradores de IA"
+      },
+      "contacts": {
+        "label": "Contactos",
+        "desc": "Contactos, etiquetas, notas, valores de campos"
+      },
+      "pipelines": {
+        "label": "Pipelines y negocios",
+        "desc": "Pipelines, etapas y negocios"
+      },
+      "broadcasts": {
+        "label": "Difusiones",
+        "desc": "Campañas de plantillas masivas"
+      },
+      "templates": {
+        "label": "Plantillas de mensaje",
+        "desc": "Plantillas y carruseles de WhatsApp"
+      },
+      "automations": {
+        "label": "Automatizaciones",
+        "desc": "Automatizaciones por disparador"
+      },
+      "flows": {
+        "label": "Flujos",
+        "desc": "Flujos de chatbot"
+      },
+      "journeys": {
+        "label": "Recorridos",
+        "desc": "Recorridos de clientes y ejecuciones"
+      },
+      "ai_agents": {
+        "label": "Agentes de IA",
+        "desc": "Ajustes de IA, base de conocimiento, playground"
+      },
+      "callbacks": {
+        "label": "Devoluciones de llamada",
+        "desc": "Solicitudes de llamada"
+      },
+      "button_clicks": {
+        "label": "Clics en botones",
+        "desc": "Análisis de clics en botones"
+      },
+      "failed_messages": {
+        "label": "Mensajes fallidos",
+        "desc": "Mensajes fallidos, registros omitidos, salud"
+      },
+      "settings": {
+        "label": "Ajustes de la cuenta",
+        "desc": "Conexión de WhatsApp, campos, respuestas rápidas, envío, idioma"
+      },
+      "members": {
+        "label": "Equipo y roles",
+        "desc": "Miembros, invitaciones y roles"
+      },
+      "api_access": {
+        "label": "API y webhooks",
+        "desc": "Claves de API y webhooks salientes"
+      }
+    }
   }
 }
