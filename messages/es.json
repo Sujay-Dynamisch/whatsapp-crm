@@ -15,6 +15,7 @@
     "createAccount": "Crear cuenta"
   },
   "Sidebar": {
+    "failedMessages": "Mensajes fallidos",
     "title": "Plantilla de CRM para WhatsApp",
     "primaryNav": "Principal",
     "dashboard": "Panel",
@@ -47,6 +48,7 @@
     "journeys": "Recorridos"
   },
   "Header": {
+    "failedMessages": "Mensajes fallidos",
     "dashboard": "Panel",
     "callbacks": "Devoluciones de llamada",
     "inbox": "Bandeja de entrada",
@@ -2452,6 +2454,7 @@
       "schedule": "Según una programación"
     },
     "condition": {
+      "feature_enabled": "La función está activa",
       "replied": "Ha respondido",
       "clicked_button": "Tocó un botón",
       "has_tag": "Tiene una etiqueta",
@@ -2498,6 +2501,9 @@
       "chooseMember": "Elige un miembro del equipo"
     },
     "form": {
+      "feature": "Función",
+      "featureHelp": "Sí cuando el administrador del sistema activó esta función para la cuenta.",
+      "chooseFeature": "Elige una función…",
       "startsWhen": "Empieza cuando",
       "tag": "Etiqueta",
       "chooseTag": "Elige una etiqueta…",
@@ -2620,6 +2626,8 @@
       "stepId": "Id del paso:"
     },
     "editor": {
+      "callbacksOff": "Las solicitudes de llamada están desactivadas en esta cuenta, así que quien pida una llamada no aparece en la página de devoluciones y nadie recibe aviso. Pide al administrador del sistema que la active, o añade un paso “Si / si no → La función está activa (Solicitudes de llamada)” antes de la etiqueta de llamada.",
+      "callbacksOffGuarded": "Las solicitudes de llamada están desactivadas en esta cuenta — este recorrido omite la etiqueta y pasa el lead directo a tu equipo.",
       "back": "Volver a recorridos",
       "name": "Nombre del recorrido",
       "addStep": "Añadir paso",
@@ -2786,6 +2794,122 @@
         "exited": "Salió",
         "failed": "Fallida"
       }
+    }
+  },
+  "FailedMessages": {
+    "title": "Mensajes fallidos",
+    "subtitle": "Mensajes y plantillas que no llegaron — reenviar, programar, enviar un texto personalizado o descartar.",
+    "refresh": "Actualizar",
+    "loadFailed": "No se pudieron cargar los mensajes fallidos",
+    "actionFailed": "No se pudo — inténtalo de nuevo",
+    "done": "{count, plural, one {Hecho} other {Hecho para # mensajes}}",
+    "partly": "{ok} hechos, {failed} no",
+    "dismissConfirm": "¿Descartar {count} mensajes fallidos?",
+    "dismissed": "{count, plural, one {Descartado} other {# descartados}}",
+    "textSent": "Mensaje enviado",
+    "scheduled": "Reenvío programado para {when}",
+    "resent": "Enviado de nuevo",
+    "unscheduled": "Programación cancelada",
+    "reg": {
+      "fixTitle": "Corregir el número de {name}",
+      "phoneLabel": "Número de WhatsApp",
+      "added": "Contacto añadido — su recorrido comenzó",
+      "restarted": "Ya era contacto — su recorrido se reinició",
+      "hint": "Registros del sitio omitidos porque el número no era válido. Corrige el número para añadir el contacto e iniciar su recorrido.",
+      "empty": "No hay registros omitidos",
+      "number": "Número",
+      "noNumber": "ninguno",
+      "fix": "Corregir y añadir"
+    },
+    "health": {
+      "scheduler": "Programador (temporizadores, recordatorios)",
+      "waiting": "Esperando la primera ejecución",
+      "running": "Funcionando",
+      "stopped": "DETENIDO — última ejecución {when}",
+      "leadFeed": "Feed de leads del sitio",
+      "off": "No configurado",
+      "working": "Funcionando",
+      "failing": "Fallando",
+      "skipped": "Registros omitidos",
+      "skippedCount": "{count, plural, =0 {Ninguno} one {# por corregir} other {# por corregir}}"
+    },
+    "stat": {
+      "open": "Aún fallidos",
+      "fixed": "Resueltos",
+      "scheduled": "Programados",
+      "windowOpen": "Ventana de 24h abierta"
+    },
+    "last14": "Fallidos, últimos 14 días",
+    "tab": {
+      "messages": "Mensajes",
+      "registrations": "Registros omitidos ({count})"
+    },
+    "day": {
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "week": "Últimos 7 días"
+    },
+    "status": {
+      "open": "Aún fallidos",
+      "resolved": "Resueltos",
+      "all": "Todos"
+    },
+    "pickDate": "Elegir fecha",
+    "selectAll": "Seleccionar todo",
+    "selected": "{count} seleccionados",
+    "resend": "Reenviar",
+    "schedule": "Programar",
+    "dismiss": "Descartar",
+    "emptyOpen": "Nada falló aquí 🎉",
+    "empty": "No hay mensajes aquí",
+    "unknown": "Contacto desconocido",
+    "fromJourney": "Recorrido: {name}",
+    "fromInbox": "Bandeja / automatización",
+    "textMessage": "mensaje de texto",
+    "optedOut": "Se dio de baja — no se puede enviar",
+    "windowOpen": "Ventana de 24h abierta hasta las {time} — puedes enviar un mensaje normal",
+    "windowClosed": "Ventana de 24h cerrada — solo plantillas",
+    "scheduledFor": "Reenviar a las {when}",
+    "resolved": {
+      "resent": "Enviado de nuevo",
+      "custom_text": "Enviado como texto",
+      "dismissed": "Descartado",
+      "retried": "Reintentado automáticamente",
+      "fallback_sent": "Enviado como texto al responder",
+      "expired": "Abandonado (demasiado tarde)",
+      "superseded": "Reemplazado por uno más nuevo",
+      "opted_out": "Se dio de baja"
+    },
+    "openChat": "Abrir chat",
+    "cancelSchedule": "Cancelar programación",
+    "sendText": "Enviar como texto",
+    "err": {
+      "not_found": "No encontrado",
+      "already_resolved": "Ya resuelto",
+      "opted_out": "Se dio de baja — sin mensajes",
+      "window_closed": "La ventana de 24 horas está cerrada — solo plantilla",
+      "needs_variables": "Esta plantilla necesita variables que no tenemos — envíala como texto",
+      "no_contact": "El contacto ya no existe",
+      "bad_time": "Elige una hora en los próximos 30 días",
+      "empty_text": "Escribe el mensaje primero",
+      "send_failed": "Meta lo rechazó de nuevo"
+    },
+    "textTitle": "Enviar un mensaje a {name}",
+    "textDesc": "Su ventana de 24 horas está abierta hasta las {time}, así que puedes enviar un mensaje normal. Empieza con el texto de la plantilla — edítalo como quieras.",
+    "cancel": "Cancelar",
+    "send": "Enviar",
+    "scheduleTitle": "{count, plural, one {Reenviar más tarde} other {Reenviar # mensajes más tarde}}",
+    "scheduleDesc": "Se envía la misma plantilla de nuevo a esta hora.",
+    "preset": {
+      "hour": "En 1 hora",
+      "evening": "Esta tarde, 6 PM",
+      "tomorrow": "Mañana, 11 AM",
+      "custom": "Elegir hora"
+    },
+    "banner": {
+      "schedulerDown": "El programador se detuvo (última ejecución {when}) — temporizadores, recordatorios y el feed de leads están en pausa.",
+      "feedFailing": "El feed de leads del sitio está fallando — no llegan nuevos registros.",
+      "open": "Abrir"
     }
   }
 }

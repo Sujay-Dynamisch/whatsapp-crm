@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { AccountAccessAlert } from "@/components/layout/account-access-alert";
+import { HealthBanner } from "@/components/layout/health-banner";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { BrowserNotificationsListener } from "@/components/notifications/browser-notifications-listener";
 import { FeatureGate } from "@/components/layout/feature-gate";
@@ -60,6 +61,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           {/* Above every page: writes are being rejected and here's why.
               Renders nothing unless the account/role failed to resolve. */}
           <AccountAccessAlert />
+          {/* Owners/admins: scheduler stopped / lead feed failing (060). */}
+          <HealthBanner />
           <FeatureGate>{children}</FeatureGate>
         </main>
       </div>

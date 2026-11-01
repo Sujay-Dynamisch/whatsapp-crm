@@ -203,7 +203,9 @@ async function pendingFailures(db: SupabaseClient, contactId: string, now: Date)
 }
 
 async function resolve(db: SupabaseClient, ids: string[], resolved: string) {
-  if (ids.length) await db.from('journey_messages').update({ resolved, next_retry_at: null }).in('id', ids);
+  if (ids.length) {
+    await db.from('journey_messages').update({ resolved, resolved_at: new Date().toISOString(), next_retry_at: null }).in('id', ids);
+  }
 }
 
 /**

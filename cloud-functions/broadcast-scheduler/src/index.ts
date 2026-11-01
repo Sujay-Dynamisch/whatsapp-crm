@@ -42,6 +42,8 @@ import { runWindowKeepalive } from '@/lib/conversations/window-keepalive';
 import { runJourneyTick } from '@/lib/journeys/engine';
 import { liveJourneyDeps } from '@/lib/journeys/dispatch';
 import { runCallbackFollowUps } from '@/lib/callbacks/followups';
+import { runScheduledResends } from '@/lib/failed-messages/service';
+import { TICK_HEARTBEAT, recordHeartbeat, runDailySummaries } from '@/lib/health/health';
 import { runLeadSync } from '@/lib/lead-sync/registrations';
 
 // Shared app modules (flows/ai admin clients used by engineSendText)
@@ -212,7 +214,16 @@ export async function journeyTick(req: Req, res: Res): Promise<void> {
     const callbacks = await runCallbackFollowUps(s.db, liveJourneyDeps).catch((err) => ({
       error: err instanceof Error ? err.message : String(err),
     }));
-    console.log(JSON.stringify({ fn: 'journeyTick', ...report, leadSync, callbacks }));
+    // Failed messages page: resends scheduled for now; daily health summary.
+    const resends = await runScheduledResends(s.db, liveJourneyDeps).catch((err) => ({
+      error: err instanceof Error ? err.message : String(err),
+    }));
+    const health = await runDailySummaries(s.db).catch((err) => ({
+      error: err instanceof Error ? err.message : String(err),
+    }));
+    // Last: proves this tick ran end to end (the app warns after 10 min without).
+    await recordHeartbeat(s.db, TICK_HEARTBEAT, { claimed: report.claimed, errors: report.errors.length });
+    console.log(JSON.stringify({ fn: 'journeyTick', ...report, leadSync, callbacks, resends, health }));
     res.status(200).json(report);
   } catch (err) {
     console.error('[journeyTick]', err);

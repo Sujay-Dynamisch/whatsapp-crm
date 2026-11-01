@@ -16,13 +16,19 @@ vi.mock('@/lib/journeys/dispatch', () => ({
   restartJourneysOnReregistration: journeys.restart,
 }));
 
+const health = vi.hoisted(() => ({ leadFeedChanged: vi.fn(async () => undefined) }));
+vi.mock('@/lib/health/health', () => health);
+
 import { runLeadSync } from './registrations';
 
 // Minimal query builder: lead_sync_sources select / update, custom_fields lookups.
+let upserts: { table: string; row: Record<string, unknown>; opts: unknown }[] = [];
+let sourceReport: unknown = null;
 function fakeDb(): SupabaseClient {
-  const builder = (data: unknown) => {
+  const builder = (data: unknown, table: string) => {
     const b: Record<string, unknown> = {};
     for (const k of ['select', 'eq', 'ilike', 'limit', 'update', 'insert']) b[k] = () => b;
+    b.upsert = (row: Record<string, unknown>, opts: unknown) => (upserts.push({ table, row, opts }), b);
     b.maybeSingle = async () => ({ data: { id: 'city-field' }, error: null });
     b.single = b.maybeSingle;
     b.then = (res: (v: unknown) => unknown) => Promise.resolve({ data, error: null }).then(res);
@@ -30,13 +36,21 @@ function fakeDb(): SupabaseClient {
   };
   return {
     from: (table: string) =>
-      builder(table === 'lead_sync_sources' ? [{ account_id: 'acct', source_url: 'https://src.example/regs', tag: 'webinar' }] : null),
+      builder(
+        table === 'lead_sync_sources'
+          ? [{ account_id: 'acct', source_url: 'https://src.example/regs', tag: 'webinar', last_report: sourceReport }]
+          : null,
+        table
+      ),
   } as unknown as SupabaseClient;
 }
 
 const NOW = new Date('2026-11-02T05:00:00Z');
 
 beforeEach(() => {
+  upserts = [];
+  sourceReport = null;
+  health.leadFeedChanged.mockClear();
   contacts.created.clear();
   journeys.dispatch.mockClear();
   journeys.restart.mockClear();
@@ -48,6 +62,7 @@ beforeEach(() => {
           data: [
             { _id: 'r-new', fullName: 'New Lead', whatsappNumber: '9800000001', createdAt: '2026-11-02T04:58:00Z' },
             { _id: 'r-again', fullName: 'Old Lead', whatsappNumber: '9800000002', createdAt: '2026-11-02T04:59:00Z' },
+            { _id: 'r-bad', fullName: 'Typo Lead', whatsappNumber: '12345', email: 'typo@x.com', city: 'Pune', createdAt: '2026-11-02T04:57:00Z' },
           ],
           totalPages: 1,
         })
@@ -60,7 +75,7 @@ describe('lead sync → journeys', () => {
   it('new contact → starts the journey with the registration id; existing contact → restart check', async () => {
     contacts.created.set('+919800000001', true);
     const out = await runLeadSync(fakeDb(), NOW);
-    expect(out.acct).toMatchObject({ fetched: 2, created: 1, existing: 1, restarted: 1 });
+    expect(out.acct).toMatchObject({ fetched: 3, created: 1, existing: 1, restarted: 1, skipped: 1 });
     expect(journeys.dispatch).toHaveBeenCalledWith(expect.anything(), {
       accountId: 'acct',
       contactId: 'contact-+919800000001',
@@ -74,5 +89,26 @@ describe('lead sync → journeys', () => {
       registrationId: 'r-again',
       registeredAt: '2026-11-02T04:59:00Z',
     });
+  });
+
+  it('an invalid number is kept for a human to fix — once per registration', async () => {
+    await runLeadSync(fakeDb(), NOW);
+    expect(upserts).toEqual([
+      {
+        table: 'lead_sync_issues',
+        row: expect.objectContaining({ account_id: 'acct', registration_id: 'r-bad', kind: 'invalid_phone', raw_phone: '12345', name: 'Typo Lead', email: 'typo@x.com', city: 'Pune' }),
+        opts: { onConflict: 'account_id,registration_id,kind', ignoreDuplicates: true },
+      },
+    ]);
+  });
+
+  it('tells health about the feed state (previous vs now)', async () => {
+    sourceReport = { error: 'source responded 500' };
+    await runLeadSync(fakeDb(), NOW);
+    expect(health.leadFeedChanged).toHaveBeenCalledWith(expect.anything(), 'acct', 'source responded 500', null);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('down', { status: 503 })));
+    sourceReport = null;
+    await runLeadSync(fakeDb(), NOW);
+    expect(health.leadFeedChanged).toHaveBeenLastCalledWith(expect.anything(), 'acct', null, 'source responded 503');
   });
 });

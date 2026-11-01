@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { Notification } from "@/types";
-import { AlarmClock, Bell, CheckCheck, Loader2, PhoneCall, Repeat, UserPlus } from "lucide-react";
+import { Activity, AlarmClock, Bell, CheckCheck, Loader2, PhoneCall, Repeat, ShieldAlert, UserPlus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,8 @@ const TYPE_ICON: Record<Notification["type"], typeof Bell> = {
   callback_requested: PhoneCall,
   callback_overdue: AlarmClock,
   callback_returned: Repeat,
+  health_alert: ShieldAlert,
+  health_summary: Activity,
 };
 
 export default function NotificationsPage() {
@@ -121,6 +123,8 @@ export default function NotificationsPage() {
       if (!n.read_at) markRead(n.id);
       if (n.type === "callback_requested" || n.type === "callback_overdue" || n.type === "callback_returned") {
         router.push("/callbacks");
+      } else if (n.type === "health_alert" || n.type === "health_summary") {
+        router.push("/failed-messages");
       } else if (n.conversation_id) {
         router.push(`/inbox?c=${n.conversation_id}`);
       }

@@ -21,6 +21,7 @@ import {
   setContactTags,
 } from '@/lib/api/v1/contacts';
 import { dispatchJourneyTrigger, restartJourneysOnReregistration } from '@/lib/journeys/dispatch';
+import { leadFeedChanged } from '@/lib/health/health';
 
 const LOOKBACK_MINUTES = 60;
 const PAGE_SIZE = 50;
@@ -101,7 +102,7 @@ async function cityFieldId(db: SupabaseClient, accountId: string, userId: string
 export async function runLeadSync(db: SupabaseClient, now = new Date()): Promise<Record<string, LeadSyncReport | { error: string }>> {
   const { data: sources, error } = await db
     .from('lead_sync_sources')
-    .select('account_id, source_url, tag')
+    .select('account_id, source_url, tag, last_report')
     .eq('enabled', true);
   if (error) throw error;
 
@@ -111,6 +112,9 @@ export async function runLeadSync(db: SupabaseClient, now = new Date()): Promise
       error: err instanceof Error ? err.message : String(err),
     }));
     out[s.account_id] = report;
+    // Alert admins when the feed starts failing / recovers (migration 060).
+    const before = (s.last_report as { error?: string } | null)?.error ?? null;
+    await leadFeedChanged(db, s.account_id, before, 'error' in report ? report.error : null);
     await db
       .from('lead_sync_sources')
       .update({ last_run_at: now.toISOString(), last_report: report })
@@ -140,6 +144,27 @@ async function syncSource(
     const phone = toInternationalPhone(r.whatsappNumber);
     if (!phone) {
       report.skipped++;
+      // Keep it for a human to fix (once per registration — the sync
+      // re-reads the last hour every minute). Best effort.
+      await db
+        .from('lead_sync_issues')
+        .upsert(
+          {
+            account_id: accountId,
+            registration_id: r._id,
+            kind: 'invalid_phone',
+            raw_phone: r.whatsappNumber ?? null,
+            name: r.fullName?.trim() || null,
+            email: r.email?.trim() || null,
+            city: r.city?.trim() || null,
+            registered_at: r.createdAt,
+          },
+          { onConflict: 'account_id,registration_id,kind', ignoreDuplicates: true }
+        )
+        .then(
+          () => undefined,
+          () => undefined
+        );
       continue;
     }
     try {

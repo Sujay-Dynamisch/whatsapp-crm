@@ -45,6 +45,7 @@ import {
   type SendResult,
 } from './messages';
 import { isUnsubscribeText } from '@/lib/contacts/unsubscribe';
+import { accountHasFeature } from '@/lib/features-server';
 import { resolveTemplateRow, templateContentText } from '@/lib/whatsapp/template-body';
 
 export interface JourneyRow {
@@ -330,6 +331,9 @@ async function evaluateCondition(
     }
     case 'window_open':
       return windowOpen(db, e, now);
+    case 'feature_enabled':
+      // Switched off by the system admin → "no" (e.g. skip the callback step).
+      return cfg.feature ? accountHasFeature(db, e.account_id, cfg.feature) : false;
     case 'expression': {
       const s = await scope();
       return compare(cfg.op ?? 'equals', evaluateValue(cfg.left ?? '', s), evaluateValue(cfg.right ?? '', s));

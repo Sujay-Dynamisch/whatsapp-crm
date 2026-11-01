@@ -216,7 +216,7 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     case_0: 'pay_link', case_1: 'pay_link',
     case_2: 'testimonials', case_3: 'testimonials',
     case_4: 'set_reschedule', case_5: 'set_reschedule',
-    case_6: 'tag_callback', case_7: 'tag_callback', case_8: 'tag_callback',
+    case_6: 'callback_on', case_7: 'callback_on', case_8: 'callback_on',
     default: 'menu_retry',
   });
   add('menu_retry', 'send_text', 'Ask for 1–4', { text: 'Please reply with 1, 2, 3 or 4 so I can help you with your next step. 🙏' }, { next: 'reply_menu' });
@@ -253,7 +253,7 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
       { op: 'contains', value: 'join', label: 'Join' },
     ],
   }, { case_0: 'tag_closed', case_1: 'pay_link', case_2: 'pay_link', default: 'faq' });
-  add('faq', 'send_text', 'FAQ + handoff', { text: '{{ vars.faq_text }}\n\nMy team will also reach out to you personally.' }, { next: 'tag_callback' });
+  add('faq', 'send_text', 'FAQ + handoff', { text: '{{ vars.faq_text }}\n\nMy team will also reach out to you personally.' }, { next: 'callback_on' });
   add('tag_closed', 'add_tag', 'Tag: manually_closed (LOST)', { tag_id: tag.manually_closed }, { next: 'closed_msg' });
   add('closed_msg', 'send_text', 'Confirm stop', { text: `Understood, ${NAME}. I won't send further messages. Wishing you the best!\n\n— Swapnil Gautam` }, { next: 'end' });
 
@@ -274,13 +274,16 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
       { op: 'contains', value: 'call', label: 'Request Callback' },
       { op: 'contains', value: 'talk', label: 'Talk to team' },
     ],
-  }, { case_0: 'pay_link', case_1: 'pay_link', case_2: 'tag_callback', case_3: 'tag_callback', case_4: 'tag_callback', default: 't5_retry' });
+  }, { case_0: 'pay_link', case_1: 'pay_link', case_2: 'callback_on', case_3: 'callback_on', case_4: 'callback_on', default: 't5_retry' });
   add('t5_retry', 'send_text', 'Ask for 1–2', { text: 'Please reply 1 to join Revibe or 2 to request a callback from my team. 🙏' }, { next: 'reply_t5' });
 
   // Attend again → next webinar link → reminder loop.
   add('set_reschedule', 'set_variable', 'Mark re-invite', { assignments: [{ key: 'reschedule', value: 'yes' }] }, { next: 'schedule' });
 
   // Request callback → human handoff (automation stops; sales marks paid / lost).
+  // Callback requests switched off for the account (system admin) → no
+  // request would open, so skip the tag and hand straight to Swapnil.
+  add('callback_on', 'condition', 'Callback requests on?', { kind: 'feature_enabled', feature: 'callbacks' }, { yes: 'tag_callback', no: 'assign_owner' });
   add('tag_callback', 'add_tag', 'Tag: callback_requested', { tag_id: tag.callback_requested }, { next: 'assign_owner' });
   add('assign_owner', 'conversation', 'Human handoff (assign Swapnil)', { action: 'assign', user_id: ownerUserId }, { next: 'callback_msg' });
   add('callback_msg', 'send_text', 'Confirm callback', { text: `Thank you, ${NAME}! 🙏 My team will call you shortly.` }, { next: 'end' });
@@ -297,7 +300,7 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
       { op: 'contains', value: 'not now', label: 'Not now' },
       { op: 'contains', value: 'call', label: 'Call me again' },
     ],
-  }, { case_0: 'c_slot', case_1: 'tag_callback', default: 'mark_menu' });
+  }, { case_0: 'c_slot', case_1: 'callback_on', default: 'mark_menu' });
 
   // ---------- 15-day alternate-day nurture (11 AM IST) → CLOSED-LOST ----------
   //   x_slot → x_wait (until the slot; a reply leaves the nurture)

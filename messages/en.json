@@ -15,6 +15,7 @@
     "createAccount": "Create account"
   },
   "Sidebar": {
+    "failedMessages": "Failed messages",
     "title": "WhatsApp CRM",
     "primaryNav": "Primary",
     "dashboard": "Dashboard",
@@ -47,6 +48,7 @@
     "journeys": "Journeys"
   },
   "Header": {
+    "failedMessages": "Failed messages",
     "dashboard": "Dashboard",
     "callbacks": "Callbacks",
     "inbox": "Inbox",
@@ -2452,6 +2454,7 @@
       "schedule": "On a schedule"
     },
     "condition": {
+      "feature_enabled": "Feature is on",
       "replied": "Has replied",
       "clicked_button": "Tapped a button",
       "has_tag": "Has a tag",
@@ -2498,6 +2501,9 @@
       "chooseMember": "Choose a team member"
     },
     "form": {
+      "feature": "Feature",
+      "featureHelp": "Yes when the system admin has this feature switched on for the account.",
+      "chooseFeature": "Choose a feature…",
       "startsWhen": "Starts when",
       "tag": "Tag",
       "chooseTag": "Choose a tag…",
@@ -2620,6 +2626,8 @@
       "stepId": "Step id:"
     },
     "editor": {
+      "callbacksOff": "Callback requests are switched off for this account, so leads who ask for a call won't appear on the Callbacks page and nobody is notified. Ask the system admin to turn it on, or add an “If / else → Feature is on (Callback requests)” step before the callback tag.",
+      "callbacksOffGuarded": "Callback requests are switched off for this account — this journey skips the callback tag and hands the lead straight to your team.",
       "back": "Back to journeys",
       "name": "Journey name",
       "addStep": "Add step",
@@ -2786,6 +2794,122 @@
         "exited": "Exited",
         "failed": "Failed"
       }
+    }
+  },
+  "FailedMessages": {
+    "title": "Failed messages",
+    "subtitle": "Messages and templates that didn't reach people — resend, schedule, send a custom text, or dismiss.",
+    "refresh": "Refresh",
+    "loadFailed": "Could not load failed messages",
+    "actionFailed": "Could not do that — try again",
+    "done": "{count, plural, one {Done} other {Done for # messages}}",
+    "partly": "{ok} done, {failed} not",
+    "dismissConfirm": "Dismiss {count} failed messages?",
+    "dismissed": "{count, plural, one {Dismissed} other {# dismissed}}",
+    "textSent": "Message sent",
+    "scheduled": "Resend scheduled for {when}",
+    "resent": "Sent again",
+    "unscheduled": "Schedule cancelled",
+    "reg": {
+      "fixTitle": "Correct the number for {name}",
+      "phoneLabel": "WhatsApp number",
+      "added": "Contact added — their journey has started",
+      "restarted": "Already a contact — their journey was restarted",
+      "hint": "Website registrations that were skipped because the phone number was not valid. Correct the number to add the contact and start their journey.",
+      "empty": "No skipped registrations",
+      "number": "Number",
+      "noNumber": "none",
+      "fix": "Fix number & add"
+    },
+    "health": {
+      "scheduler": "Scheduler (timers, reminders)",
+      "waiting": "Waiting for the first run",
+      "running": "Running",
+      "stopped": "STOPPED — last ran {when}",
+      "leadFeed": "Website lead feed",
+      "off": "Not set up",
+      "working": "Working",
+      "failing": "Failing",
+      "skipped": "Skipped registrations",
+      "skippedCount": "{count, plural, =0 {None} one {# to fix} other {# to fix}}"
+    },
+    "stat": {
+      "open": "Still failed",
+      "fixed": "Fixed / handled",
+      "scheduled": "Scheduled",
+      "windowOpen": "24h window open now"
+    },
+    "last14": "Failed, last 14 days",
+    "tab": {
+      "messages": "Messages",
+      "registrations": "Skipped registrations ({count})"
+    },
+    "day": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "Last 7 days"
+    },
+    "status": {
+      "open": "Still failed",
+      "resolved": "Handled",
+      "all": "All"
+    },
+    "pickDate": "Pick a date",
+    "selectAll": "Select all",
+    "selected": "{count} selected",
+    "resend": "Resend",
+    "schedule": "Schedule",
+    "dismiss": "Dismiss",
+    "emptyOpen": "Nothing failed here 🎉",
+    "empty": "No messages here",
+    "unknown": "Unknown contact",
+    "fromJourney": "Journey: {name}",
+    "fromInbox": "Inbox / automation",
+    "textMessage": "text message",
+    "optedOut": "Opted out — can't message",
+    "windowOpen": "24h window open until {time} — you can send a normal message",
+    "windowClosed": "24h window closed — only templates",
+    "scheduledFor": "Resend at {when}",
+    "resolved": {
+      "resent": "Sent again",
+      "custom_text": "Sent as custom text",
+      "dismissed": "Dismissed",
+      "retried": "Retried automatically",
+      "fallback_sent": "Sent as text when they replied",
+      "expired": "Gave up (too late)",
+      "superseded": "Replaced by a newer message",
+      "opted_out": "They opted out"
+    },
+    "openChat": "Open chat",
+    "cancelSchedule": "Cancel schedule",
+    "sendText": "Send as text",
+    "err": {
+      "not_found": "Not found",
+      "already_resolved": "Already handled",
+      "opted_out": "They opted out — no messages",
+      "window_closed": "Their 24-hour window is closed — only a template can be sent",
+      "needs_variables": "This template needs variables we don't have — send it as text instead",
+      "no_contact": "The contact no longer exists",
+      "bad_time": "Choose a time in the next 30 days",
+      "empty_text": "Write the message first",
+      "send_failed": "Meta refused it again"
+    },
+    "textTitle": "Send a message to {name}",
+    "textDesc": "Their 24-hour window is open until {time}, so a normal message can be sent. It starts with the template's text — edit it as you like.",
+    "cancel": "Cancel",
+    "send": "Send",
+    "scheduleTitle": "{count, plural, one {Resend later} other {Resend # messages later}}",
+    "scheduleDesc": "The same template is sent again at this time.",
+    "preset": {
+      "hour": "In 1 hour",
+      "evening": "This evening, 6 PM",
+      "tomorrow": "Tomorrow, 11 AM",
+      "custom": "Pick a time"
+    },
+    "banner": {
+      "schedulerDown": "The scheduler has stopped (last ran {when}) — journey timers, reminders and the lead feed are on hold.",
+      "feedFailing": "The website lead feed is failing — new registrations are not coming in.",
+      "open": "Open"
     }
   }
 }

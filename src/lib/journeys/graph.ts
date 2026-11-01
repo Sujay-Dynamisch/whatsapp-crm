@@ -15,6 +15,8 @@
 // {{ … }} expressions (see ./expressions).
 // ============================================================
 
+import { isFeature, type Feature } from '../features';
+
 export type JourneyTriggerType =
   | 'manual'
   | 'contact_created'
@@ -38,9 +40,9 @@ export const TRIGGER_TYPES: JourneyTriggerType[] = [
 
 export type DurationUnit = 'minutes' | 'hours' | 'days';
 
-export type ConditionKind = 'has_tag' | 'clicked_button' | 'replied' | 'window_open' | 'expression';
+export type ConditionKind = 'has_tag' | 'clicked_button' | 'replied' | 'window_open' | 'expression' | 'feature_enabled';
 
-export const CONDITION_KINDS: ConditionKind[] = ['replied', 'clicked_button', 'has_tag', 'window_open', 'expression'];
+export const CONDITION_KINDS: ConditionKind[] = ['replied', 'clicked_button', 'has_tag', 'window_open', 'expression', 'feature_enabled'];
 
 /** Where a 'replied' condition starts counting customer messages. */
 export type RepliedSince = 'wait' | 'start';
@@ -148,6 +150,8 @@ export interface NodeConfigs {
     kind: ConditionKind;
     /** kind 'replied': count replies since the last wait started (default) or since the run started. */
     since?: RepliedSince;
+    /** kind 'feature_enabled': is this account feature on (e.g. 'callbacks')? */
+    feature?: Feature;
     tag_id?: string;
     button_text?: string;
     /** kind 'expression'. */
@@ -437,6 +441,7 @@ function configIssues(n: JourneyNode): GraphIssue[] {
       if (!CONDITION_KINDS.includes(cfg.kind)) bad('Choose a condition');
       if (cfg.kind === 'has_tag' && !cfg.tag_id) bad('Choose a tag');
       if (cfg.kind === 'replied' && cfg.since !== undefined && !REPLIED_SINCE.includes(cfg.since)) bad('Choose when to start counting replies');
+      if (cfg.kind === 'feature_enabled' && !isFeature(cfg.feature)) bad('Choose a feature');
       if (cfg.kind === 'expression') {
         if (!nonEmpty(cfg.left)) bad('Set the value to check');
         if (!COMPARE_OPS.includes(cfg.op as CompareOp)) bad('Choose a comparison');

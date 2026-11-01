@@ -32,6 +32,7 @@ export const FEATURES = [
   'api_access',
   'button_analytics',
   'callbacks',
+  'failed_messages',
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -41,6 +42,8 @@ export interface FeatureInfo {
   description: string;
   /** Turning this off also turns these off (they depend on it). */
   implies?: Feature[];
+  /** Off for accounts until the system admin turns it on (migration 060). */
+  defaultOff?: boolean;
 }
 
 export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
@@ -97,6 +100,12 @@ export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
   callbacks: {
     label: 'Callback requests',
     description: 'Callbacks page, sidebar badge and owner/admin notifications when a contact asks for a call.',
+  },
+  failed_messages: {
+    label: 'Failed messages & health alerts',
+    description:
+      'Failed messages page (resend, schedule, send as text, dismiss), skipped website registrations, daily health summary and scheduler / lead-feed alerts.',
+    defaultOff: true,
   },
   api_access: {
     label: 'API & webhooks',
@@ -164,6 +173,7 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/journeys', feature: 'journeys' },
   { prefix: '/button-clicks', feature: 'button_analytics' },
   { prefix: '/callbacks', feature: 'callbacks' },
+  { prefix: '/failed-messages', feature: 'failed_messages' },
   // Internal APIs
   { prefix: '/api/whatsapp/broadcast', feature: 'broadcasts' },
   { prefix: '/api/automations', feature: 'automations' },
@@ -174,6 +184,8 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/api/account/api-keys', feature: 'api_access' },
   { prefix: '/api/button-clicks', feature: 'button_analytics' },
   { prefix: '/api/callbacks', feature: 'callbacks' },
+  { prefix: '/api/failed-messages', feature: 'failed_messages' },
+  { prefix: '/api/health', feature: 'failed_messages' },
   { prefix: '/api/delivery-settings', feature: 'smart_sending' },
   { prefix: '/api/whatsapp/quality', feature: 'smart_sending' },
   { prefix: '/api/language-settings', feature: 'ai_agents' },

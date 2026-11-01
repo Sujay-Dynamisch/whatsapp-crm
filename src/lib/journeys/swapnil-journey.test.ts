@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-// Journeys are on for the test account.
-vi.mock('@/lib/features-server', () => ({ accountHasFeature: async () => true }));
+// Features are on for the test account unless a test switches one off.
+const features = vi.hoisted(() => ({ off: new Set<string>() }));
+vi.mock('@/lib/features-server', () => ({ accountHasFeature: async (_db: unknown, _acct: string, f: string) => !features.off.has(f) }));
 
 import {
   DAY_END_HOUR,
@@ -259,6 +260,7 @@ const log = (from = 0) => sent.slice(from).map((s) => `${label(s.at)} ${s.kind =
 const templates = (name: string) => sent.filter((s) => s.name === name);
 
 beforeEach(() => {
+  features.off.clear();
   seq = 0;
   sent = [];
   metaRule = () => null;
@@ -1076,5 +1078,28 @@ describe('callback follow-ups', () => {
     expect(validateGraph(g)).toEqual([]);
     t.callback_missed_node = 'nope';
     expect(validateGraph(g)).toContainEqual({ nodeId: 'trigger', message: 'Callback follow-up step "nope" does not exist' });
+  });
+});
+
+// ============================================================
+// Callback requests switched off for the account (system admin)
+// ============================================================
+describe('callbacks feature off', () => {
+  it('“Request a callback” skips the tag (no request, nobody waiting) but still hands the lead to Swapnil', async () => {
+    features.off.add('callbacks');
+    await register('2026-11-02 10:00');
+    await reply('4', '2026-11-03 08:00');
+    expect(hasTag('callback_requested')).toBe(false);
+    expect(tables.callback_requests).toEqual([]);
+    expect(tables.conversations.find((c) => c.id === 'conv1')!.assigned_agent_id).toBe('owner');
+    expect(sent.at(-1)!.text).toBe('Thank you, Asha! 🙏 My team will call you shortly.');
+    expect(run().status).toBe('completed');
+  });
+
+  it('with the feature on, the same reply opens a callback request', async () => {
+    await register('2026-11-02 10:00');
+    await reply('4', '2026-11-03 08:00');
+    expect(hasTag('callback_requested')).toBe(true);
+    expect(tables.callback_requests).toHaveLength(1);
   });
 });

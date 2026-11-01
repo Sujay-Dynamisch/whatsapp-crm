@@ -205,6 +205,15 @@ BEGIN
     RAISE EXCEPTION 'callback follow-up columns missing — migration 059 did not apply';
   END IF;
 
+  -- 060: failed messages + health. A missing default-off trigger would
+  -- silently give the feature to every new account.
+  IF to_regclass('public.lead_sync_issues') IS NULL
+     OR to_regclass('public.system_heartbeats') IS NULL
+     OR to_regclass('public.health_summaries') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'zz_accounts_default_off_features') THEN
+    RAISE EXCEPTION 'failed messages / health schema incomplete — migration 060 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;
