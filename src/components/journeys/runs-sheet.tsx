@@ -596,6 +596,9 @@ export function RunsSheet({
                           <span className="shrink-0 text-xs font-medium text-amber-600 dark:text-amber-400">{t('runs.outcome.sendFailed')}</span>
                         ) : s.outcome ? (
                           <span className="shrink-0 text-xs text-muted-foreground">→ {outcomeLabel(node, s.outcome, t)}</span>
+                        ) : node?.type === 'end' ? (
+                          // End has no exit event: reaching it means the run finished.
+                          <span className="shrink-0 text-xs text-muted-foreground">{t('runs.status.completed')}</span>
                         ) : (
                           <span className="shrink-0 text-xs text-amber-600 dark:text-amber-400">
                             {detail.run.status === 'waiting' && detail.run.next_run_at && i === steps.length - 1
