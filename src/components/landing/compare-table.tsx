@@ -53,7 +53,36 @@ export function CompareTable() {
           </button>
         </label>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur">
+      {/* Phones: each feature as a row with the three vendors underneath */}
+      <div className="rounded-2xl border border-white/10 bg-[#0d1117]/80 md:hidden">
+        <div className="sticky top-16 z-10 grid grid-cols-3 rounded-t-2xl border-b border-white/10 bg-[#0d1117] px-2 py-3 text-center text-xs">
+          <span className="font-semibold text-emerald-300">Flowza</span>
+          <span className="font-medium text-slate-300">AiSensy</span>
+          <span className="font-medium text-slate-300">WATI</span>
+        </div>
+        {COMPARE.map((g) => {
+          const rows = g.rows.filter((r) => !onlyDiff || !(same(r.Flowza, r.aisensy) && same(r.Flowza, r.wati)));
+          if (!rows.length) return null;
+          return (
+            <div key={g.group}>
+              <p className="border-b border-white/5 bg-white/[0.02] px-4 py-2 text-[11px] font-semibold tracking-wider text-emerald-300/80 uppercase">{g.group}</p>
+              {rows.map((r) => (
+                <div key={r.feature} className="border-b border-white/5 px-4 py-3 last:border-b-0">
+                  <p className="text-sm font-medium text-slate-100">{r.feature}</p>
+                  {r.detail && <p className="mt-0.5 text-xs text-slate-400">{r.detail}</p>}
+                  <div className="mt-2.5 grid grid-cols-3 items-start gap-2 text-center">
+                    <div className="flex justify-center rounded-lg bg-emerald-500/[0.06] px-1 py-1.5"><CellView cell={r.Flowza} ours /></div>
+                    <div className="flex justify-center px-1 py-1.5"><CellView cell={r.aisensy} /></div>
+                    <div className="flex justify-center px-1 py-1.5"><CellView cell={r.wati} /></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-2xl border border-white/10 bg-[#0d1117]/80 backdrop-blur md:block">
         <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
             <tr className="sticky top-0 z-10 bg-[#0d1117]">

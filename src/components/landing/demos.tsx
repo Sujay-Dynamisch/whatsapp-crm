@@ -72,12 +72,12 @@ export function InboxDemo() {
 
 // ---------- Journey: a graph with messages flowing through it ----------
 const NODES = [
-  { id: 'reg', label: 'Registered', sub: 'Website · API', x: 20, y: 30 },
-  { id: 'msg', label: 'Msg 1–3', sub: 'Confirmation · reminders', x: 200, y: 30 },
-  { id: 'menu', label: 'Check-in menu', sub: '7:00 AM next day', x: 380, y: 30 },
-  { id: 'pay', label: 'Payment link', sub: '2 daytime nudges', x: 200, y: 150 },
-  { id: 'nurture', label: 'Nurture', sub: '11 AM · every 2nd day', x: 380, y: 150 },
-  { id: 'won', label: 'WON', sub: 'Tag: paid', x: 20, y: 150 },
+  { id: 'reg', label: 'Registered', sub: 'Website · API' },
+  { id: 'msg', label: 'Msg 1–3', sub: 'Confirmation · reminders' },
+  { id: 'menu', label: 'Check-in menu', sub: '7:00 AM next day' },
+  { id: 'pay', label: 'Payment link', sub: '2 daytime nudges' },
+  { id: 'nurture', label: 'Nurture', sub: '11 AM · every 2nd day' },
+  { id: 'won', label: 'WON', sub: 'Tag: paid' },
 ];
 const EDGES: [string, string][] = [
   ['reg', 'msg'],
@@ -87,6 +87,10 @@ const EDGES: [string, string][] = [
   ['pay', 'won'],
   ['nurture', 'pay'],
 ];
+// Wide layout (3 × 2) for tablets and up; tall layout (2 × 3) for phones,
+// so the labels stay readable instead of shrinking to half size.
+const WIDE = { box: '0 0 560 230', at: { reg: [20, 30], msg: [200, 30], menu: [380, 30], pay: [200, 150], nurture: [380, 150], won: [20, 150] } };
+const TALL = { box: '0 0 340 330', at: { reg: [10, 10], msg: [180, 10], menu: [180, 138], nurture: [10, 138], pay: [180, 266], won: [10, 266] } };
 
 export function JourneyDemo() {
   const reduce = useReducedMotion();
@@ -96,34 +100,53 @@ export function JourneyDemo() {
     const id = setInterval(() => setActive((a) => (a + 1) % NODES.length), 1100);
     return () => clearInterval(id);
   }, [reduce]);
-  const pos = Object.fromEntries(NODES.map((n) => [n.id, n]));
+  return (
+    <>
+      <JourneyGraph layout={WIDE} active={active} reduce={reduce} className="hidden sm:block" />
+      <JourneyGraph layout={TALL} active={active} reduce={reduce} className="sm:hidden" />
+    </>
+  );
+}
+
+function JourneyGraph({
+  layout,
+  active,
+  reduce,
+  className,
+}: {
+  layout: { box: string; at: Record<string, number[]> };
+  active: number;
+  reduce: boolean;
+  className: string;
+}) {
   const W = 150;
   const H = 54;
+  const gid = `lp-edge-${layout.box.replace(/\D+/g, '-')}`;
   return (
-    <svg viewBox="0 0 560 230" className="h-full w-full">
+    <svg viewBox={layout.box} className={`h-auto w-full ${className}`} role="img" aria-label="Example journey: registered, messages, check-in menu, payment link or nurture, won">
       <defs>
-        <linearGradient id="lp-edge" x1="0" x2="1">
+        <linearGradient id={gid} x1="0" x2="1">
           <stop offset="0" stopColor="#25D366" />
           <stop offset="1" stopColor="#a78bfa" />
         </linearGradient>
       </defs>
       {EDGES.map(([a, b]) => {
-        const A = pos[a];
-        const B = pos[b];
-        const x1 = A.x + W / 2;
-        const y1 = A.y + H / 2;
-        const x2 = B.x + W / 2;
-        const y2 = B.y + H / 2;
+        const [ax, ay] = layout.at[a];
+        const [bx, by] = layout.at[b];
+        const x1 = ax + W / 2;
+        const y1 = ay + H / 2;
+        const x2 = bx + W / 2;
+        const y2 = by + H / 2;
         const d = `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`;
         return (
           <g key={`${a}-${b}`}>
             <path d={d} stroke="rgba(255,255,255,0.08)" strokeWidth="2" fill="none" />
-            <path d={d} stroke="url(#lp-edge)" strokeWidth="2" fill="none" strokeDasharray="6 10" className={reduce ? '' : 'animate-[lp-dash_1.2s_linear_infinite]'} />
+            <path d={d} stroke={`url(#${gid})`} strokeWidth="2" fill="none" strokeDasharray="6 10" className={reduce ? '' : 'animate-[lp-dash_1.2s_linear_infinite]'} />
           </g>
         );
       })}
       {NODES.map((n, i) => (
-        <g key={n.id} transform={`translate(${n.x},${n.y})`}>
+        <g key={n.id} transform={`translate(${layout.at[n.id][0]},${layout.at[n.id][1]})`}>
           <rect
             width={W}
             height={H}

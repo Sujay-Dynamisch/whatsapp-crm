@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 
 import { Globe } from './globe';
+import { MobileMenu } from './mobile-menu';
 import { PlanActions } from './plan-actions';
 import { CompareTable } from './compare-table';
 import { InboxDemo, JourneyDemo, RecoveryDemo, RolesDemo } from './demos';
@@ -64,7 +65,7 @@ const NAV = [
 
 function SectionHead({ eyebrow, title, sub }: { eyebrow: string; title: React.ReactNode; sub?: string }) {
   return (
-    <Reveal className="mx-auto mb-12 max-w-3xl text-center">
+    <Reveal className="mx-auto mb-12 max-w-3xl px-5 text-center">
       <p className="mb-3 text-xs font-semibold tracking-[0.2em] text-emerald-400 uppercase">{eyebrow}</p>
       <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-5xl">{title}</h2>
       {sub && <p className="mt-4 text-base text-slate-400 sm:text-lg">{sub}</p>}
@@ -105,8 +106,8 @@ export function LandingPage() {
     <div className="lp min-h-screen overflow-x-hidden bg-[#0d1117] text-slate-200 antialiased selection:bg-emerald-400/30">
       {/* Nav */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#0d1117]/70 backdrop-blur-xl">
-        <nav className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-5">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-white">
+        <nav className="relative mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:gap-6 sm:px-5">
+          <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold text-white">
             <Image
               src="/brand/flowza-circle-192.png"
               alt=""
@@ -124,18 +125,23 @@ export function LandingPage() {
               </a>
             ))}
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Link href="/login" className="rounded-lg px-3 py-1.5 text-sm text-slate-300 transition-colors hover:text-white">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+            <Link
+              href="/login"
+              className="hidden rounded-lg px-3 py-1.5 text-sm whitespace-nowrap text-slate-300 transition-colors hover:text-white min-[400px]:inline-block"
+            >
               Sign in
             </Link>
             <a
               href={demoLink()}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg bg-white px-3.5 py-1.5 text-sm font-medium text-black transition-transform hover:scale-[1.03]"
+              className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium whitespace-nowrap text-black transition-transform hover:scale-[1.03] sm:px-3.5"
             >
-              Book a free demo
+              <span className="sm:hidden">Free demo</span>
+              <span className="hidden sm:inline">Book a free demo</span>
             </a>
+            <MobileMenu links={NAV} demoHref={demoLink()} />
           </div>
         </nav>
       </header>
@@ -172,12 +178,12 @@ export function LandingPage() {
               </p>
             </Reveal>
             <Reveal delay={240}>
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="mt-8 flex flex-col gap-3 min-[380px]:flex-row min-[380px]:flex-wrap">
                 <a
                   href={demoLink()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-black shadow-[0_0_40px_rgba(37,211,102,0.35)] transition-all hover:bg-emerald-300 hover:shadow-[0_0_60px_rgba(37,211,102,0.5)]"
+                  className="group inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-black shadow-[0_0_40px_rgba(37,211,102,0.35)] transition-all hover:bg-emerald-300 hover:shadow-[0_0_60px_rgba(37,211,102,0.5)]"
                 >
                   <MessageCircle className="h-4 w-4" />
                   Get a free live demo
@@ -185,7 +191,7 @@ export function LandingPage() {
                 </a>
                 <a
                   href="#pricing"
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                 >
                   See pricing
                 </a>
@@ -460,8 +466,8 @@ export function LandingPage() {
       </section>
 
       {/* Demo CTA */}
-      <section id="demo" className="scroll-mt-20 px-5 py-24">
-        <Reveal className="relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#123524] via-[#0d1117] to-[#1e1440] p-10 text-center sm:p-16">
+      <section id="demo" className="scroll-mt-20 px-4 py-24 sm:px-5">
+        <Reveal className="relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#123524] via-[#0d1117] to-[#1e1440] px-5 py-10 text-center sm:p-16">
           <div className="lp-stars pointer-events-none absolute inset-0 opacity-40" />
           <p className="relative text-xs font-semibold tracking-[0.2em] text-emerald-300 uppercase">See it before you subscribe</p>
           <h2 className="relative mt-4 text-3xl font-semibold tracking-tight text-white sm:text-5xl">Get a free live demo</h2>
@@ -473,7 +479,7 @@ export function LandingPage() {
               href={demoLink()}
               target="_blank"
               rel="noopener noreferrer"
-              className="group inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-6 py-3.5 font-semibold text-black shadow-[0_0_50px_rgba(37,211,102,0.4)] transition-all hover:bg-emerald-300"
+              className="group inline-flex max-w-full items-center gap-2 rounded-xl bg-emerald-400 px-5 py-3.5 font-semibold whitespace-nowrap text-black shadow-[0_0_50px_rgba(37,211,102,0.4)] sm:px-6 transition-all hover:bg-emerald-300"
             >
               <MessageCircle className="h-5 w-5" />
               WhatsApp {CONTACT.name}
@@ -493,7 +499,7 @@ export function LandingPage() {
             <Image src="/brand/flowza-circle-192.png" alt="" width={20} height={20} className="h-5 w-5 rounded-full" />© {new Date().getFullYear()} Flowza · Don’t
             just send messages. Build relationships.
           </p>
-          <div className="flex gap-5">
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2">
             <a href="#pricing" className="hover:text-white">Pricing</a>
             <a href="#compare" className="hover:text-white">Compare</a>
             <Link href="/login" className="hover:text-white">Sign in</Link>
