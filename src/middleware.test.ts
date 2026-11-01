@@ -281,3 +281,20 @@ describe("middleware — custom role permissions (migration 062)", () => {
     expect((await run("/broadcasts")).status).toBe(200);
   });
 });
+
+describe("middleware — landing page at /", () => {
+  const run = (path: string) => middleware(new NextRequest(`https://app.test${path}`));
+
+  it("visitors see the landing page", async () => {
+    mockUser = null;
+    const res = await run("/");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("signed-in users go to the dashboard", async () => {
+    mockUser = { id: "user-1" };
+    const res = await run("/");
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/dashboard");
+  });
+});
