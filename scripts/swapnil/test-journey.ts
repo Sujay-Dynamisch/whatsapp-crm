@@ -2,7 +2,8 @@
 // Copies the live "Webinar Funnel — Swapnil Gautam" graph into
 // "[TEST] Webinar Funnel" (manual trigger, re-entry allowed) with the
 // timings squeezed: Msg 2 at +2 min, Msg 3 at +4 min, check-in at +6 min,
-// every reply wait 3 min, nurture every 2 min × 2 sends.
+// every reply wait 3 min, payment nudges at +3 / +6 min (Stage D at +9),
+// nurture every 2 min × 2 sends.
 //
 //   npx jiti scripts/swapnil/test-journey.ts                      # create/refresh the test journey
 //   npx jiti scripts/swapnil/test-journey.ts --enroll +919359742537   # …and start a run for that number
@@ -32,13 +33,23 @@ return {
   checkin_iso: ist(now + 6 * M),
 };`;
 
+// Nurture slots: every 2 minutes instead of 11 AM every 2nd day.
+const TEST_SLOT = `const now = Date.now();
+return { at: new Date(now + 2 * 60e3).toISOString(), retry_until: new Date(now + 60 * 60e3).toISOString(), final: 'no' };`;
+// Payment nudges at +3 / +6 min, Stage D at +9 min.
+const TEST_PAY_PLAN = `const now = Date.now(), iso = (m) => new Date(now + m * 60e3).toISOString();
+return { n1_ok: 'yes', n1_iso: iso(3), n2_ok: 'yes', n2_iso: iso(6), end_iso: iso(9), step1_iso: iso(3), step2_iso: iso(6) };`;
+
 function squeeze(live: JourneyGraph): JourneyGraph {
   const nodes = live.nodes.map((n) => structuredClone(n) as JourneyNode);
   for (const n of nodes) {
     const c = n.config as Record<string, unknown>;
     if (n.type === 'trigger') n.config = { trigger_type: 'manual' } as JourneyNode['config'];
     if (n.type === 'code' && (n.id === 'schedule' || n.id === 'a_next')) c.code = TEST_SCHEDULE;
-    if (n.type === 'wait_for_reply') Object.assign(c, n.id.endsWith('_wait') ? { amount: 2, unit: 'minutes' } : { amount: 3, unit: 'minutes' });
+    if (n.type === 'code' && n.id.endsWith('_slot')) c.code = TEST_SLOT;
+    if (n.type === 'code' && n.id === 'pay_plan') c.code = TEST_PAY_PLAN;
+    // Waits with their own "until" keep it (the test codes above make it minutes).
+    if (n.type === 'wait_for_reply' && !c.until) Object.assign(c, { amount: 3, unit: 'minutes' });
     if (n.type === 'loop') c.max = 2;
   }
   return { nodes };

@@ -20,6 +20,7 @@ import {
 import {
   COMPARE_OPS,
   CONDITION_KINDS,
+  REPLIED_SINCE,
   CONTACT_FIELDS,
   HTTP_METHODS,
   TRIGGER_TYPES,
@@ -387,9 +388,14 @@ Content-Type: application/json
       break;
     case 'wait_for_reply':
       body = (
-        <Field label={t('form.giveUpAfter')} help={t('form.waitReplyHelp')}>
-          {duration()}
-        </Field>
+        <>
+          <Field label={t('form.giveUpAfter')} help={t('form.waitReplyHelp')}>
+            {duration()}
+          </Field>
+          <Field label={t('form.giveUpAt')} help={t('form.giveUpAtHelp')}>
+            <ExprInput value={String(c.until ?? '')} onChange={(until) => set({ until })} suggestions={suggestions} />
+          </Field>
+        </>
       );
       break;
     case 'condition': {
@@ -405,6 +411,21 @@ Content-Type: application/json
               ))}
             </select>
           </Field>
+          {cfg.kind === 'replied' && (
+            <Field label={t('form.repliedSince')}>
+              <select
+                className={selectClass}
+                value={cfg.since ?? 'wait'}
+                onChange={(e) => set({ since: e.target.value === 'start' ? 'start' : undefined })}
+              >
+                {REPLIED_SINCE.map((k) => (
+                  <option key={k} value={k}>
+                    {t(`form.repliedSince_${k}`)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           {cfg.kind === 'has_tag' && <Field label={t('form.tag')}>{tagSelect(cfg.tag_id)}</Field>}
           {cfg.kind === 'clicked_button' && (
             <Field label={t('form.buttonText')}>

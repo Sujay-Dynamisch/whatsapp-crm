@@ -285,7 +285,8 @@ async function evaluateCondition(
   context: RunContext,
   scope: () => Promise<ExprScope>
 ): Promise<boolean> {
-  const since = context.wait_started_at ?? e.entered_at;
+  // 'start': any reply during this run; default: since the last wait began.
+  const since = cfg.kind === 'replied' && cfg.since === 'start' ? e.entered_at : context.wait_started_at ?? e.entered_at;
   switch (cfg.kind) {
     case 'has_tag': {
       const { count } = await db
@@ -590,8 +591,9 @@ async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepR
     case 'wait_for_reply': {
       const cfg = node.config as NodeConfigs['wait'];
       let until = new Date(now.getTime() + durationMs(cfg.amount, cfg.unit));
-      // "Wait until": resume at a computed time (past = next tick), capped at 90 days.
-      if (node.type === 'wait' && cfg.until?.trim()) {
+      // "Wait until": resume / time out at a computed time (past = next
+      // tick), capped at 90 days. An unusable value keeps amount/unit.
+      if (cfg.until?.trim()) {
         const raw = evaluateValue(cfg.until, await rt.scope());
         const at = new Date(raw instanceof Date ? raw.getTime() : String(raw ?? ''));
         if (!Number.isNaN(at.getTime())) {
@@ -887,7 +889,9 @@ export async function enrollContact(
   journey: JourneyRow,
   contactId: string,
   deps: JourneyDeps,
-  context: Record<string, unknown> = {}
+  context: Record<string, unknown> = {},
+  /** `reentry`: start even if the contact ran this journey before (e.g. they registered again). */
+  options: { reentry?: boolean } = {}
 ): Promise<{ enrolled: boolean; outcome?: AdvanceOutcome; reason?: string }> {
   if (journey.status !== 'active') return { enrolled: false, reason: 'journey_not_active' };
   const trigger = findTrigger(journey.graph);
@@ -895,7 +899,8 @@ export async function enrollContact(
 
   // Scheduled and webhook runs repeat by design; the live-enrollment
   // unique index still keeps one run per contact at a time.
-  const repeats = journey.allow_reentry || journey.trigger_type === 'schedule' || journey.trigger_type === 'webhook';
+  const repeats =
+    options.reentry || journey.allow_reentry || journey.trigger_type === 'schedule' || journey.trigger_type === 'webhook';
   if (!repeats) {
     const { count } = await db
       .from('journey_enrollments')
