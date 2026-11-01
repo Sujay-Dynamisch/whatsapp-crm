@@ -195,6 +195,16 @@ BEGIN
     RAISE EXCEPTION 'journey workflow schema incomplete — migration 054 did not apply';
   END IF;
 
+  -- 059: callback follow-ups. The Callbacks API counts "No answer" marks
+  -- and the tick stamps reminders.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'callback_requests'
+      AND column_name IN ('no_answer_count', 'reminded_at')
+  ) <> 2 THEN
+    RAISE EXCEPTION 'callback follow-up columns missing — migration 059 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

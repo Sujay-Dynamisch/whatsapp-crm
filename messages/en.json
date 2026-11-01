@@ -2199,7 +2199,26 @@
     "updateFailed": "Could not update the request",
     "toastTitle": "📞 New callback request",
     "aContact": "A contact",
-    "open": "Open"
+    "open": "Open",
+    "markNoAnswerAgain": "No answer again",
+    "noAnswerTimes": "No answer ×{count}",
+    "backToNurture": "Back to nurture",
+    "backToNurtureTitle": "Put {name} back into nurture?",
+    "backToNurtureBody": "Use this when you couldn't reach them. The request is closed and they get the nurture messages again (11 AM every 2nd day, then closed-lost after 15 days).",
+    "backedToNurture": "Back in nurture — request closed",
+    "followMessaged": "Marked as no answer — they were sent “we tried calling you”",
+    "followMessagedHint": "{left, plural, one {One more “No answer” puts them back into nurture.} other {# more “No answer” marks put them back into nurture.}}",
+    "followReturned": "No answer {count}× — request closed, lead back in nurture",
+    "overdueToastTitle": "⏰ Callback waiting 4+ hours",
+    "returnedToastTitle": "↩ Lead back in nurture (callback not reached)",
+    "reason": {
+      "not_in_journey": "They were never in a journey, so no message was sent.",
+      "not_configured": "Their journey has no callback follow-up step.",
+      "opted_out": "They opted out (STOP) — no message sent.",
+      "closed": "They're marked paid / closed — no message sent.",
+      "busy": "Their journey is busy right now — try again in a minute.",
+      "start_failed": "Could not restart their journey — try again."
+    }
   },
   "ButtonClicks": {
     "title": "Button Clicks",

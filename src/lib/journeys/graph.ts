@@ -116,6 +116,18 @@ export interface TriggerConfig extends Partial<ScheduleConfig> {
   contact_source?: ContactSource;
   /** Any trigger: stop a run as soon as the contact has one of these tags (e.g. paid, closed). */
   exit_tag_ids?: string[];
+  /** Callbacks: the step a lead goes back to when their callback didn't work out (e.g. a nurture stage). */
+  callback_return_node?: string;
+  /** Callbacks: the step that tells a lead "we tried calling you" after a "No answer". */
+  callback_missed_node?: string;
+  /** Callbacks: after this many "No answer" marks the lead goes back to `callback_return_node` (default 2). */
+  callback_no_answer_limit?: number;
+}
+
+/** Steps a run can start at besides the trigger (callback follow-ups). */
+export function entryNodeIds(graph: JourneyGraph): string[] {
+  const cfg = (findTrigger(graph)?.config ?? {}) as TriggerConfig;
+  return [cfg.callback_return_node, cfg.callback_missed_node].filter((x): x is string => Boolean(x));
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -347,6 +359,11 @@ export function validateGraph(graph: unknown): GraphIssue[] {
 
   const triggers = g.nodes.filter((n) => n?.type === 'trigger');
   if (triggers.length !== 1) issues.push({ nodeId: null, message: 'A journey needs exactly one trigger' });
+  if (triggers.length === 1) {
+    for (const id of entryNodeIds(g)) {
+      if (!ids.has(id)) issues.push({ nodeId: triggers[0].id, message: `Callback follow-up step "${id}" does not exist` });
+    }
+  }
 
   for (const n of g.nodes) {
     if (!n || !NODE_TYPES.includes(n.type)) continue;
@@ -364,7 +381,7 @@ export function validateGraph(graph: unknown): GraphIssue[] {
   if (triggers.length === 1) {
     const byId = new Map(g.nodes.map((n) => [n.id, n]));
     const seen = new Set<string>();
-    const stack = [triggers[0].id];
+    const stack = [triggers[0].id, ...entryNodeIds(g).filter((id) => ids.has(id))];
     while (stack.length) {
       const id = stack.pop()!;
       if (seen.has(id)) continue;
@@ -402,6 +419,10 @@ function configIssues(n: JourneyNode): GraphIssue[] {
         bad('Default country code must be 1–4 digits, e.g. 91');
       }
       if (t === 'schedule') out.push(...scheduleIssues(n.id, cfg));
+      if (cfg.callback_no_answer_limit !== undefined) {
+        const lim = Number(cfg.callback_no_answer_limit);
+        if (!Number.isInteger(lim) || lim < 1 || lim > 10) bad('"No answer" limit must be 1–10');
+      }
       break;
     }
     case 'wait':

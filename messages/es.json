@@ -2199,7 +2199,26 @@
     "updateFailed": "No se pudo actualizar la solicitud",
     "toastTitle": "📞 Nueva solicitud de llamada",
     "aContact": "Un contacto",
-    "open": "Abrir"
+    "open": "Abrir",
+    "markNoAnswerAgain": "No contestó otra vez",
+    "noAnswerTimes": "No contestó ×{count}",
+    "backToNurture": "Volver a la nutrición",
+    "backToNurtureTitle": "¿Devolver a {name} a la nutrición?",
+    "backToNurtureBody": "Úsalo cuando no logres contactarle. La solicitud se cierra y vuelve a recibir los mensajes de nutrición (11 AM cada 2 días, luego perdido a los 15 días).",
+    "backedToNurture": "De vuelta en nutrición — solicitud cerrada",
+    "followMessaged": "Marcado como no contestó — se envió “intentamos llamarte”",
+    "followMessagedHint": "{left, plural, one {Un “No contestó” más lo devuelve a la nutrición.} other {# “No contestó” más lo devuelven a la nutrición.}}",
+    "followReturned": "No contestó {count}× — solicitud cerrada, lead de vuelta en nutrición",
+    "overdueToastTitle": "⏰ Devolución de llamada esperando más de 4 horas",
+    "returnedToastTitle": "↩ Lead de vuelta en nutrición (sin contacto)",
+    "reason": {
+      "not_in_journey": "Nunca estuvo en un recorrido, así que no se envió mensaje.",
+      "not_configured": "Su recorrido no tiene paso de seguimiento de llamadas.",
+      "opted_out": "Se dio de baja (STOP) — no se envió mensaje.",
+      "closed": "Marcado como pagado/cerrado — no se envió mensaje.",
+      "busy": "Su recorrido está ocupado ahora — inténtalo en un minuto.",
+      "start_failed": "No se pudo reiniciar su recorrido — inténtalo de nuevo."
+    }
   },
   "ButtonClicks": {
     "title": "Clics en botones",

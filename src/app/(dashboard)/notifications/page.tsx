@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { Notification } from "@/types";
-import { Bell, CheckCheck, Loader2, PhoneCall, UserPlus } from "lucide-react";
+import { AlarmClock, Bell, CheckCheck, Loader2, PhoneCall, Repeat, UserPlus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,8 @@ import { useTranslations } from "next-intl";
 const TYPE_ICON: Record<Notification["type"], typeof Bell> = {
   conversation_assigned: UserPlus,
   callback_requested: PhoneCall,
+  callback_overdue: AlarmClock,
+  callback_returned: Repeat,
 };
 
 export default function NotificationsPage() {
@@ -117,7 +119,7 @@ export default function NotificationsPage() {
   const handleClick = useCallback(
     (n: Notification) => {
       if (!n.read_at) markRead(n.id);
-      if (n.type === "callback_requested") {
+      if (n.type === "callback_requested" || n.type === "callback_overdue" || n.type === "callback_returned") {
         router.push("/callbacks");
       } else if (n.conversation_id) {
         router.push(`/inbox?c=${n.conversation_id}`);

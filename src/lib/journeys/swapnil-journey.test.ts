@@ -19,6 +19,7 @@ import { dispatchJourneyInbound, dispatchJourneyTrigger, restartJourneysOnReregi
 import { runJourneyTick, type JourneyDeps, type JourneyRow } from './engine';
 import { validateGraph, type JourneyGraph, type NodeConfigs } from './graph';
 import { isUnsubscribeText } from '@/lib/contacts/unsubscribe';
+import { handleNoAnswer, returnToNurture, runCallbackFollowUps } from '@/lib/callbacks/followups';
 
 // ============================================================
 // End-to-end runs of Swapnil Gautam's webinar journey (the graph the
@@ -168,6 +169,13 @@ const deps: JourneyDeps = {
 function addTag(contactId: string, tagId: string) {
   if (tables.contact_tags.some((r) => r.contact_id === contactId && r.tag_id === tagId)) return;
   tables.contact_tags.push({ id: `ct-${++seq}`, contact_id: contactId, tag_id: tagId, tags: { name: TAG_NAMES.get(tagId) ?? tagId } });
+  // Database trigger (migration 058): the callback tag opens one request.
+  if (tagId === TAG_IDS.callback_requested && !tables.callback_requests.some((r) => r.contact_id === contactId && r.status !== 'done')) {
+    tables.callback_requests.push({
+      id: `cb-${++seq}`, account_id: 'acct', contact_id: contactId, conversation_id: `conv${contactId.slice(1)}`, status: 'new',
+      note: null, no_answer_count: 0, requested_at: clock.toISOString(), handled_at: null, reminded_at: null,
+    });
+  }
 }
 const hasTag = (name: (typeof TAGS)[number] | 'unsubscribe', contactId = 'c1') =>
   tables.contact_tags.some((r) => r.contact_id === contactId && TAG_NAMES.get(String(r.tag_id)) === name);
@@ -264,7 +272,13 @@ beforeEach(() => {
       { id: 'conv1', account_id: 'acct', contact_id: 'c1', last_customer_message_at: null },
       { id: 'conv2', account_id: 'acct', contact_id: 'c2', last_customer_message_at: null },
     ],
-    profiles: [{ user_id: 'owner', account_id: 'acct' }],
+    profiles: [
+      { user_id: 'owner', account_id: 'acct', account_role: 'owner' },
+      { user_id: 'agent', account_id: 'acct', account_role: 'agent' },
+    ],
+    tags: TAGS.map((t) => ({ id: `tag-${t}`, account_id: 'acct', name: t })),
+    callback_requests: [],
+    notifications: [],
     messages: [],
     contact_tags: [],
     journey_enrollments: [],
@@ -296,6 +310,8 @@ describe('graph', () => {
       sg_nurture_postwebinar: 1,
       sg_nurture_coldlead: 1,
       sg_nurture_payment: 2,
+      // Not in the PDF: the "we tried calling you" follow-up (migration 059).
+      sg_callback_missed: 1,
     };
     const used = g.nodes.filter((n) => n.type === 'send_template');
     expect(new Set(used.map((n) => (n.config as NodeConfigs['send_template']).template_name))).toEqual(new Set(Object.keys(expected)));
@@ -896,5 +912,169 @@ describe('registering again', () => {
     clock = ist('2026-11-03 09:00');
     expect(await again('reg-x', '2026-11-03 08:59')).toBe(1);
     expect(log()).toEqual(['Tue 03 09:00 sg_webinar_confirmation']);
+  });
+});
+
+// ============================================================
+// Callback didn't work out (Callbacks page, migration 059)
+// ============================================================
+describe('callback follow-ups', () => {
+  const request = () => tables.callback_requests.at(-1)!;
+  /** What PATCH /api/callbacks/[id] does for "No answer". */
+  const noAnswer = async (when: string) => {
+    await runUntil(when);
+    const r = request();
+    Object.assign(r, { status: 'no_answer', no_answer_count: Number(r.no_answer_count) + 1, handled_at: clock.toISOString() });
+    return handleNoAnswer(db(), String(r.id), deps);
+  };
+  /** Lead registers Mon 10 AM and asks for a callback at the Tue 7 AM check-in. */
+  const askForCallback = async () => {
+    await register('2026-11-02 10:00');
+    await reply('Request a callback', '2026-11-03 08:00');
+    expect(request()).toMatchObject({ status: 'new', contact_id: 'c1' });
+    expect(run().status).toBe('completed');
+  };
+
+  it('1st “No answer” → “we tried calling you”; request stays open for another try', async () => {
+    await askForCallback();
+    expect(await noAnswer('2026-11-03 12:00')).toMatchObject({ action: 'messaged', count: 1, limit: 2 });
+    expect(log().at(-1)).toBe('Tue 03 12:00 sg_callback_missed');
+    expect(templates('sg_callback_missed')[0].params).toEqual(['Asha']);
+    expect(request()).toMatchObject({ status: 'no_answer', no_answer_count: 1 });
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: 'cb_wait' });
+  });
+
+  it('… lead taps “Call me again” → back to the team, confirmation sent, request still open', async () => {
+    await askForCallback();
+    await noAnswer('2026-11-03 12:00');
+    await reply('Call me again', '2026-11-03 13:00');
+    expect(sent.at(-1)!.text).toBe('Thank you, Asha! 🙏 My team will call you shortly.');
+    expect(request().status).not.toBe('done');
+    expect(run().status).toBe('completed');
+  });
+
+  it('… lead taps “Not now” → Stage C nurture at 11 AM, closed-lost on day 15', async () => {
+    await askForCallback();
+    await noAnswer('2026-11-03 12:00');
+    await reply('Not now', '2026-11-03 13:00');
+    await runUntil('2026-11-25 00:00');
+    expect(log(-8)).toEqual(
+      ['Wed 04', 'Fri 06', 'Sun 08', 'Tue 10', 'Thu 12', 'Sat 14', 'Mon 16', 'Wed 18'].map((d) => `${d} 11:00 sg_nurture_coldlead`)
+    );
+    expect(hasTag('closed_lost')).toBe(true);
+  });
+
+  it('… lead replies “1” → payment link, with the journey’s settings carried over', async () => {
+    await askForCallback();
+    await noAnswer('2026-11-03 12:00');
+    await reply('1', '2026-11-03 13:00');
+    expect(sent.at(-1)!.text).toContain(LINKS.pay);
+  });
+
+  it('… no reply in 24h → nothing more is sent; the request waits for the team', async () => {
+    await askForCallback();
+    await noAnswer('2026-11-03 12:00');
+    const count = sent.length;
+    await runUntil('2026-11-05 11:00');
+    expect(sent.length).toBe(count);
+    expect(run()).toMatchObject({ status: 'completed', current_node_id: 'end' });
+  });
+
+  it('2nd “No answer” → request closed, tag removed, owner told, lead back in Stage C', async () => {
+    await askForCallback();
+    await noAnswer('2026-11-03 12:00');
+    expect(await noAnswer('2026-11-04 12:00')).toMatchObject({ action: 'returned', count: 2 });
+    expect(request()).toMatchObject({ status: 'done', note: 'Back to nurture (automatic)' });
+    expect(hasTag('callback_requested')).toBe(false);
+    expect(tables.notifications).toEqual([
+      expect.objectContaining({ user_id: 'owner', type: 'callback_returned', contact_id: 'c1', body: 'Asha · +919800000001' }),
+    ]);
+    await runUntil('2026-11-06 00:00');
+    expect(log().at(-1)).toBe('Thu 05 11:00 sg_nurture_coldlead');
+  });
+
+  it('“Back to nurture” button → closed + Stage C, no admin notification', async () => {
+    await askForCallback();
+    await runUntil('2026-11-03 15:00');
+    const r = await returnToNurture(db(), request() as never, deps, 'manual');
+    expect(r.started).toBe(true);
+    expect(request()).toMatchObject({ status: 'done', note: 'Back to nurture' });
+    expect(tables.notifications).toEqual([]);
+    await runUntil('2026-11-05 00:00');
+    expect(log().at(-1)).toBe('Wed 04 11:00 sg_nurture_coldlead');
+  });
+
+  it('a request still “New” after 4 hours → one reminder to owners/admins (not agents)', async () => {
+    await askForCallback(); // Tue 08:00
+    await runUntil('2026-11-03 11:59');
+    expect((await runCallbackFollowUps(db(), deps)).reminded).toBe(0);
+    await runUntil('2026-11-03 12:01');
+    expect((await runCallbackFollowUps(db(), deps)).reminded).toBe(1);
+    expect((await runCallbackFollowUps(db(), deps)).reminded).toBe(0); // once
+    expect(tables.notifications).toEqual([
+      expect.objectContaining({ user_id: 'owner', type: 'callback_overdue', title: 'Callback waiting 4+ hours' }),
+    ]);
+  });
+
+  it('a request already called is not reminded', async () => {
+    await askForCallback();
+    request().status = 'called';
+    await runUntil('2026-11-04 12:00');
+    expect((await runCallbackFollowUps(db(), deps)).reminded).toBe(0);
+  });
+
+  it('“No answer” then nobody tries again for 48h → back to nurture automatically', async () => {
+    await askForCallback();
+    await noAnswer('2026-11-03 12:00');
+    await runUntil('2026-11-05 11:59');
+    expect((await runCallbackFollowUps(db(), deps)).returned).toBe(0);
+    await runUntil('2026-11-05 12:01');
+    expect((await runCallbackFollowUps(db(), deps)).returned).toBe(1);
+    expect(request().status).toBe('done');
+    await runUntil('2026-11-07 00:00');
+    expect(log().at(-1)).toBe('Fri 06 11:00 sg_nurture_coldlead');
+  });
+
+  it('paid / opted-out leads are never messaged or put back', async () => {
+    for (const tag of [TAG_IDS.paid, 'tag-unsub']) {
+      tables.journey_enrollments = [];
+      tables.contact_tags = [];
+      tables.callback_requests = [];
+      sent = [];
+      await askForCallback();
+      addTag('c1', tag);
+      const count = sent.length;
+      expect((await noAnswer('2026-11-03 12:00')).action, tag).toBe('none');
+      expect((await returnToNurture(db(), request() as never, deps, 'manual')).reason).toBe(tag === TAG_IDS.paid ? 'closed' : 'opted_out');
+      expect(sent.length).toBe(count);
+      expect(request().status).toBe('no_answer'); // left for the team
+    }
+  });
+
+  it('a contact who was never in the journey → nothing sent, request left for the team', async () => {
+    clock = ist('2026-11-03 08:00');
+    addTag('c2', TAG_IDS.callback_requested);
+    expect(await noAnswer('2026-11-03 12:00')).toMatchObject({ action: 'none', reason: 'not_in_journey' });
+    expect(sent).toEqual([]);
+    expect(request().status).toBe('no_answer');
+  });
+
+  it('a stale “No answer” that can’t go back → the team is told once, retried after another 48h', async () => {
+    clock = ist('2026-11-03 08:00');
+    addTag('c2', TAG_IDS.callback_requested);
+    await noAnswer('2026-11-03 12:00');
+    await runUntil('2026-11-05 12:01');
+    expect((await runCallbackFollowUps(db(), deps)).returned).toBe(0);
+    expect((await runCallbackFollowUps(db(), deps)).returned).toBe(0);
+    expect(tables.notifications.filter((n) => n.type === 'callback_overdue')).toHaveLength(1);
+  });
+
+  it('the follow-up steps are valid entry points of the journey', () => {
+    const g = buildJourney(TAG_IDS, 'owner');
+    const t = g.nodes.find((n) => n.type === 'trigger')!.config as NodeConfigs['trigger'];
+    expect(t).toMatchObject({ callback_missed_node: 'cb_missed', callback_return_node: 'c_slot', callback_no_answer_limit: 2 });
+    expect(validateGraph(g)).toEqual([]);
+    t.callback_missed_node = 'nope';
+    expect(validateGraph(g)).toContainEqual({ nodeId: 'trigger', message: 'Callback follow-up step "nope" does not exist' });
   });
 });

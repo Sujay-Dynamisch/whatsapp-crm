@@ -2199,7 +2199,26 @@
     "updateFailed": "Não foi possível atualizar o pedido",
     "toastTitle": "📞 Novo pedido de ligação",
     "aContact": "Um contato",
-    "open": "Abrir"
+    "open": "Abrir",
+    "markNoAnswerAgain": "Não atendeu de novo",
+    "noAnswerTimes": "Não atendeu ×{count}",
+    "backToNurture": "Voltar para a nutrição",
+    "backToNurtureTitle": "Colocar {name} de volta na nutrição?",
+    "backToNurtureBody": "Use quando não conseguir falar com a pessoa. A solicitação é fechada e ela volta a receber as mensagens de nutrição (11h a cada 2 dias, depois perdida após 15 dias).",
+    "backedToNurture": "De volta à nutrição — solicitação fechada",
+    "followMessaged": "Marcado como não atendeu — enviamos “tentamos ligar para você”",
+    "followMessagedHint": "{left, plural, one {Mais um “Não atendeu” a coloca de volta na nutrição.} other {Mais # “Não atendeu” a colocam de volta na nutrição.}}",
+    "followReturned": "Não atendeu {count}× — solicitação fechada, lead de volta à nutrição",
+    "overdueToastTitle": "⏰ Retorno esperando há mais de 4 horas",
+    "returnedToastTitle": "↩ Lead de volta à nutrição (sem contato)",
+    "reason": {
+      "not_in_journey": "Nunca esteve em uma jornada, então nenhuma mensagem foi enviada.",
+      "not_configured": "A jornada não tem etapa de acompanhamento de retorno.",
+      "opted_out": "Cancelou (STOP) — nenhuma mensagem enviada.",
+      "closed": "Marcado como pago/fechado — nenhuma mensagem enviada.",
+      "busy": "A jornada está ocupada agora — tente de novo em um minuto.",
+      "start_failed": "Não foi possível reiniciar a jornada — tente de novo."
+    }
   },
   "ButtonClicks": {
     "title": "Cliques em botões",

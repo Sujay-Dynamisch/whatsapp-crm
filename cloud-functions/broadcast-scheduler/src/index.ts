@@ -12,7 +12,8 @@
 //
 //   windowKeepalive     ← Cloud Scheduler (*/5 min) — 24h-window check-ins
 //   journeyTick         ← Cloud Scheduler (every minute) — journey waits / timeouts,
-//                         plus the external lead sync (src/lib/lead-sync)
+//                         plus the external lead sync (src/lib/lead-sync) and
+//                         callback follow-ups (src/lib/callbacks/followups)
 //
 // Plain exported (req, res) handlers — the Node runtime wraps them in
 // the Functions Framework automatically, so no runtime dependency.
@@ -40,6 +41,7 @@ import {
 import { runWindowKeepalive } from '@/lib/conversations/window-keepalive';
 import { runJourneyTick } from '@/lib/journeys/engine';
 import { liveJourneyDeps } from '@/lib/journeys/dispatch';
+import { runCallbackFollowUps } from '@/lib/callbacks/followups';
 import { runLeadSync } from '@/lib/lead-sync/registrations';
 
 // Shared app modules (flows/ai admin clients used by engineSendText)
@@ -206,7 +208,11 @@ export async function journeyTick(req: Req, res: Res): Promise<void> {
       error: err instanceof Error ? err.message : String(err),
     }));
     const report = await runJourneyTick(s.db, liveJourneyDeps);
-    console.log(JSON.stringify({ fn: 'journeyTick', ...report, leadSync }));
+    // Callback reminders (4h) and the 48h "No answer" → nurture rule.
+    const callbacks = await runCallbackFollowUps(s.db, liveJourneyDeps).catch((err) => ({
+      error: err instanceof Error ? err.message : String(err),
+    }));
+    console.log(JSON.stringify({ fn: 'journeyTick', ...report, leadSync, callbacks }));
     res.status(200).json(report);
   } catch (err) {
     console.error('[journeyTick]', err);

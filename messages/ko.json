@@ -2199,7 +2199,26 @@
     "updateFailed": "요청을 업데이트할 수 없습니다",
     "toastTitle": "📞 새 콜백 요청",
     "aContact": "연락처",
-    "open": "열기"
+    "open": "열기",
+    "markNoAnswerAgain": "다시 부재중",
+    "noAnswerTimes": "부재중 ×{count}",
+    "backToNurture": "너처로 돌려보내기",
+    "backToNurtureTitle": "{name} 님을 너처로 돌려보낼까요?",
+    "backToNurtureBody": "연락이 닿지 않을 때 사용하세요. 요청이 종료되고 너처 메시지를 다시 받습니다(이틀마다 오전 11시, 15일 후 종료-실패).",
+    "backedToNurture": "너처로 돌아갔습니다 — 요청 종료",
+    "followMessaged": "부재중으로 표시 — “전화를 드렸습니다” 메시지를 보냈습니다",
+    "followMessagedHint": "{left, plural, other {부재중을 #번 더 표시하면 너처로 돌아갑니다.}}",
+    "followReturned": "부재중 {count}회 — 요청 종료, 리드는 너처로 돌아감",
+    "overdueToastTitle": "⏰ 4시간 넘게 대기 중인 콜백",
+    "returnedToastTitle": "↩ 리드가 너처로 돌아감 (콜백 연결 실패)",
+    "reason": {
+      "not_in_journey": "여정에 참여한 적이 없어 메시지를 보내지 않았습니다.",
+      "not_configured": "여정에 콜백 후속 단계가 없습니다.",
+      "opted_out": "수신 거부(STOP) — 메시지를 보내지 않았습니다.",
+      "closed": "결제 완료/종료로 표시됨 — 메시지를 보내지 않았습니다.",
+      "busy": "여정이 지금 실행 중입니다 — 잠시 후 다시 시도하세요.",
+      "start_failed": "여정을 다시 시작하지 못했습니다 — 다시 시도하세요."
+    }
   },
   "ButtonClicks": {
     "title": "버튼 클릭",

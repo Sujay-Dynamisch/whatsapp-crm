@@ -28,6 +28,8 @@ export type TagIds = Record<(typeof TAGS)[number], string>;
 
 /** Nurture sends go out at this IST hour. */
 export const NURTURE_HOUR = 11;
+/** "No answer" marks on a callback before the lead goes back to nurture. */
+export const CALLBACK_NO_ANSWER_LIMIT = 2;
 /** Payment nudges only between these IST hours. */
 export const DAY_START_HOUR = 9;
 export const DAY_END_HOUR = 21;
@@ -148,7 +150,16 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
   // ---------- Registration → Msg 1 → Msg 2 / Msg 3 → 7 AM check-in ----------
   // Global overrides: STOP always ends the run (engine); paid / manually_closed
   // (kill switch) end it via exit tags.
-  add('trigger', 'trigger', 'Contact added (API)', { trigger_type: 'contact_created', contact_source: 'api', exit_tag_ids: [tag.paid, tag.manually_closed] }, { next: 'settings' });
+  add('trigger', 'trigger', 'Contact added (API)', {
+    trigger_type: 'contact_created',
+    contact_source: 'api',
+    exit_tag_ids: [tag.paid, tag.manually_closed],
+    // Callback follow-ups (Callbacks page): "No answer" → cb_missed; 2nd
+    // "No answer", "Back to nurture" or 48h without action → Stage C.
+    callback_missed_node: 'cb_missed',
+    callback_return_node: 'c_slot',
+    callback_no_answer_limit: CALLBACK_NO_ANSWER_LIMIT,
+  }, { next: 'settings' });
   add('settings', 'set_variable', 'Settings (edit me)', {
     assignments: [
       { key: 'webinar_link', value: 'https://PASTE-WEBINAR-LINK' },
@@ -273,6 +284,20 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
   add('tag_callback', 'add_tag', 'Tag: callback_requested', { tag_id: tag.callback_requested }, { next: 'assign_owner' });
   add('assign_owner', 'conversation', 'Human handoff (assign Swapnil)', { action: 'assign', user_id: ownerUserId }, { next: 'callback_msg' });
   add('callback_msg', 'send_text', 'Confirm callback', { text: `Thank you, ${NAME}! 🙏 My team will call you shortly.` }, { next: 'end' });
+
+  // Callback not answered (started from the Callbacks page): tell them we
+  // tried. "Call me again" → back to the team; "Not now" → Stage C
+  // nurture; anything else → the conversion menu. No reply → the
+  // request stays with the team (2nd "No answer" / 48h → Stage C).
+  add('cb_missed', 'send_template', 'We tried calling you', tpl('sg_callback_missed', [NAME]), { next: 'cb_wait' });
+  add('cb_wait', 'wait_for_reply', 'Wait 24h for a reply', { amount: 24, unit: 'hours' }, { replied: 'cb_reply', timeout: 'end' });
+  add('cb_reply', 'switch', 'Reply to "we tried calling"', {
+    value: lc,
+    cases: [
+      { op: 'contains', value: 'not now', label: 'Not now' },
+      { op: 'contains', value: 'call', label: 'Call me again' },
+    ],
+  }, { case_0: 'c_slot', case_1: 'tag_callback', default: 'mark_menu' });
 
   // ---------- 15-day alternate-day nurture (11 AM IST) → CLOSED-LOST ----------
   //   x_slot → x_wait (until the slot; a reply leaves the nurture)

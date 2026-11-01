@@ -890,12 +890,17 @@ export async function enrollContact(
   contactId: string,
   deps: JourneyDeps,
   context: Record<string, unknown> = {},
-  /** `reentry`: start even if the contact ran this journey before (e.g. they registered again). */
-  options: { reentry?: boolean } = {}
+  /**
+   * `reentry`: start even if the contact ran this journey before (e.g. they registered again).
+   * `startAt`: begin at this step instead of the trigger (e.g. back to nurture after a failed callback).
+   */
+  options: { reentry?: boolean; startAt?: string } = {}
 ): Promise<{ enrolled: boolean; outcome?: AdvanceOutcome; reason?: string }> {
   if (journey.status !== 'active') return { enrolled: false, reason: 'journey_not_active' };
   const trigger = findTrigger(journey.graph);
   if (!trigger) return { enrolled: false, reason: 'no_trigger' };
+  const start = options.startAt ? journey.graph.nodes.find((n) => n.id === options.startAt) : trigger;
+  if (!start) return { enrolled: false, reason: 'no_start_step' };
 
   // Scheduled and webhook runs repeat by design; the live-enrollment
   // unique index still keeps one run per contact at a time.
@@ -918,7 +923,7 @@ export async function enrollContact(
       account_id: journey.account_id,
       contact_id: contactId,
       status: 'active',
-      current_node_id: trigger.id,
+      current_node_id: start.id,
       locked_at: now.toISOString(),
       context,
       entered_at: now.toISOString(),
