@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
+import { SETTINGS_SECTION_AREA } from '@/lib/auth/permissions';
 import {
   RAIL_GROUPS,
   SECTION_META,
@@ -34,7 +35,7 @@ export function SettingsRail({
   hints?: Partial<Record<SettingsSection, ReactNode>>;
 }) {
   const t = useTranslations('Settings');
-  const { hasFeature } = useAuth();
+  const { hasFeature, can } = useAuth();
   const activeRef = useRef<HTMLButtonElement>(null);
 
   // When horizontal (mobile), keep the active chip in view. On desktop
@@ -61,7 +62,8 @@ export function SettingsRail({
       {RAIL_GROUPS.map(({ label, group }) => {
         const items = SETTINGS_SECTIONS.filter((s) => {
           const feature = SECTION_FEATURE[s];
-          return !feature || hasFeature(feature);
+          const area = SETTINGS_SECTION_AREA[s];
+          return (!feature || hasFeature(feature)) && (!area || can(area));
         }).filter(
           (s) => SECTION_META[s].group === group,
         );

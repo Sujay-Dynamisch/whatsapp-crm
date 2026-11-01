@@ -75,6 +75,8 @@ export interface AccountMember {
   avatar_url: string | null;
   role: AccountRole;
   joined_at: string;
+  /** Custom role (migration 062) — null when on a built-in role. */
+  custom_role_id?: string | null;
 }
 
 /**
@@ -88,6 +90,8 @@ export interface AccountInvitation {
   account_id: string;
   /** Roles offered via invite — owner is never offered. */
   role: Exclude<AccountRole, "owner">;
+  /** Custom role the invitee gets (migration 062). */
+  custom_role_id?: string | null;
   created_by_user_id: string | null;
   label: string | null;
   created_at: string;

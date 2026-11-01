@@ -25,6 +25,7 @@ interface ProfileRow {
   avatar_url: string | null;
   account_role: string;
   created_at: string;
+  custom_role_id?: string | null;
 }
 
 export async function GET() {
@@ -33,11 +34,17 @@ export async function GET() {
 
     // RLS on profiles allows reading any row whose account matches
     // the caller's, so this query is naturally account-scoped.
-    const { data, error } = await ctx.supabase
-      .from("profiles")
-      .select("user_id, full_name, email, avatar_url, account_role, created_at")
-      .eq("account_id", ctx.accountId)
-      .order("created_at", { ascending: true });
+    const load = (columns: string) =>
+      ctx.supabase
+        .from("profiles")
+        .select(columns)
+        .eq("account_id", ctx.accountId)
+        .order("created_at", { ascending: true });
+    // custom_role_id arrives with migration 062; older schemas still list members.
+    let { data, error } = await load("user_id, full_name, email, avatar_url, account_role, created_at, custom_role_id");
+    if (error && /custom_role_id/.test(error.message)) {
+      ({ data, error } = await load("user_id, full_name, email, avatar_url, account_role, created_at"));
+    }
 
     if (error) {
       console.error("[GET /api/account/members] fetch error:", error);
@@ -49,7 +56,7 @@ export async function GET() {
 
     const canSeeEmails = canManageMembers(ctx.role);
 
-    const members: AccountMember[] = (data as ProfileRow[]).flatMap((row) => {
+    const members: AccountMember[] = ((data ?? []) as unknown as ProfileRow[]).flatMap((row) => {
       // Defensive: the DB enum should never let an unknown role
       // through, but if a migration ever broadens the enum without
       // updating TS, skip the row rather than crash the page.
@@ -62,6 +69,7 @@ export async function GET() {
           avatar_url: row.avatar_url,
           role: row.account_role,
           joined_at: row.created_at,
+          custom_role_id: row.custom_role_id ?? null,
         },
       ];
     });

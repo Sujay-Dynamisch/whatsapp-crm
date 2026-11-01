@@ -223,6 +223,16 @@ BEGIN
     RAISE EXCEPTION 'notification type lead_returned missing — migration 061 did not apply';
   END IF;
 
+  -- 062: custom roles. Without the sync trigger a member could hold a
+  -- custom role whose base role differs from their account_role.
+  IF to_regclass('public.account_custom_roles') IS NULL
+     OR to_regprocedure('public.my_area_level(text)') IS NULL
+     OR to_regprocedure('public.set_member_access(uuid, account_role_enum, uuid)') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'profiles_custom_role_sync')
+     OR NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'perm_gate_insert' AND tablename = 'contacts') THEN
+    RAISE EXCEPTION 'custom roles schema incomplete — migration 062 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;
