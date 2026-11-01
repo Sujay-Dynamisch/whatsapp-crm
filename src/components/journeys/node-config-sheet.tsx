@@ -34,6 +34,7 @@ import {
   type NodeConfigs,
 } from '@/lib/journeys/graph';
 import { variableSuggestions } from '@/lib/journeys/variables';
+import { FEATURES, FEATURE_INFO } from '@/lib/features';
 import { ExprInput, ExprTextarea, KeyValueList } from './expression-input';
 import { NODE_ACCENT, NODE_ICON } from './node-meta';
 
@@ -421,6 +422,18 @@ Content-Type: application/json
                 {REPLIED_SINCE.map((k) => (
                   <option key={k} value={k}>
                     {t(`form.repliedSince_${k}`)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          {cfg.kind === 'feature_enabled' && (
+            <Field label={t('form.feature')} help={t('form.featureHelp')}>
+              <select className={selectClass} value={cfg.feature ?? ''} onChange={(e) => set({ feature: e.target.value || undefined })}>
+                <option value="">{t('form.chooseFeature')}</option>
+                {FEATURES.map((f) => (
+                  <option key={f} value={f}>
+                    {FEATURE_INFO[f].label}
                   </option>
                 ))}
               </select>

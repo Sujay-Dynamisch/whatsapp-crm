@@ -15,6 +15,7 @@
     "createAccount": "계정 만들기"
   },
   "Sidebar": {
+    "failedMessages": "실패한 메시지",
     "title": "WhatsApp용 CRM 템플릿",
     "primaryNav": "기본 메뉴",
     "dashboard": "대시보드",
@@ -47,6 +48,7 @@
     "journeys": "여정"
   },
   "Header": {
+    "failedMessages": "실패한 메시지",
     "dashboard": "대시보드",
     "callbacks": "콜백 요청",
     "inbox": "인박스",
@@ -2199,7 +2201,26 @@
     "updateFailed": "요청을 업데이트할 수 없습니다",
     "toastTitle": "📞 새 콜백 요청",
     "aContact": "연락처",
-    "open": "열기"
+    "open": "열기",
+    "markNoAnswerAgain": "다시 부재중",
+    "noAnswerTimes": "부재중 ×{count}",
+    "backToNurture": "너처로 돌려보내기",
+    "backToNurtureTitle": "{name} 님을 너처로 돌려보낼까요?",
+    "backToNurtureBody": "연락이 닿지 않을 때 사용하세요. 요청이 종료되고 너처 메시지를 다시 받습니다(이틀마다 오전 11시, 15일 후 종료-실패).",
+    "backedToNurture": "너처로 돌아갔습니다 — 요청 종료",
+    "followMessaged": "부재중으로 표시 — “전화를 드렸습니다” 메시지를 보냈습니다",
+    "followMessagedHint": "{left, plural, other {부재중을 #번 더 표시하면 너처로 돌아갑니다.}}",
+    "followReturned": "부재중 {count}회 — 요청 종료, 리드는 너처로 돌아감",
+    "overdueToastTitle": "⏰ 4시간 넘게 대기 중인 콜백",
+    "returnedToastTitle": "↩ 리드가 너처로 돌아감 (콜백 연결 실패)",
+    "reason": {
+      "not_in_journey": "여정에 참여한 적이 없어 메시지를 보내지 않았습니다.",
+      "not_configured": "여정에 콜백 후속 단계가 없습니다.",
+      "opted_out": "수신 거부(STOP) — 메시지를 보내지 않았습니다.",
+      "closed": "결제 완료/종료로 표시됨 — 메시지를 보내지 않았습니다.",
+      "busy": "여정이 지금 실행 중입니다 — 잠시 후 다시 시도하세요.",
+      "start_failed": "여정을 다시 시작하지 못했습니다 — 다시 시도하세요."
+    }
   },
   "ButtonClicks": {
     "title": "버튼 클릭",
@@ -2433,6 +2454,7 @@
       "schedule": "일정에 따라"
     },
     "condition": {
+      "feature_enabled": "기능이 켜져 있음",
       "replied": "답장함",
       "clicked_button": "버튼을 누름",
       "has_tag": "태그 있음",
@@ -2479,6 +2501,9 @@
       "chooseMember": "팀원을 선택하세요"
     },
     "form": {
+      "feature": "기능",
+      "featureHelp": "시스템 관리자가 이 계정에 해당 기능을 켜 두었으면 예.",
+      "chooseFeature": "기능 선택…",
       "startsWhen": "시작 조건",
       "tag": "태그",
       "chooseTag": "태그 선택…",
@@ -2601,6 +2626,8 @@
       "stepId": "단계 ID:"
     },
     "editor": {
+      "callbacksOff": "이 계정은 콜백 요청이 꺼져 있어 전화를 요청한 리드가 콜백 페이지에 표시되지 않고 알림도 가지 않습니다. 시스템 관리자에게 켜 달라고 하거나, 콜백 태그 앞에 “조건 → 기능이 켜져 있음(콜백 요청)” 단계를 추가하세요.",
+      "callbacksOffGuarded": "이 계정은 콜백 요청이 꺼져 있습니다 — 이 여정은 콜백 태그를 건너뛰고 리드를 바로 팀에 넘깁니다.",
       "back": "여정으로 돌아가기",
       "name": "여정 이름",
       "addStep": "단계 추가",
@@ -2767,6 +2794,122 @@
         "exited": "종료됨",
         "failed": "실패"
       }
+    }
+  },
+  "FailedMessages": {
+    "title": "실패한 메시지",
+    "subtitle": "전달되지 않은 메시지와 템플릿 — 다시 보내기, 예약, 직접 작성한 메시지 보내기 또는 무시.",
+    "refresh": "새로고침",
+    "loadFailed": "실패한 메시지를 불러오지 못했습니다",
+    "actionFailed": "실행하지 못했습니다 — 다시 시도하세요",
+    "done": "{count, plural, other {완료 (#개)}}",
+    "partly": "{ok}개 완료, {failed}개 실패",
+    "dismissConfirm": "실패한 메시지 {count}개를 무시할까요?",
+    "dismissed": "{count, plural, other {#개 무시함}}",
+    "textSent": "메시지를 보냈습니다",
+    "scheduled": "{when}에 다시 보내도록 예약했습니다",
+    "resent": "다시 보냈습니다",
+    "unscheduled": "예약을 취소했습니다",
+    "reg": {
+      "fixTitle": "{name} 님의 번호 수정",
+      "phoneLabel": "WhatsApp 번호",
+      "added": "연락처 추가 — 여정이 시작되었습니다",
+      "restarted": "이미 있는 연락처 — 여정을 다시 시작했습니다",
+      "hint": "전화번호가 올바르지 않아 건너뛴 웹사이트 등록입니다. 번호를 고치면 연락처가 추가되고 여정이 시작됩니다.",
+      "empty": "건너뛴 등록이 없습니다",
+      "number": "번호",
+      "noNumber": "없음",
+      "fix": "번호 수정 후 추가"
+    },
+    "health": {
+      "scheduler": "스케줄러 (타이머, 알림)",
+      "waiting": "첫 실행 대기 중",
+      "running": "실행 중",
+      "stopped": "중지됨 — 마지막 실행 {when}",
+      "leadFeed": "웹사이트 리드 피드",
+      "off": "설정 안 됨",
+      "working": "정상",
+      "failing": "실패 중",
+      "skipped": "건너뛴 등록",
+      "skippedCount": "{count, plural, =0 {없음} other {#건 수정 필요}}"
+    },
+    "stat": {
+      "open": "아직 실패",
+      "fixed": "해결/처리됨",
+      "scheduled": "예약됨",
+      "windowOpen": "24시간 창 열림"
+    },
+    "last14": "실패, 최근 14일",
+    "tab": {
+      "messages": "메시지",
+      "registrations": "건너뛴 등록 ({count})"
+    },
+    "day": {
+      "today": "오늘",
+      "yesterday": "어제",
+      "week": "최근 7일"
+    },
+    "status": {
+      "open": "아직 실패",
+      "resolved": "처리됨",
+      "all": "전체"
+    },
+    "pickDate": "날짜 선택",
+    "selectAll": "모두 선택",
+    "selected": "{count}개 선택됨",
+    "resend": "다시 보내기",
+    "schedule": "예약",
+    "dismiss": "무시",
+    "emptyOpen": "실패한 메시지가 없습니다 🎉",
+    "empty": "메시지가 없습니다",
+    "unknown": "알 수 없는 연락처",
+    "fromJourney": "여정: {name}",
+    "fromInbox": "받은편지함 / 자동화",
+    "textMessage": "텍스트 메시지",
+    "optedOut": "수신 거부 — 보낼 수 없음",
+    "windowOpen": "{time}까지 24시간 창 열림 — 일반 메시지를 보낼 수 있습니다",
+    "windowClosed": "24시간 창 닫힘 — 템플릿만 가능",
+    "scheduledFor": "{when}에 다시 보냄",
+    "resolved": {
+      "resent": "다시 보냄",
+      "custom_text": "직접 작성한 메시지로 보냄",
+      "dismissed": "무시함",
+      "retried": "자동 재시도",
+      "fallback_sent": "답장 시 텍스트로 보냄",
+      "expired": "포기 (너무 늦음)",
+      "superseded": "새 메시지로 대체됨",
+      "opted_out": "수신 거부"
+    },
+    "openChat": "채팅 열기",
+    "cancelSchedule": "예약 취소",
+    "sendText": "텍스트로 보내기",
+    "err": {
+      "not_found": "찾을 수 없음",
+      "already_resolved": "이미 처리됨",
+      "opted_out": "수신 거부 — 메시지 불가",
+      "window_closed": "24시간 창이 닫혀 템플릿만 보낼 수 있습니다",
+      "needs_variables": "이 템플릿에 필요한 변수가 없습니다 — 텍스트로 보내세요",
+      "no_contact": "연락처가 더 이상 없습니다",
+      "bad_time": "30일 이내의 시간을 선택하세요",
+      "empty_text": "먼저 메시지를 작성하세요",
+      "send_failed": "Meta가 다시 거부했습니다"
+    },
+    "textTitle": "{name} 님에게 메시지 보내기",
+    "textDesc": "{time}까지 24시간 창이 열려 있어 일반 메시지를 보낼 수 있습니다. 템플릿 내용으로 시작하니 자유롭게 수정하세요.",
+    "cancel": "취소",
+    "send": "보내기",
+    "scheduleTitle": "{count, plural, other {#개 나중에 다시 보내기}}",
+    "scheduleDesc": "이 시간에 같은 템플릿을 다시 보냅니다.",
+    "preset": {
+      "hour": "1시간 후",
+      "evening": "오늘 저녁 6시",
+      "tomorrow": "내일 오전 11시",
+      "custom": "시간 선택"
+    },
+    "banner": {
+      "schedulerDown": "스케줄러가 중지되었습니다(마지막 실행 {when}) — 여정 타이머, 알림, 리드 피드가 멈췄습니다.",
+      "feedFailing": "웹사이트 리드 피드가 실패 중입니다 — 새 등록이 들어오지 않습니다.",
+      "open": "열기"
     }
   }
 }

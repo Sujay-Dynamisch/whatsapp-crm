@@ -63,7 +63,7 @@ export default function JourneyEditorPage() {
   const t = useTranslations('Journeys');
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
-  const { accountId, canSendMessages } = useAuth();
+  const { accountId, canSendMessages, hasFeature } = useAuth();
 
   const [journey, setJourney] = useState<Journey | null>(null);
   const [graph, setGraph] = useState<JourneyGraph>({ nodes: [] });
@@ -139,6 +139,21 @@ export default function JourneyEditorPage() {
 
   // ---- derived -------------------------------------------------------
   const issues = useMemo(() => validateGraph(graph), [graph]);
+  // Callback requests switched off for this account (system admin) while
+  // this journey asks for callbacks: the requests would never open.
+  const callbackTagIds = useMemo(
+    () => new Set(lists.tags.filter((tag) => tag.name.trim().toLowerCase() === 'callback_requested').map((tag) => tag.id)),
+    [lists.tags]
+  );
+  const usesCallbacks = useMemo(
+    () => graph.nodes.some((n) => n.type === 'add_tag' && callbackTagIds.has((n.config as { tag_id?: string }).tag_id ?? '')),
+    [graph, callbackTagIds]
+  );
+  const callbacksGuarded = useMemo(
+    () => graph.nodes.some((n) => n.type === 'condition' && (n.config as { kind?: string; feature?: string }).kind === 'feature_enabled' && (n.config as { feature?: string }).feature === 'callbacks'),
+    [graph]
+  );
+  const callbacksOff = usesCallbacks && !hasFeature('callbacks');
   const issueNodeIds = useMemo(
     () => new Set(issues.map((i) => i.nodeId).filter((x): x is string => Boolean(x))),
     [issues]
@@ -353,6 +368,13 @@ export default function JourneyEditorPage() {
           </Button>
         </div>
       </div>
+
+      {callbacksOff && (
+        <div className="flex items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{t(callbacksGuarded ? 'editor.callbacksOffGuarded' : 'editor.callbacksOff')}</span>
+        </div>
+      )}
 
       {issues.length > 0 && (
         <div className="flex items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">

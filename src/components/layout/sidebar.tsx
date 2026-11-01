@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useOpenCallbacks } from "@/hooks/use-open-callbacks";
-import {
+import { MessageSquareWarning,
   Bell,
   Bot,
   Crown,
@@ -108,6 +108,7 @@ const navItems: NavItem[] = [
   { href: "/broadcasts", labelKey: "broadcasts", icon: Radio, feature: "broadcasts" },
   { href: "/button-clicks", labelKey: "buttonClicks", icon: MousePointerClick, feature: "button_analytics" },
   { href: "/callbacks", labelKey: "callbacks", icon: PhoneCall, feature: "callbacks" },
+  { href: "/failed-messages", labelKey: "failedMessages", icon: MessageSquareWarning, feature: "failed_messages" },
   { href: "/automations", labelKey: "automations", icon: Zap, feature: "automations" },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, feature: "flows" },
   { href: "/journeys", labelKey: "journeys", icon: Route, feature: "journeys" },

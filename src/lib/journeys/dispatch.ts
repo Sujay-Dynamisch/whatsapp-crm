@@ -303,6 +303,11 @@ export async function dispatchJourneyInbound(
     handled =
       (await resumeOnReply(db, args.accountId, args.contactId, deps, { text, button: args.buttonText ?? null }, fellBack)) > 0 ||
       handled;
+    // A lost lead writing back: tell the team and restart the menu (no live run took the message).
+    if (!handled) {
+      const { reviveLostLead } = await import('./revive');
+      handled = (await reviveLostLead(db, { accountId: args.accountId, contactId: args.contactId, text }, deps)) === 'restarted';
+    }
     handled =
       (await dispatchJourneyTrigger(
         db,

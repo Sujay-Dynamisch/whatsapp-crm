@@ -1,4 +1,5 @@
-// Creates the 5 pending webinar templates (T5–T9 from SG_WhatsApp_Templates.pdf)
+// Creates the webinar templates (T1–T9 from SG_WhatsApp_Templates.pdf, the
+// Utility variants and sg_callback_missed)
 // in Swapnil Gautam's account and submits them to Meta for approval.
 //
 //   npx jiti scripts/swapnil/submit-templates.ts            # dry run: validate + print
@@ -63,6 +64,23 @@ const TEMPLATES: TemplatePayload[] = [
       'See you there.',
     ].join('\n\n'),
     sample_values: { body: ['Priya', 'Tue, 27 Oct 2026', '8:00 PM IST', 'https://example.com/webinar'] },
+  },
+  // Sent when the team marks a callback "No answer" (Callbacks page). A
+  // reply to the lead's own callback request — informational, so Utility.
+  {
+    name: 'sg_callback_missed',
+    category: 'Utility',
+    language: 'en_US',
+    header_type: 'text',
+    header_content: 'We Tried Calling You',
+    body_text: [
+      'Hi {{1}},',
+      'Our team tried calling you about your callback request but could not reach you.',
+      'Reply with a time that suits you, or tap a button below.',
+      '— Team Swapnil Gautam',
+    ].join('\n\n'),
+    buttons: qr('Call me again', 'Not now'),
+    sample_values: { body: ['Priya'] },
   },
   // T1–T4 as specified in the PDF (header + buttons). The account's older
   // registration_confirmation / reminder_for_webinar / trigger_sent_at_7 /

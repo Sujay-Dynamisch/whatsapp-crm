@@ -15,6 +15,7 @@ import {
   PhoneMissed,
   PhoneOutgoing,
   RefreshCw,
+  Repeat,
   RotateCcw,
   Search,
   StickyNote,
@@ -25,7 +26,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { promptDialog } from '@/components/ui/confirm-dialog';
+import { confirmDialog, promptDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 
 type Status = 'new' | 'called' | 'no_answer' | 'done';
@@ -41,6 +42,8 @@ interface CallbackRequest {
   note: string | null;
   requested_at: string;
   handled_at: string | null;
+  /** "No answer" marks so far (migration 059). */
+  no_answer_count?: number;
   contact_name: string | null;
   contact_phone: string | null;
 }
@@ -49,6 +52,14 @@ interface Data {
   requests: CallbackRequest[];
   stats: { open: number; today: number; handled_today: number };
   daily: { date: string; count: number }[];
+}
+
+type FollowUpReason = 'not_in_journey' | 'not_configured' | 'opted_out' | 'closed' | 'busy' | 'start_failed';
+interface NoAnswerFollowUp {
+  action: 'messaged' | 'returned' | 'none';
+  reason?: FollowUpReason;
+  count: number;
+  limit: number;
 }
 
 const STATUS_FILTERS: StatusFilter[] = ['open', 'new', 'called', 'no_answer', 'done', 'all'];
@@ -150,7 +161,37 @@ export default function CallbacksPage() {
         toast.error(json?.error || t('updateFailed'));
         return;
       }
-      toast.success(okMsg);
+      // "No answer": say what happened to the lead.
+      const f = json?.followup as NoAnswerFollowUp | null | undefined;
+      if (patch.status === 'no_answer' && f) {
+        if (f.action === 'messaged') toast.success(t('followMessaged'), { description: t('followMessagedHint', { left: f.limit - f.count }) });
+        else if (f.action === 'returned') toast.success(t('followReturned', { count: f.count }));
+        else toast.success(okMsg, f.reason ? { description: t(`reason.${f.reason}`) } : undefined);
+      } else {
+        toast.success(okMsg);
+      }
+      await load();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function backToNurture(r: CallbackRequest) {
+    const ok = await confirmDialog({
+      title: t('backToNurtureTitle', { name: r.contact_name || r.contact_phone || '' }),
+      description: t('backToNurtureBody'),
+      confirmLabel: t('backToNurture'),
+    });
+    if (!ok) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(`/api/callbacks/${r.id}/nurture`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json?.reason ? t(`reason.${json.reason}`) : json?.error || t('updateFailed'));
+        return;
+      }
+      toast.success(t('backedToNurture'));
       await load();
     } finally {
       setBusyId(null);
@@ -332,6 +373,11 @@ export default function CallbacksPage() {
                       <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium', STATUS_STYLE[r.status])}>
                         {t(`status.${r.status}`)}
                       </span>
+                      {(r.no_answer_count ?? 0) > 0 && (
+                        <span className="rounded-full border border-rose-500/30 px-2 py-0.5 text-[11px] text-rose-600 dark:text-rose-400">
+                          {t('noAnswerTimes', { count: r.no_answer_count ?? 0 })}
+                        </span>
+                      )}
                     </div>
                     {r.contact_phone && (
                       <div className="mt-1 flex items-center gap-1.5">
@@ -393,12 +439,11 @@ export default function CallbacksPage() {
                               {t('markCalled')}
                             </Button>
                           )}
-                          {r.status !== 'no_answer' && (
-                            <Button size="sm" variant="outline" disabled={busy} onClick={() => void update(r, { status: 'no_answer' }, t('markedNoAnswer'))}>
-                              <PhoneMissed className="h-3.5 w-3.5" />
-                              {t('markNoAnswer')}
-                            </Button>
-                          )}
+                          {/* Every "No answer" counts as an attempt (2nd → back to nurture). */}
+                          <Button size="sm" variant="outline" disabled={busy} onClick={() => void update(r, { status: 'no_answer' }, t('markedNoAnswer'))}>
+                            <PhoneMissed className="h-3.5 w-3.5" />
+                            {(r.no_answer_count ?? 0) > 0 ? t('markNoAnswerAgain') : t('markNoAnswer')}
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -408,6 +453,10 @@ export default function CallbacksPage() {
                           >
                             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                             {t('markDone')}
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void backToNurture(r)}>
+                            <Repeat className="h-3.5 w-3.5" />
+                            {t('backToNurture')}
                           </Button>
                         </>
                       ) : (

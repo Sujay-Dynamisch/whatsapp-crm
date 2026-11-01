@@ -28,6 +28,8 @@ export type TagIds = Record<(typeof TAGS)[number], string>;
 
 /** Nurture sends go out at this IST hour. */
 export const NURTURE_HOUR = 11;
+/** "No answer" marks on a callback before the lead goes back to nurture. */
+export const CALLBACK_NO_ANSWER_LIMIT = 2;
 /** Payment nudges only between these IST hours. */
 export const DAY_START_HOUR = 9;
 export const DAY_END_HOUR = 21;
@@ -148,7 +150,19 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
   // ---------- Registration → Msg 1 → Msg 2 / Msg 3 → 7 AM check-in ----------
   // Global overrides: STOP always ends the run (engine); paid / manually_closed
   // (kill switch) end it via exit tags.
-  add('trigger', 'trigger', 'Contact added (API)', { trigger_type: 'contact_created', contact_source: 'api', exit_tag_ids: [tag.paid, tag.manually_closed] }, { next: 'settings' });
+  add('trigger', 'trigger', 'Contact added (API)', {
+    trigger_type: 'contact_created',
+    contact_source: 'api',
+    exit_tag_ids: [tag.paid, tag.manually_closed],
+    // Callback follow-ups (Callbacks page): "No answer" → cb_missed; 2nd
+    // "No answer", "Back to nurture" or 48h without action → Stage C.
+    callback_missed_node: 'cb_missed',
+    callback_return_node: 'c_slot',
+    callback_no_answer_limit: CALLBACK_NO_ANSWER_LIMIT,
+    // A closed-lost lead writes back → team notified, menu again.
+    revive_tag_id: tag.closed_lost,
+    revive_node: 'revived',
+  }, { next: 'settings' });
   add('settings', 'set_variable', 'Settings (edit me)', {
     assignments: [
       { key: 'webinar_link', value: 'https://PASTE-WEBINAR-LINK' },
@@ -188,26 +202,33 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
 
   // ---------- Conversion menu (typed 1–4 or the template's buttons) ----------
   add('mark_menu', 'set_variable', 'Mark: answered the menu', { assignments: [{ key: 'menu_replied', value: 'yes' }] }, { next: 'menu' });
-  add('menu', 'switch', 'Menu choice', {
-    value: lc,
-    cases: [
-      { op: 'starts_with', value: '1', label: '1 Join' },
-      { op: 'contains', value: 'join', label: 'Ready to Join' },
-      { op: 'starts_with', value: '2', label: '2 Success stories' },
-      { op: 'contains', value: 'testimon', label: 'Testimonials' },
-      { op: 'starts_with', value: '3', label: '3 Next session' },
-      { op: 'contains', value: 'attend', label: "Couldn't attend" },
-      { op: 'starts_with', value: '4', label: '4 Callback' },
-      { op: 'contains', value: 'call', label: 'Request a callback' },
-      { op: 'contains', value: 'question', label: 'Questions' },
-    ],
-  }, {
+  const MENU_CASES: NodeConfigs['switch']['cases'] = [
+    { op: 'starts_with', value: '1', label: '1 Join' },
+    { op: 'contains', value: 'join', label: 'Ready to Join' },
+    { op: 'starts_with', value: '2', label: '2 Success stories' },
+    { op: 'contains', value: 'testimon', label: 'Testimonials' },
+    { op: 'starts_with', value: '3', label: '3 Next session' },
+    { op: 'contains', value: 'attend', label: "Couldn't attend" },
+    { op: 'starts_with', value: '4', label: '4 Callback' },
+    { op: 'contains', value: 'call', label: 'Request a callback' },
+    { op: 'contains', value: 'question', label: 'Questions' },
+  ];
+  const menuNext = (fallback: string) => ({
     case_0: 'pay_link', case_1: 'pay_link',
     case_2: 'testimonials', case_3: 'testimonials',
     case_4: 'set_reschedule', case_5: 'set_reschedule',
-    case_6: 'tag_callback', case_7: 'tag_callback', case_8: 'tag_callback',
-    default: 'menu_retry',
+    case_6: 'callback_on', case_7: 'callback_on', case_8: 'callback_on',
+    default: fallback,
   });
+  add('menu', 'switch', 'Menu choice', { value: lc, cases: MENU_CASES }, menuNext('menu_retry'));
+  // Closed-lost lead wrote back (journey restarted here; their message is
+  // {{ reply.text }}): a menu choice goes straight through, anything else
+  // gets the menu again. Quiet again → Stage C → closed-lost later.
+  add('revived', 'set_variable', 'Lost lead wrote back', { assignments: [{ key: 'revived', value: 'yes' }, { key: 'menu_replied', value: 'yes' }] }, { next: 'revive_pick' });
+  add('revive_pick', 'switch', 'Their message a menu choice?', { value: lc, cases: MENU_CASES }, menuNext('revive_menu'));
+  add('revive_menu', 'send_text', 'Welcome back + menu', {
+    text: `Welcome back, ${NAME}! 👋 Great to hear from you.\n\nReply with:\n1️⃣ Join Revibe today (Get the payment link)\n2️⃣ See real success stories\n3️⃣ Get the next webinar session\n4️⃣ Request a callback from my team\n\n— Swapnil Gautam`,
+  }, { next: 'reply_menu' });
   add('menu_retry', 'send_text', 'Ask for 1–4', { text: 'Please reply with 1, 2, 3 or 4 so I can help you with your next step. 🙏' }, { next: 'reply_menu' });
 
   // Payment link → up to 2 daytime nudges inside the 24-hour window →
@@ -242,7 +263,7 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
       { op: 'contains', value: 'join', label: 'Join' },
     ],
   }, { case_0: 'tag_closed', case_1: 'pay_link', case_2: 'pay_link', default: 'faq' });
-  add('faq', 'send_text', 'FAQ + handoff', { text: '{{ vars.faq_text }}\n\nMy team will also reach out to you personally.' }, { next: 'tag_callback' });
+  add('faq', 'send_text', 'FAQ + handoff', { text: '{{ vars.faq_text }}\n\nMy team will also reach out to you personally.' }, { next: 'callback_on' });
   add('tag_closed', 'add_tag', 'Tag: manually_closed (LOST)', { tag_id: tag.manually_closed }, { next: 'closed_msg' });
   add('closed_msg', 'send_text', 'Confirm stop', { text: `Understood, ${NAME}. I won't send further messages. Wishing you the best!\n\n— Swapnil Gautam` }, { next: 'end' });
 
@@ -263,16 +284,33 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
       { op: 'contains', value: 'call', label: 'Request Callback' },
       { op: 'contains', value: 'talk', label: 'Talk to team' },
     ],
-  }, { case_0: 'pay_link', case_1: 'pay_link', case_2: 'tag_callback', case_3: 'tag_callback', case_4: 'tag_callback', default: 't5_retry' });
+  }, { case_0: 'pay_link', case_1: 'pay_link', case_2: 'callback_on', case_3: 'callback_on', case_4: 'callback_on', default: 't5_retry' });
   add('t5_retry', 'send_text', 'Ask for 1–2', { text: 'Please reply 1 to join Revibe or 2 to request a callback from my team. 🙏' }, { next: 'reply_t5' });
 
   // Attend again → next webinar link → reminder loop.
   add('set_reschedule', 'set_variable', 'Mark re-invite', { assignments: [{ key: 'reschedule', value: 'yes' }] }, { next: 'schedule' });
 
   // Request callback → human handoff (automation stops; sales marks paid / lost).
+  // Callback requests switched off for the account (system admin) → no
+  // request would open, so skip the tag and hand straight to Swapnil.
+  add('callback_on', 'condition', 'Callback requests on?', { kind: 'feature_enabled', feature: 'callbacks' }, { yes: 'tag_callback', no: 'assign_owner' });
   add('tag_callback', 'add_tag', 'Tag: callback_requested', { tag_id: tag.callback_requested }, { next: 'assign_owner' });
   add('assign_owner', 'conversation', 'Human handoff (assign Swapnil)', { action: 'assign', user_id: ownerUserId }, { next: 'callback_msg' });
   add('callback_msg', 'send_text', 'Confirm callback', { text: `Thank you, ${NAME}! 🙏 My team will call you shortly.` }, { next: 'end' });
+
+  // Callback not answered (started from the Callbacks page): tell them we
+  // tried. "Call me again" → back to the team; "Not now" → Stage C
+  // nurture; anything else → the conversion menu. No reply → the
+  // request stays with the team (2nd "No answer" / 48h → Stage C).
+  add('cb_missed', 'send_template', 'We tried calling you', tpl('sg_callback_missed', [NAME]), { next: 'cb_wait' });
+  add('cb_wait', 'wait_for_reply', 'Wait 24h for a reply', { amount: 24, unit: 'hours' }, { replied: 'cb_reply', timeout: 'end' });
+  add('cb_reply', 'switch', 'Reply to "we tried calling"', {
+    value: lc,
+    cases: [
+      { op: 'contains', value: 'not now', label: 'Not now' },
+      { op: 'contains', value: 'call', label: 'Call me again' },
+    ],
+  }, { case_0: 'c_slot', case_1: 'callback_on', default: 'mark_menu' });
 
   // ---------- 15-day alternate-day nurture (11 AM IST) → CLOSED-LOST ----------
   //   x_slot → x_wait (until the slot; a reply leaves the nurture)
