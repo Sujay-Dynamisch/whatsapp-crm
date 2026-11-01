@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { newNode, type JourneyGraph, type JourneyNode } from './graph';
+import { newNode, validateGraph, type JourneyGraph, type JourneyNode } from './graph';
 import {
   enrollContact,
   interpolate,
@@ -736,5 +736,82 @@ describe('stop a run by hand', () => {
     await runJourneyTick(db(), deps);
     expect(sent).toEqual(['template:welcome:Asha']);
     expect(await stopEnrollment(db(), args)).toBe('finished');
+  });
+});
+
+describe('wait for reply "until", replied-since-start, forced re-entry', () => {
+  const n = <T extends Parameters<typeof newNode>[0]>(t: T, id: string) => newNode(t, undefined, id) as JourneyNode;
+
+  it('a wait for reply times out at its computed "until" time, falling back to amount/unit when unusable', async () => {
+    const build = (until: string): JourneyGraph => {
+      const t = n('trigger', 't');
+      const w = n('wait_for_reply', 'w');
+      w.config = { amount: 1, unit: 'hours', until };
+      const e1 = n('end', 'e1');
+      const e2 = n('end', 'e2');
+      t.next.next = 'w';
+      w.next.replied = 'e1';
+      w.next.timeout = 'e2';
+      return { nodes: [t, w, e1, e2] };
+    };
+    await enrollContact(db(), journeyWith(build(minutes(300).toISOString())), 'c1', deps);
+    expect(enrollment()).toMatchObject({ status: 'waiting', wait_kind: 'reply', next_run_at: minutes(300).toISOString() });
+
+    tables.journey_enrollments = [];
+    await enrollContact(db(), journeyWith(build('{{ nodes.missing.at }}')), 'c1', deps);
+    expect(enrollment()).toMatchObject({ next_run_at: minutes(60).toISOString() });
+
+    clock = minutes(61);
+    await runJourneyTick(db(), deps);
+    expect(enrollment()).toMatchObject({ status: 'completed', current_node_id: 'e2' });
+  });
+
+  it('"replied" with since: start counts replies from the start of the run, not just the last wait', async () => {
+    const build = (since?: 'start'): JourneyGraph => {
+      const t = n('trigger', 't');
+      const w = n('wait', 'w');
+      w.config = { amount: 1, unit: 'hours' };
+      const c = n('condition', 'c');
+      c.config = { kind: 'replied', ...(since ? { since } : {}) };
+      const yes = n('end', 'yes');
+      const no = n('end', 'no');
+      t.next.next = 'w';
+      w.next.next = 'c';
+      c.next.yes = 'yes';
+      c.next.no = 'no';
+      return { nodes: [t, w, c, yes, no] };
+    };
+    for (const [since, expected] of [[undefined, 'no'], ['start', 'yes']] as const) {
+      tables.journey_enrollments = [];
+      tables.messages = [];
+      clock = T0;
+      await enrollContact(db(), journeyWith(build(since)), 'c1', deps);
+      // A reply that came in before the current wait started…
+      tables.messages.push({ id: 'm1', conversation_id: 'conv1', sender_type: 'customer', created_at: minutes(-1).toISOString() });
+      tables.journey_enrollments[0].entered_at = minutes(-5).toISOString();
+      clock = minutes(61);
+      await runJourneyTick(db(), deps);
+      expect(enrollment().current_node_id, String(since)).toBe(expected);
+    }
+  });
+
+  it('rejects an unknown "since" value', () => {
+    const c = n('condition', 'c');
+    c.config = { kind: 'replied', since: 'yesterday' as never };
+    const t = n('trigger', 't');
+    const e = n('end', 'e');
+    t.next.next = 'c';
+    c.next.yes = 'e';
+    c.next.no = 'e';
+    expect(validateGraph({ nodes: [t, c, e] })).toEqual([{ nodeId: 'c', message: 'Choose when to start counting replies' }]);
+  });
+
+  it('enrollContact with reentry starts a contact who already ran a no-re-entry journey', async () => {
+    const j = journeyWith(nurtureGraph());
+    await enrollContact(db(), j, 'c1', deps);
+    tables.journey_enrollments[0].status = 'completed';
+    expect(await enrollContact(db(), j, 'c1', deps)).toEqual({ enrolled: false, reason: 'already_enrolled' });
+    expect(await enrollContact(db(), j, 'c1', deps, {}, { reentry: true })).toMatchObject({ enrolled: true });
+    expect(tables.journey_enrollments).toHaveLength(2);
   });
 });

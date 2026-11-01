@@ -20,7 +20,7 @@ import {
   resolveAuditUserId,
   setContactTags,
 } from '@/lib/api/v1/contacts';
-import { dispatchJourneyTrigger } from '@/lib/journeys/dispatch';
+import { dispatchJourneyTrigger, restartJourneysOnReregistration } from '@/lib/journeys/dispatch';
 
 const LOOKBACK_MINUTES = 60;
 const PAGE_SIZE = 50;
@@ -40,6 +40,8 @@ export interface LeadSyncReport {
   fetched: number;
   created: number;
   existing: number;
+  /** Existing contacts who registered again and were restarted in their journey. */
+  restarted: number;
   skipped: number;
   errors: string[];
 }
@@ -124,7 +126,7 @@ async function syncSource(
   tag: string,
   now: Date
 ): Promise<LeadSyncReport> {
-  const report: LeadSyncReport = { fetched: 0, created: 0, existing: 0, skipped: 0, errors: [] };
+  const report: LeadSyncReport = { fetched: 0, created: 0, existing: 0, restarted: 0, skipped: 0, errors: [] };
   const regs = await fetchRecent(url, process.env.LEAD_SYNC_SOURCE_TOKEN, now.getTime() - LOOKBACK_MINUTES * 60_000);
   report.fetched = regs.length;
   if (!regs.length) return report;
@@ -149,6 +151,14 @@ async function syncSource(
       });
       if (!created) {
         report.existing++;
+        // Registered again: restart their journey for the new webinar
+        // (once per registration; see restartJourneysOnReregistration).
+        report.restarted += await restartJourneysOnReregistration(db, {
+          accountId,
+          contactId: id,
+          registrationId: r._id,
+          registeredAt: r.createdAt,
+        });
         continue;
       }
       report.created++;
@@ -159,7 +169,13 @@ async function syncSource(
         if (cityId === undefined) cityId = await cityFieldId(db, accountId, userId);
         if (cityId) await db.from('contact_custom_values').insert({ contact_id: id, custom_field_id: cityId, value: city });
       }
-      await dispatchJourneyTrigger(db, { accountId, contactId: id, trigger: 'contact_created', source: 'api' });
+      await dispatchJourneyTrigger(db, {
+        accountId,
+        contactId: id,
+        trigger: 'contact_created',
+        source: 'api',
+        data: { source: 'api', registration_id: r._id, registered_at: r.createdAt },
+      });
     } catch (err) {
       report.errors.push(`${r._id}: ${err instanceof Error ? err.message : String(err)}`);
     }

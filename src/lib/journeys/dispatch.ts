@@ -14,7 +14,7 @@ import { engineSendTemplate, engineSendText } from '@/lib/automations/meta-send'
 import { engineSendInteractiveButtons, engineSendMedia } from '@/lib/flows/meta-send';
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write';
 
-import type { JourneyTriggerType } from './graph';
+import { findTrigger, type JourneyTriggerType, type TriggerConfig } from './graph';
 import { sendJourneyFallbacks } from './messages';
 import {
   enrollContact,
@@ -93,6 +93,8 @@ export interface JourneyTriggerInput {
   text?: string;
   /** contact_created: 'api' (public API) or 'whatsapp' (inbox auto-created on a first message). */
   source?: 'api' | 'whatsapp';
+  /** Extra trigger data for the run ({{ trigger.… }}), e.g. the website registration id. */
+  data?: Record<string, unknown>;
 }
 
 /** Does this journey's trigger config match the event? */
@@ -139,6 +141,7 @@ export async function dispatchJourneyTrigger(
         input.contactId,
         deps,
         startContext(input.trigger, {
+          ...(input.data ?? {}),
           ...(input.tagId ? { tag_id: input.tagId } : {}),
           ...(input.buttonText ? { button_text: input.buttonText } : {}),
           ...(input.text !== undefined ? { text: input.text } : {}),
@@ -149,6 +152,112 @@ export async function dispatchJourneyTrigger(
     return enrolled;
   } catch (err) {
     console.error('[journeys] trigger dispatch failed:', err instanceof Error ? err.message : err);
+    return 0;
+  }
+}
+
+export interface ReregistrationInput {
+  accountId: string;
+  contactId: string;
+  /** The registration's id at the source — a run is started once per registration. */
+  registrationId: string;
+  /** When they registered (ISO). Registrations older than the contact's latest run are ignored. */
+  registeredAt: string;
+}
+
+/**
+ * An existing contact registered again (website lead sync): restart the
+ * account's "contact created (API)" journeys for them, so they get the
+ * confirmation and reminders for their new webinar.
+ *
+ * Skipped when the contact opted out or carries one of the journey's
+ * exit tags (paid / closed), when this registration already started a
+ * run, or when the registration is older than their latest run (the
+ * lead sync re-reads the last hour every minute). A run that is
+ * executing a step right now is left alone; the next sync retries.
+ * Never throws.
+ */
+export async function restartJourneysOnReregistration(
+  db: SupabaseClient,
+  input: ReregistrationInput,
+  deps: JourneyDeps = liveJourneyDeps
+): Promise<number> {
+  try {
+    if (!(await accountHasFeature(db, input.accountId, 'journeys'))) return 0;
+    const registeredAt = Date.parse(input.registeredAt);
+    if (!input.registrationId || !Number.isFinite(registeredAt)) return 0;
+
+    const { data: journeys } = await db
+      .from('journeys')
+      .select('*')
+      .eq('account_id', input.accountId)
+      .eq('status', 'active')
+      .eq('trigger_type', 'contact_created');
+    const matching = ((journeys ?? []) as JourneyRow[]).filter((j) =>
+      triggerMatches(j, { accountId: input.accountId, contactId: input.contactId, trigger: 'contact_created', source: 'api' })
+    );
+    if (!matching.length) return 0;
+
+    const { data: tagRows } = await db.from('contact_tags').select('tag_id, tags(name)').eq('contact_id', input.contactId);
+    const tags = (tagRows ?? []) as { tag_id: string; tags?: { name?: string } | { name?: string }[] | null }[];
+    const optedOut = tags.some((r) => {
+      const t = Array.isArray(r.tags) ? r.tags[0] : r.tags;
+      return (t?.name ?? '').trim().toLowerCase() === 'unsubscribe';
+    });
+    if (optedOut) return 0;
+
+    let started = 0;
+    for (const journey of matching) {
+      const exitIds = (findTrigger(journey.graph)?.config as TriggerConfig | undefined)?.exit_tag_ids ?? [];
+      if (tags.some((r) => exitIds.includes(r.tag_id))) continue;
+
+      const { data: runs } = await db
+        .from('journey_enrollments')
+        .select('id, status, entered_at, context')
+        .eq('journey_id', journey.id)
+        .eq('contact_id', input.contactId);
+      const list = (runs ?? []) as { id: string; status: string; entered_at: string; context?: Record<string, unknown> | null }[];
+      const regId = (r: (typeof list)[number]) =>
+        ((r.context?.trigger_data ?? {}) as Record<string, unknown>).registration_id;
+      if (list.some((r) => regId(r) === input.registrationId)) continue;
+      const latest = Math.max(0, ...list.map((r) => Date.parse(r.entered_at) || 0));
+      if (registeredAt <= latest) continue;
+      if (list.some((r) => r.status === 'active')) continue; // mid-step; retried next sync
+
+      // End the old run (only a parked one, atomically) before starting fresh.
+      const live = list.filter((r) => r.status === 'waiting').map((r) => r.id);
+      if (live.length) {
+        await db
+          .from('journey_enrollments')
+          .update({
+            status: 'exited',
+            wait_kind: null,
+            locked_at: null,
+            last_error: 'Registered again — restarted',
+            completed_at: deps.now().toISOString(),
+          })
+          .in('id', live)
+          .eq('status', 'waiting');
+      }
+
+      const r = await enrollContact(
+        db,
+        journey,
+        input.contactId,
+        deps,
+        startContext('contact_created', {
+          source: 'api',
+          reregistered: true,
+          registration_id: input.registrationId,
+          registered_at: input.registeredAt,
+        }),
+        { reentry: true }
+      );
+      if (r.enrolled) started++;
+    }
+    return started;
+  } catch (err) {
+    console.error('[journeys] re-registration restart failed:', err instanceof Error ? err.message : err);
     return 0;
   }
 }

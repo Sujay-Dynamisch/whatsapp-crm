@@ -42,6 +42,10 @@ export type ConditionKind = 'has_tag' | 'clicked_button' | 'replied' | 'window_o
 
 export const CONDITION_KINDS: ConditionKind[] = ['replied', 'clicked_button', 'has_tag', 'window_open', 'expression'];
 
+/** Where a 'replied' condition starts counting customer messages. */
+export type RepliedSince = 'wait' | 'start';
+export const REPLIED_SINCE: RepliedSince[] = ['wait', 'start'];
+
 /** Comparison operators for expression conditions and switch cases. */
 export type CompareOp =
   | 'equals'
@@ -126,9 +130,12 @@ export interface NodeConfigs {
   trigger: TriggerConfig;
   /** `until`: optional expression → date/time to resume at; amount/unit is the fallback. */
   wait: { amount: number; unit: DurationUnit; until?: string };
-  wait_for_reply: { amount: number; unit: DurationUnit };
+  /** `until` as for wait: the reply timeout becomes that date/time (amount/unit is the fallback). */
+  wait_for_reply: { amount: number; unit: DurationUnit; until?: string };
   condition: {
     kind: ConditionKind;
+    /** kind 'replied': count replies since the last wait started (default) or since the run started. */
+    since?: RepliedSince;
     tag_id?: string;
     button_text?: string;
     /** kind 'expression'. */
@@ -408,6 +415,7 @@ function configIssues(n: JourneyNode): GraphIssue[] {
       const cfg = c as NodeConfigs['condition'];
       if (!CONDITION_KINDS.includes(cfg.kind)) bad('Choose a condition');
       if (cfg.kind === 'has_tag' && !cfg.tag_id) bad('Choose a tag');
+      if (cfg.kind === 'replied' && cfg.since !== undefined && !REPLIED_SINCE.includes(cfg.since)) bad('Choose when to start counting replies');
       if (cfg.kind === 'expression') {
         if (!nonEmpty(cfg.left)) bad('Set the value to check');
         if (!COMPARE_OPS.includes(cfg.op as CompareOp)) bad('Choose a comparison');
