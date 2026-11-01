@@ -10,20 +10,43 @@ import { useEffect, useRef } from 'react';
 import { isLand } from './land-mask';
 
 const CITIES: [number, number][] = [
-  [19.07, 72.88], [28.61, 77.21], [12.97, 77.59], [18.52, 73.86], [22.57, 88.36], // Mumbai, Delhi, Bengaluru, Pune, Kolkata
-  [25.2, 55.27], [51.51, -0.13], [40.71, -74.0], [-23.55, -46.63], [1.35, 103.82], // Dubai, London, New York, São Paulo, Singapore
-  [37.57, 126.98], [-33.87, 151.21], [6.52, 3.38], [-26.2, 28.05], [19.43, -99.13], // Seoul, Sydney, Lagos, Johannesburg, Mexico City
-  [3.14, 101.69], [-6.21, 106.85], [41.01, 28.98], [52.52, 13.4], [35.68, 139.69], // KL, Jakarta, Istanbul, Berlin, Tokyo
+  [19.07, 72.88],
+  [28.61, 77.21],
+  [12.97, 77.59],
+  [18.52, 73.86],
+  [22.57, 88.36], // Mumbai, Delhi, Bengaluru, Pune, Kolkata
+  [25.2, 55.27],
+  [51.51, -0.13],
+  [40.71, -74.0],
+  [-23.55, -46.63],
+  [1.35, 103.82], // Dubai, London, New York, São Paulo, Singapore
+  [37.57, 126.98],
+  [-33.87, 151.21],
+  [6.52, 3.38],
+  [-26.2, 28.05],
+  [19.43, -99.13], // Seoul, Sydney, Lagos, Johannesburg, Mexico City
+  [3.14, 101.69],
+  [-6.21, 106.85],
+  [41.01, 28.98],
+  [52.52, 13.4],
+  [35.68, 139.69], // KL, Jakarta, Istanbul, Berlin, Tokyo
 ];
 
 type V3 = [number, number, number];
 const toVec = (lat: number, lon: number): V3 => {
   const la = (lat * Math.PI) / 180;
   const lo = (lon * Math.PI) / 180;
-  return [Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)];
+  return [
+    Math.cos(la) * Math.sin(lo),
+    Math.sin(la),
+    Math.cos(la) * Math.cos(lo),
+  ];
 };
 const slerp = (a: V3, b: V3, t: number): V3 => {
-  const dot = Math.min(1, Math.max(-1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]));
+  const dot = Math.min(
+    1,
+    Math.max(-1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])
+  );
   const om = Math.acos(dot);
   if (om < 1e-4) return a;
   const s = Math.sin(om);
@@ -47,21 +70,29 @@ export function Globe({ className }: { className?: string }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduce = window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    ).matches;
 
     // Land dots: a dense Fibonacci sphere, kept where there is land.
-    const N = 22000;
+    // Phones / small screens: fewer dots, 30 fps, lower resolution.
+    const lite =
+      window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768;
+    const N = lite ? 12000 : 22000;
     const dots: V3[] = [];
-    for (let i = 0; i < N; i++) {
-      const y = 1 - (i / (N - 1)) * 2;
-      const r = Math.sqrt(1 - y * y);
-      const th = Math.PI * (3 - Math.sqrt(5)) * i;
-      const v: V3 = [Math.cos(th) * r, y, Math.sin(th) * r];
-      // Back to lat / lon (inverse of toVec).
-      const lat = (Math.asin(v[1]) * 180) / Math.PI;
-      const lon = (Math.atan2(v[0], v[2]) * 180) / Math.PI;
-      if (isLand(lat, lon)) dots.push(v);
-    }
+    // Built once the page is idle (see start()) so it never delays first paint.
+    const buildDots = () => {
+      for (let i = 0; i < N; i++) {
+        const y = 1 - (i / (N - 1)) * 2;
+        const r = Math.sqrt(1 - y * y);
+        const th = Math.PI * (3 - Math.sqrt(5)) * i;
+        const v: V3 = [Math.cos(th) * r, y, Math.sin(th) * r];
+        // Back to lat / lon (inverse of toVec).
+        const lat = (Math.asin(v[1]) * 180) / Math.PI;
+        const lon = (Math.atan2(v[0], v[2]) * 180) / Math.PI;
+        if (isLand(lat, lon)) dots.push(v);
+      }
+    };
     // Brightness levels for the land dots (night-side teal → sunlit mint).
     const SHADES = 12;
     const SHADE_COLORS = Array.from({ length: SHADES }, (_, i) => {
@@ -71,13 +102,14 @@ export function Globe({ className }: { className?: string }) {
     const buckets: number[][] = Array.from({ length: SHADES }, () => []);
     // Sun direction in view space (upper left, towards the viewer).
     const L: V3 = [-0.55, 0.5, 0.67];
-    const lightOf = (p: { x3: number; y3: number; z: number }) => Math.max(0, p.x3 * L[0] + p.y3 * L[1] + p.z * L[2]);
+    const lightOf = (p: { x3: number; y3: number; z: number }) =>
+      Math.max(0, p.x3 * L[0] + p.y3 * L[1] + p.z * L[2]);
     const cities = CITIES.map(([la, lo]) => toVec(la, lo));
 
     let w = 0;
     let h = 0;
     const resize = () => {
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = Math.min(lite ? 1.5 : 2, window.devicePixelRatio || 1);
       const rect = canvas.getBoundingClientRect();
       w = rect.width;
       h = rect.height;
@@ -154,8 +186,15 @@ export function Globe({ className }: { className?: string }) {
         let on = false;
         for (let lon = -180; lon <= 180; lon += 4) {
           const p = project(toVec(lat, lon));
-          if (p.z < 0) { on = false; continue; }
-          if (on) ctx.lineTo(p.x, p.y); else { ctx.moveTo(p.x, p.y); on = true; }
+          if (p.z < 0) {
+            on = false;
+            continue;
+          }
+          if (on) ctx.lineTo(p.x, p.y);
+          else {
+            ctx.moveTo(p.x, p.y);
+            on = true;
+          }
         }
         ctx.stroke();
       }
@@ -164,8 +203,15 @@ export function Globe({ className }: { className?: string }) {
         let on = false;
         for (let lat = -88; lat <= 88; lat += 4) {
           const p = project(toVec(lat, lon));
-          if (p.z < 0) { on = false; continue; }
-          if (on) ctx.lineTo(p.x, p.y); else { ctx.moveTo(p.x, p.y); on = true; }
+          if (p.z < 0) {
+            on = false;
+            continue;
+          }
+          if (on) ctx.lineTo(p.x, p.y);
+          else {
+            ctx.moveTo(p.x, p.y);
+            on = true;
+          }
         }
         ctx.stroke();
       }
@@ -176,16 +222,22 @@ export function Globe({ className }: { className?: string }) {
       for (const d of dots) {
         const p = project(d);
         if (p.z < 0.02) continue;
-        const shade = (0.3 + 0.7 * lightOf(p)) * (0.45 + 0.55 * Math.min(1, p.z * 1.4));
+        const shade =
+          (0.3 + 0.7 * lightOf(p)) * (0.45 + 0.55 * Math.min(1, p.z * 1.4));
         const size = 0.9 + p.z * 1.35;
-        buckets[Math.min(SHADES - 1, Math.floor(shade * SHADES))].push(p.x - size / 2, p.y - size / 2, size);
+        buckets[Math.min(SHADES - 1, Math.floor(shade * SHADES))].push(
+          p.x - size / 2,
+          p.y - size / 2,
+          size
+        );
       }
       for (let i = 0; i < SHADES; i++) {
         const b = buckets[i];
         if (!b.length) continue;
         ctx.fillStyle = SHADE_COLORS[i];
         ctx.beginPath();
-        for (let j = 0; j < b.length; j += 3) ctx.rect(b[j], b[j + 1], b[j + 2], b[j + 2]);
+        for (let j = 0; j < b.length; j += 3)
+          ctx.rect(b[j], b[j + 1], b[j + 2], b[j + 2]);
         ctx.fill();
       }
 
@@ -195,7 +247,12 @@ export function Globe({ className }: { className?: string }) {
       rim.addColorStop(1, 'rgba(56, 189, 248, 0.22)');
       ctx.fillStyle = rim;
       ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-      const night = ctx.createLinearGradient(sx, sy, cx - L[0] * R, cy + L[1] * R);
+      const night = ctx.createLinearGradient(
+        sx,
+        sy,
+        cx - L[0] * R,
+        cy + L[1] * R
+      );
       night.addColorStop(0, 'rgba(0, 0, 0, 0)');
       night.addColorStop(0.6, 'rgba(0, 0, 0, 0.05)');
       night.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
@@ -288,20 +345,58 @@ export function Globe({ className }: { className?: string }) {
 
     let raf = 0;
     let visible = true;
+    let started = false;
+    let cancelled = false;
+    let lastDraw = 0;
+    const frameMs = lite ? 33 : 0;
     const loop = (t: number) => {
       if (!dragging) {
         rot += vel;
         vel += ((reduce ? 0 : CRUISE) - vel) * 0.02; // ease back to cruise
       }
-      draw(t);
+      if (t - lastDraw >= frameMs) {
+        draw(t);
+        lastDraw = t;
+      }
+      if (!reduce && visible && !document.hidden)
+        raf = requestAnimationFrame(loop);
+    };
+
+    // Start after the page has loaded and the browser is idle: the land
+    // dots and the animation must not compete with first paint.
+    let idle = 0;
+    const start = () => {
+      if (cancelled || started) return;
+      buildDots();
+      started = true;
+      draw(performance.now());
       if (!reduce && visible) raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
+    const schedule = () => {
+      const ric = (
+        window as Window & {
+          requestIdleCallback?: Window['requestIdleCallback'];
+        }
+      ).requestIdleCallback;
+      idle = ric
+        ? ric(start, { timeout: 2500 })
+        : window.setTimeout(start, 1200);
+    };
+    if (document.readyState === 'complete') schedule();
+    else window.addEventListener('load', schedule, { once: true });
+    const onVisibility = () => {
+      if (started && !document.hidden && visible && !reduce) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(loop);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     const io = new IntersectionObserver(([e]) => {
       const was = visible;
       visible = e.isIntersecting;
-      if (visible && !was && !reduce) raf = requestAnimationFrame(loop);
+      if (started && visible && !was && !reduce)
+        raf = requestAnimationFrame(loop);
     });
     io.observe(canvas);
 
@@ -311,7 +406,7 @@ export function Globe({ className }: { className?: string }) {
       canvas.setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
-      if (!dragging) return;
+      if (!dragging || !started) return;
       const dx = e.clientX - lastX;
       lastX = e.clientX;
       rot += dx * 0.006;
@@ -327,7 +422,14 @@ export function Globe({ className }: { className?: string }) {
     canvas.addEventListener('pointercancel', up);
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
+      (
+        window as Window & { cancelIdleCallback?: Window['cancelIdleCallback'] }
+      ).cancelIdleCallback?.(idle);
+      window.clearTimeout(idle);
+      window.removeEventListener('load', schedule);
+      document.removeEventListener('visibilitychange', onVisibility);
       ro.disconnect();
       io.disconnect();
       canvas.removeEventListener('pointerdown', down);
@@ -337,5 +439,13 @@ export function Globe({ className }: { className?: string }) {
     };
   }, []);
 
-  return <canvas ref={ref} className={className} style={{ touchAction: 'pan-y', cursor: 'grab' }} aria-label="Messages travelling around the globe" role="img" />;
+  return (
+    <canvas
+      ref={ref}
+      className={className}
+      style={{ touchAction: 'pan-y', cursor: 'grab' }}
+      aria-label="Messages travelling around the globe"
+      role="img"
+    />
+  );
 }

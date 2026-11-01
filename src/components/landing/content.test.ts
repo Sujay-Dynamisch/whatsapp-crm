@@ -24,10 +24,10 @@ describe('pricing links', () => {
       const q = new URLSearchParams(url.slice('upi://pay?'.length));
       expect(Object.fromEntries(q)).toEqual({
         pa: 'khedekarsujay5-1@okicici',
-        pn: 'wacrm',
+        pn: 'Flowza',
         am: amount,
         cu: 'INR',
-        tn: `wacrm ${name} plan - 1 month`,
+        tn: `Flowza ${name} plan - 1 month`,
       });
     }
   });

@@ -208,7 +208,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <Link href="/dashboard" className="flex items-center gap-2">
             <Image
               src="/logo.png"
-              alt="WACRM"
+              alt="Flowza"
               width={32}
               height={32}
               className="h-8 w-8 object-contain shrink-0"

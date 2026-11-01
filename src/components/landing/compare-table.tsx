@@ -10,7 +10,7 @@ import { COMPARE, COMPARE_CHECKED, COMPARE_SOURCES, type Cell } from './content'
 
 function CellView({ cell, ours }: { cell: Cell; ours?: boolean }) {
   if (cell.v === 'text') return <span className={`text-xs ${ours ? 'font-medium text-white' : 'text-slate-300'}`}>{cell.note}</span>;
-  if (cell.v === 'unknown') return <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CircleDashed className="h-3.5 w-3.5" />Not listed</span>;
+  if (cell.v === 'unknown') return <span className="inline-flex items-center gap-1 text-[11px] text-slate-400"><CircleDashed className="h-3.5 w-3.5" />Not listed</span>;
   const icon =
     cell.v === 'yes' ? (
       <span className={`flex h-5 w-5 items-center justify-center rounded-full ${ours ? 'bg-emerald-400 text-black' : 'bg-emerald-500/15 text-emerald-400'}`}>
@@ -21,7 +21,7 @@ function CellView({ cell, ours }: { cell: Cell; ours?: boolean }) {
         <Minus className="h-3.5 w-3.5" strokeWidth={3} />
       </span>
     ) : (
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/5 text-slate-500">
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/5 text-slate-400">
         <X className="h-3.5 w-3.5" strokeWidth={3} />
       </span>
     );
@@ -60,7 +60,7 @@ export function CompareTable() {
               <th className="w-[38%] px-5 py-4 text-left text-xs font-medium tracking-wide text-slate-400 uppercase">Capability</th>
               <th className="relative px-3 py-4 text-center">
                 <span className="absolute inset-x-2 top-0 bottom-0 -z-0 rounded-t-xl bg-gradient-to-b from-emerald-500/15 to-transparent" />
-                <span className="relative font-semibold text-white">wacrm</span>
+                <span className="relative font-semibold text-white">Flowza</span>
               </th>
               <th className="px-3 py-4 text-center font-medium text-slate-300">AiSensy</th>
               <th className="px-3 py-4 text-center font-medium text-slate-300">WATI</th>
@@ -68,7 +68,7 @@ export function CompareTable() {
           </thead>
           <tbody>
             {COMPARE.map((g) => {
-              const rows = g.rows.filter((r) => !onlyDiff || !(same(r.wacrm, r.aisensy) && same(r.wacrm, r.wati)));
+              const rows = g.rows.filter((r) => !onlyDiff || !(same(r.Flowza, r.aisensy) && same(r.Flowza, r.wati)));
               if (!rows.length) return null;
               return [
                 <tr key={g.group}>
@@ -80,9 +80,9 @@ export function CompareTable() {
                   <tr key={r.feature} className="border-t border-white/5 transition-colors hover:bg-white/[0.025]">
                     <td className="px-5 py-3">
                       <p className="font-medium text-slate-100">{r.feature}</p>
-                      {r.detail && <p className="mt-0.5 text-xs text-slate-500">{r.detail}</p>}
+                      {r.detail && <p className="mt-0.5 text-xs text-slate-400">{r.detail}</p>}
                     </td>
-                    <td className="bg-emerald-500/[0.04] px-3 py-3 text-center"><CellView cell={r.wacrm} ours /></td>
+                    <td className="bg-emerald-500/[0.04] px-3 py-3 text-center"><CellView cell={r.Flowza} ours /></td>
                     <td className="px-3 py-3 text-center"><CellView cell={r.aisensy} /></td>
                     <td className="px-3 py-3 text-center"><CellView cell={r.wati} /></td>
                   </tr>
@@ -92,7 +92,7 @@ export function CompareTable() {
           </tbody>
         </table>
       </div>
-      <p className="mt-4 text-xs leading-relaxed text-slate-500">
+      <p className="mt-4 text-xs leading-relaxed text-slate-400">
         Competitor details come from their public websites, help centres and third-party reviews, checked {COMPARE_CHECKED}, and may have changed. “Not listed” means we
         couldn’t find it publicly — not that it doesn’t exist. *Prices vary by source. Please check each vendor before deciding. Sources:{' '}
         {COMPARE_SOURCES.map((s, i) => (

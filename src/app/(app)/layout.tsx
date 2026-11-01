@@ -3,7 +3,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { Inter } from "next/font/google";
 import Script from "next/script";
-import "./globals.css";
+import "../globals.css";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ThemedToaster } from "@/components/themed-toaster";
 import { DialogHost } from "@/components/ui/confirm-dialog";
@@ -23,16 +23,14 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "wacrm",
-    template: "%s — wacrm",
+    default: "Flowza",
+    template: "%s — Flowza",
   },
-  description: "Self-hostable CRM template for WhatsApp.",
+  applicationName: "Flowza",
+  description: "Flowza — WhatsApp CRM & business automation.",
   robots: {
     index: false,
     follow: false,
-  },
-  icons: {
-    icon: [{ url: "/icon" }],
   },
   formatDetection: {
     email: false,

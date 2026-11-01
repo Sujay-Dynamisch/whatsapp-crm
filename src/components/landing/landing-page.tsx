@@ -1,5 +1,6 @@
 // The public landing page (signed-out visitors at "/").
 
+import Image from 'next/image';
 import Link from 'next/link';
 import type { ComponentType } from 'react';
 import {
@@ -36,6 +37,7 @@ import { InboxDemo, JourneyDemo, RecoveryDemo, RolesDemo } from './demos';
 import { Counter, Reveal, SpotlightGrid } from './reveal';
 import {
   CONTACT,
+  FAQS,
   FEATURES,
   INDUSTRIES,
   MARKETING_MESSAGE_PRICE,
@@ -56,6 +58,7 @@ const NAV = [
   { href: '#features', label: 'Features' },
   { href: '#compare', label: 'Compare' },
   { href: '#pricing', label: 'Pricing' },
+  { href: '#faq', label: 'FAQ' },
   { href: '#demo', label: 'Free demo' },
 ];
 
@@ -104,10 +107,15 @@ export function LandingPage() {
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#0d1117]/70 backdrop-blur-xl">
         <nav className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-5">
           <Link href="/" className="flex items-center gap-2 font-semibold text-white">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-[0_0_24px_rgba(37,211,102,0.45)]">
-              <MessageCircle className="h-4.5 w-4.5 text-black" />
-            </span>
-            wacrm
+            <Image
+              src="/brand/flowza-circle-192.png"
+              alt=""
+              width={32}
+              height={32}
+              priority
+              className="h-8 w-8 rounded-full shadow-[0_0_24px_rgba(37,211,102,0.45)]"
+            />
+            <span className="text-lg tracking-tight">Flowza</span>
           </Link>
           <div className="hidden items-center gap-6 text-sm text-slate-400 md:flex">
             {NAV.map((n) => (
@@ -184,12 +192,14 @@ export function LandingPage() {
               </div>
             </Reveal>
             <Reveal delay={320}>
-              <p className="mt-6 text-xs text-slate-500">Official WhatsApp Business API · Works for retail, clinics, coaching, restaurants & services</p>
+              <p className="mt-6 text-xs text-slate-400">Official WhatsApp Business API · Works for retail, clinics, coaching, restaurants & services</p>
             </Reveal>
           </div>
 
           <div className="relative mx-auto aspect-square w-full max-w-[560px]">
-            <Globe className="h-full w-full" />
+            {/* Silhouette shown until the globe starts (after the page is idle). */}
+            <div aria-hidden className="absolute inset-[8%] rounded-full bg-[radial-gradient(circle_at_32%_30%,#1d4f7a,#0d2c4a_45%,#06172a_85%,#030b16)] shadow-[0_0_80px_rgba(56,189,248,0.18)] ring-1 ring-sky-300/30" />
+            <Globe className="relative h-full w-full" />
             {/* Floating notifications */}
             <div className="absolute top-[12%] left-[-2%] animate-[lp-float_6s_ease-in-out_infinite] rounded-xl border border-white/10 bg-[#161b22]/90 px-3 py-2 text-xs shadow-xl backdrop-blur sm:left-[-6%]">
               <p className="font-medium text-white">💳 Payment link sent</p>
@@ -214,7 +224,7 @@ export function LandingPage() {
                 <p className="text-3xl font-semibold text-white sm:text-4xl">
                   <Counter value={s.value} prefix={'prefix' in s ? (s as { prefix?: string }).prefix : ''} suffix={s.suffix} />
                 </p>
-                <p className="mt-1 text-xs text-slate-500">{s.label}</p>
+                <p className="mt-1 text-xs text-slate-400">{s.label}</p>
               </div>
             ))}
           </div>
@@ -335,7 +345,7 @@ export function LandingPage() {
         <SectionHead
           eyebrow="Compare"
           title="More of what you need, for less"
-          sub="How wacrm stacks up against AiSensy and WATI — including where they’re ahead."
+          sub="How Flowza stacks up against AiSensy and WATI — including where they’re ahead."
         />
         <div className="mx-auto max-w-6xl px-5">
           <Reveal>
@@ -363,7 +373,7 @@ export function LandingPage() {
                 <p className="mt-1 text-sm text-slate-400">{plan.blurb}</p>
                 <p className="mt-5 flex items-baseline gap-1">
                   <span className="text-4xl font-semibold tracking-tight text-white">{plan.price}</span>
-                  <span className="text-sm text-slate-500">{plan.period}</span>
+                  <span className="text-sm text-slate-400">{plan.period}</span>
                 </p>
                 <PlanActions plan={plan} />
                 {plan.includes && <p className="mt-6 text-xs font-medium text-slate-400">{plan.includes}</p>}
@@ -400,7 +410,7 @@ export function LandingPage() {
                 <thead>
                   <tr className="text-left">
                     <th className="px-5 py-3 text-xs font-medium tracking-wide text-slate-400 uppercase" />
-                    <th className="bg-emerald-500/[0.06] px-4 py-3 font-semibold text-white">wacrm</th>
+                    <th className="bg-emerald-500/[0.06] px-4 py-3 font-semibold text-white">Flowza</th>
                     <th className="px-4 py-3 font-medium text-slate-300">AiSensy*</th>
                     <th className="px-4 py-3 font-medium text-slate-300">WATI*</th>
                   </tr>
@@ -409,7 +419,7 @@ export function LandingPage() {
                   {PRICE_COMPARE.map((r) => (
                     <tr key={r.label} className="border-t border-white/5">
                       <td className="px-5 py-3 text-slate-300">{r.label}</td>
-                      <td className="bg-emerald-500/[0.06] px-4 py-3 font-medium text-emerald-200">{r.wacrm}</td>
+                      <td className="bg-emerald-500/[0.06] px-4 py-3 font-medium text-emerald-200">{r.Flowza}</td>
                       <td className="px-4 py-3 text-slate-400">{r.aisensy}</td>
                       <td className="px-4 py-3 text-slate-400">{r.wati}</td>
                     </tr>
@@ -417,7 +427,7 @@ export function LandingPage() {
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-xs text-slate-500">
+            <p className="mt-3 text-xs text-slate-400">
               *Competitor prices are from third-party reviews (they differ between sources and change over time) and exclude Meta message charges. Check each vendor’s site for
               current pricing:{' '}
               {PRICE_SOURCES.map((s, i) => (
@@ -430,6 +440,22 @@ export function LandingPage() {
               ))}
             </p>
           </Reveal>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="scroll-mt-20 py-20">
+        <SectionHead eyebrow="FAQ" title="Questions, answered" />
+        <div className="mx-auto max-w-3xl space-y-3 px-5">
+          {FAQS.map((f) => (
+            <details key={f.q} className="group rounded-2xl border border-white/10 bg-[#161b22]/60 px-5 py-4 open:border-emerald-400/30 open:bg-[#161b22]">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium text-white [&::-webkit-details-marker]:hidden">
+                <h3 className="text-base">{f.q}</h3>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-slate-300 transition-transform group-open:rotate-45">+</span>
+              </summary>
+              <p className="mt-3 text-sm leading-relaxed text-slate-300">{f.a}</p>
+            </details>
+          ))}
         </div>
       </section>
 
@@ -462,8 +488,11 @@ export function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-white/5 py-10">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-5 text-sm text-slate-500 sm:flex-row">
-          <p>© {new Date().getFullYear()} wacrm · Don’t just send messages. Build relationships.</p>
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-5 text-sm text-slate-400 sm:flex-row">
+          <p className="flex items-center gap-2">
+            <Image src="/brand/flowza-circle-192.png" alt="" width={20} height={20} className="h-5 w-5 rounded-full" />© {new Date().getFullYear()} Flowza · Don’t
+            just send messages. Build relationships.
+          </p>
           <div className="flex gap-5">
             <a href="#pricing" className="hover:text-white">Pricing</a>
             <a href="#compare" className="hover:text-white">Compare</a>

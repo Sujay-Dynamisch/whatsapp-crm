@@ -15,7 +15,7 @@ export type Cell =
 export interface CompareRow {
   feature: string;
   detail?: string;
-  wacrm: Cell;
+  Flowza: Cell;
   aisensy: Cell;
   wati: Cell;
 }
@@ -30,43 +30,43 @@ export const COMPARE: { group: string; rows: CompareRow[] }[] = [
   {
     group: 'Messaging',
     rows: [
-      { feature: 'Official WhatsApp Business API', wacrm: Y(), aisensy: Y(), wati: Y() },
-      { feature: 'Shared team inbox', wacrm: Y(), aisensy: Y(), wati: Y() },
-      { feature: 'Template broadcasts & scheduling', wacrm: Y(), aisensy: Y(), wati: Y() },
+      { feature: 'Official WhatsApp Business API', Flowza: Y(), aisensy: Y(), wati: Y() },
+      { feature: 'Shared team inbox', Flowza: Y(), aisensy: Y(), wati: Y() },
+      { feature: 'Template broadcasts & scheduling', Flowza: Y(), aisensy: Y(), wati: Y() },
       {
         feature: 'Smart sending',
         detail: 'Auto-retry of Meta-limited sends (131049), engagement scores, resting, quality guard',
-        wacrm: Y(),
+        Flowza: Y(),
         aisensy: U,
         wati: U,
       },
-      { feature: 'Inbox translation & voice-note transcription', wacrm: Y(), aisensy: U, wati: U },
+      { feature: 'Inbox translation & voice-note transcription', Flowza: Y(), aisensy: U, wati: U },
     ],
   },
   {
     group: 'Automation',
     rows: [
-      { feature: 'No-code chatbot flow builder', wacrm: Y(), aisensy: Y(), wati: Y() },
+      { feature: 'No-code chatbot flow builder', Flowza: Y(), aisensy: Y(), wati: Y() },
       {
         feature: 'Multi-step customer journeys',
         detail: 'Waits, “wait until”, branches, loops, HTTP & code steps, per-step conversion',
-        wacrm: Y(),
+        Flowza: Y(),
         aisensy: P('Drip sequences on higher plans'),
         wati: P('Flow builder; complex multi-step flows reported harder'),
       },
-      { feature: 'Webhook- & schedule-triggered journeys', wacrm: Y(), aisensy: U, wati: U },
-      { feature: 'Lost-lead revival', detail: 'A closed-lost lead writes back → team alerted, menu re-sent', wacrm: Y(), aisensy: U, wati: U },
+      { feature: 'Webhook- & schedule-triggered journeys', Flowza: Y(), aisensy: U, wati: U },
+      { feature: 'Lost-lead revival', detail: 'A closed-lost lead writes back → team alerted, menu re-sent', Flowza: Y(), aisensy: U, wati: U },
     ],
   },
   {
     group: 'Team & operations',
     rows: [
-      { feature: 'Callback desk', detail: '“No answer” follow-ups, 4-hour reminders, back-to-nurture', wacrm: Y(), aisensy: U, wati: U },
-      { feature: 'Failed-message recovery', detail: 'Resend, schedule, or send as text while the 24h window is open', wacrm: Y(), aisensy: U, wati: U },
-      { feature: 'Health alerts & daily summary', detail: 'Scheduler and lead-feed monitoring', wacrm: Y(), aisensy: U, wati: U },
+      { feature: 'Callback desk', detail: '“No answer” follow-ups, 4-hour reminders, back-to-nurture', Flowza: Y(), aisensy: U, wati: U },
+      { feature: 'Failed-message recovery', detail: 'Resend, schedule, or send as text while the 24h window is open', Flowza: Y(), aisensy: U, wati: U },
+      { feature: 'Health alerts & daily summary', detail: 'Scheduler and lead-feed monitoring', Flowza: Y(), aisensy: U, wati: U },
       {
         feature: 'Roles & permissions',
-        wacrm: Y('Custom roles · None / View / Edit per area'),
+        Flowza: Y('Custom roles · None / View / Edit per area'),
         aisensy: U,
         wati: P('Fixed set of predefined roles'),
       },
@@ -75,19 +75,19 @@ export const COMPARE: { group: string; rows: CompareRow[] }[] = [
   {
     group: 'AI',
     rows: [
-      { feature: 'AI replies & drafts', wacrm: Y('Bring your own OpenAI / Anthropic key'), aisensy: U, wati: Y('Astra AI agent') },
-      { feature: 'AI knowledge base', wacrm: Y(), aisensy: U, wati: Y() },
+      { feature: 'AI replies & drafts', Flowza: Y('Bring your own OpenAI / Anthropic key'), aisensy: U, wati: Y('Astra AI agent') },
+      { feature: 'AI knowledge base', Flowza: Y(), aisensy: U, wati: Y() },
     ],
   },
   {
     group: 'Platform',
     rows: [
-      { feature: 'Public REST API & webhooks', wacrm: Y(), aisensy: Y(), wati: Y() },
-      { feature: 'MCP server', detail: 'Drive your CRM from Claude, Cursor and other MCP clients', wacrm: Y(), aisensy: U, wati: U },
-      { feature: 'Native e-commerce integrations', detail: 'Shopify and similar', wacrm: P('Via API & webhooks'), aisensy: Y(), wati: Y() },
-      { feature: 'Click-to-WhatsApp ads tooling', wacrm: N(), aisensy: Y(), wati: U },
-      { feature: 'Hosting', wacrm: T('Managed for you — or on your own servers'), aisensy: T('Hosted SaaS'), wati: T('Hosted SaaS') },
-      { feature: 'Starting price', wacrm: T('₹999 / month'), aisensy: T('≈ ₹1,500 / month*'), wati: T('≈ $49 / month, billed yearly*') },
+      { feature: 'Public REST API & webhooks', Flowza: Y(), aisensy: Y(), wati: Y() },
+      { feature: 'MCP server', detail: 'Drive your CRM from Claude, Cursor and other MCP clients', Flowza: Y(), aisensy: U, wati: U },
+      { feature: 'Native e-commerce integrations', detail: 'Shopify and similar', Flowza: P('Via API & webhooks'), aisensy: Y(), wati: Y() },
+      { feature: 'Click-to-WhatsApp ads tooling', Flowza: N(), aisensy: Y(), wati: U },
+      { feature: 'Hosting', Flowza: T('Managed for you — or on your own servers'), aisensy: T('Hosted SaaS'), wati: T('Hosted SaaS') },
+      { feature: 'Starting price', Flowza: T('₹999 / month'), aisensy: T('≈ ₹1,500 / month*'), wati: T('≈ $49 / month, billed yearly*') },
     ],
   },
 ];
@@ -143,7 +143,7 @@ export const demoLink = (plan?: string) =>
 export const PAYMENT = {
   upiId: (process.env.NEXT_PUBLIC_PAYMENT_UPI_ID ?? 'khedekarsujay5-1@okicici').trim(),
   /** Shown as the payee in UPI apps (the bank's verified name is shown too). */
-  payee: 'wacrm',
+  payee: 'Flowza',
 };
 
 /** "Choose plan": open WhatsApp with a purchase message. */
@@ -165,7 +165,7 @@ export const upiLink = (plan: Plan) =>
     ['pn', PAYMENT.payee],
     ['am', (plan.amount ?? 0).toFixed(2)],
     ['cu', 'INR'],
-    ['tn', `wacrm ${plan.name} plan - 1 month`],
+    ['tn', `Flowza ${plan.name} plan - 1 month`],
   ]
     .map(([k, v]) => `${k}=${upiValue(v)}`)
     .join('&');
@@ -261,13 +261,13 @@ export const PLANS: Plan[] = [
 ];
 
 /** Price comparison. Competitor figures come from third-party reviews and vary by source — see the note. */
-export const PRICE_COMPARE: { label: string; wacrm: string; aisensy: string; wati: string }[] = [
-  { label: 'Entry plan', wacrm: '₹999 / month', aisensy: '≈ ₹1,500 / month (Basic)', wati: '≈ $49–59 / month (Growth)' },
-  { label: 'Mid plan', wacrm: '₹1,999 / month', aisensy: '≈ ₹3,200 / month (Pro)', wati: '≈ $98–99 / month (Pro)' },
-  { label: 'Upper plan', wacrm: '₹3,999 / month', aisensy: 'Custom (Enterprise)', wati: '≈ $182–299 / month (Business)' },
-  { label: 'Extra team members', wacrm: 'Included (2 / 5 / unlimited)', aisensy: '≈ ₹750 / agent / month', wati: 'Limited per plan' },
-  { label: 'Journeys, callbacks, failed-message recovery', wacrm: 'From Growth', aisensy: 'Not listed', wati: 'Not listed' },
-  { label: 'WhatsApp message charges', wacrm: 'Meta rates, passed through', aisensy: 'Meta rates, billed separately', wati: 'Meta rates, billed separately' },
+export const PRICE_COMPARE: { label: string; Flowza: string; aisensy: string; wati: string }[] = [
+  { label: 'Entry plan', Flowza: '₹999 / month', aisensy: '≈ ₹1,500 / month (Basic)', wati: '≈ $49–59 / month (Growth)' },
+  { label: 'Mid plan', Flowza: '₹1,999 / month', aisensy: '≈ ₹3,200 / month (Pro)', wati: '≈ $98–99 / month (Pro)' },
+  { label: 'Upper plan', Flowza: '₹3,999 / month', aisensy: 'Custom (Enterprise)', wati: '≈ $182–299 / month (Business)' },
+  { label: 'Extra team members', Flowza: 'Included (2 / 5 / unlimited)', aisensy: '≈ ₹750 / agent / month', wati: 'Limited per plan' },
+  { label: 'Journeys, callbacks, failed-message recovery', Flowza: 'From Growth', aisensy: 'Not listed', wati: 'Not listed' },
+  { label: 'WhatsApp message charges', Flowza: 'Meta rates, passed through', aisensy: 'Meta rates, billed separately', wati: 'Meta rates, billed separately' },
 ];
 
 export const PRICE_SOURCES = [
@@ -292,4 +292,36 @@ export const PAINS = [
   'Sending WhatsApp messages to every customer by hand',
   'Hours lost on follow-ups, payment reminders and appointment updates',
   'Leads going cold because nobody replied in time',
+];
+
+// Shown on the page and as FAQPage structured data (they must match).
+export const FAQS: { q: string; a: string }[] = [
+  {
+    q: 'What is Flowza?',
+    a: 'Flowza is a WhatsApp CRM and automation platform for businesses. It puts every customer chat in one shared team inbox and automates follow-ups, payment reminders, appointment updates and marketing campaigns on the official WhatsApp Business API.',
+  },
+  {
+    q: 'Do I need the WhatsApp Business API?',
+    a: 'Yes — Flowza works on the official WhatsApp Business (Cloud) API, which keeps your number safe from bans that unofficial tools risk. We help you connect your number during onboarding.',
+  },
+  {
+    q: 'Are WhatsApp message charges included in the plan?',
+    a: `No. Plans cover the software. WhatsApp (Meta) charges for template messages separately — marketing messages cost about ${MARKETING_MESSAGE_PRICE} each in India at current rates. Replies within 24 hours of a customer’s message have no Meta charge.`,
+  },
+  {
+    q: 'Can I try it before paying?',
+    a: `Yes. Book a free live demo on WhatsApp with ${CONTACT.name} (${CONTACT.phoneDisplay}) and we’ll walk you through it with your own use case.`,
+  },
+  {
+    q: 'How do I pay?',
+    a: 'Choose a plan to message us on WhatsApp, or pay instantly via UPI — WhatsApp Pay, Google Pay, PhonePe or any UPI app. Your account is activated once the payment is confirmed.',
+  },
+  {
+    q: 'Can my team use it with different permissions?',
+    a: 'Yes. Invite your team and give each person a role. On the Business plan you can create custom roles — for example “Sales agent” — and choose None, View or Edit for each area of the app.',
+  },
+  {
+    q: 'Which businesses is Flowza for?',
+    a: 'Retail shops, clinics and hospitals, restaurants, coaching institutes, service businesses, online stores, agencies and startups — any business that talks to customers on WhatsApp.',
+  },
 ];
