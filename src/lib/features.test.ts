@@ -37,7 +37,16 @@ describe('feature registry', () => {
       'api_access',
       'button_analytics',
       'callbacks',
+      'failed_messages',
     ]);
+  });
+
+  it('failed_messages is opt-in (off by default via migration 060) and gates its page and APIs', () => {
+    expect(FEATURE_INFO.failed_messages.defaultOff).toBe(true);
+    expect(FEATURES.filter((f) => FEATURE_INFO[f].defaultOff)).toEqual(['failed_messages']);
+    for (const path of ['/failed-messages', '/api/failed-messages', '/api/failed-messages/actions', '/api/health']) {
+      expect(featureForPath(path), path).toBe('failed_messages');
+    }
   });
 });
 

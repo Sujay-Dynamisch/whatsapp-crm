@@ -15,6 +15,8 @@
 // {{ … }} expressions (see ./expressions).
 // ============================================================
 
+import { isFeature, type Feature } from '../features';
+
 export type JourneyTriggerType =
   | 'manual'
   | 'contact_created'
@@ -38,9 +40,9 @@ export const TRIGGER_TYPES: JourneyTriggerType[] = [
 
 export type DurationUnit = 'minutes' | 'hours' | 'days';
 
-export type ConditionKind = 'has_tag' | 'clicked_button' | 'replied' | 'window_open' | 'expression';
+export type ConditionKind = 'has_tag' | 'clicked_button' | 'replied' | 'window_open' | 'expression' | 'feature_enabled';
 
-export const CONDITION_KINDS: ConditionKind[] = ['replied', 'clicked_button', 'has_tag', 'window_open', 'expression'];
+export const CONDITION_KINDS: ConditionKind[] = ['replied', 'clicked_button', 'has_tag', 'window_open', 'expression', 'feature_enabled'];
 
 /** Where a 'replied' condition starts counting customer messages. */
 export type RepliedSince = 'wait' | 'start';
@@ -116,6 +118,22 @@ export interface TriggerConfig extends Partial<ScheduleConfig> {
   contact_source?: ContactSource;
   /** Any trigger: stop a run as soon as the contact has one of these tags (e.g. paid, closed). */
   exit_tag_ids?: string[];
+  /** Callbacks: the step a lead goes back to when their callback didn't work out (e.g. a nurture stage). */
+  callback_return_node?: string;
+  /** Callbacks: the step that tells a lead "we tried calling you" after a "No answer". */
+  callback_missed_node?: string;
+  /** Callbacks: after this many "No answer" marks the lead goes back to `callback_return_node` (default 2). */
+  callback_no_answer_limit?: number;
+  /** Lost lead writes back: the tag that marks a lost lead (e.g. closed_lost)… */
+  revive_tag_id?: string;
+  /** …and the step their new run starts at (their message is {{ reply.text }}). */
+  revive_node?: string;
+}
+
+/** Steps a run can start at besides the trigger (callback follow-ups). */
+export function entryNodeIds(graph: JourneyGraph): string[] {
+  const cfg = (findTrigger(graph)?.config ?? {}) as TriggerConfig;
+  return [cfg.callback_return_node, cfg.callback_missed_node, cfg.revive_node].filter((x): x is string => Boolean(x));
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -136,6 +154,8 @@ export interface NodeConfigs {
     kind: ConditionKind;
     /** kind 'replied': count replies since the last wait started (default) or since the run started. */
     since?: RepliedSince;
+    /** kind 'feature_enabled': is this account feature on (e.g. 'callbacks')? */
+    feature?: Feature;
     tag_id?: string;
     button_text?: string;
     /** kind 'expression'. */
@@ -347,6 +367,15 @@ export function validateGraph(graph: unknown): GraphIssue[] {
 
   const triggers = g.nodes.filter((n) => n?.type === 'trigger');
   if (triggers.length !== 1) issues.push({ nodeId: null, message: 'A journey needs exactly one trigger' });
+  if (triggers.length === 1) {
+    for (const id of entryNodeIds(g)) {
+      if (!ids.has(id)) issues.push({ nodeId: triggers[0].id, message: `Follow-up step "${id}" does not exist` });
+    }
+    const tc = triggers[0].config as TriggerConfig;
+    if (Boolean(tc?.revive_node) !== Boolean(tc?.revive_tag_id)) {
+      issues.push({ nodeId: triggers[0].id, message: 'Set both the lost-lead tag and the step a returning lead starts at' });
+    }
+  }
 
   for (const n of g.nodes) {
     if (!n || !NODE_TYPES.includes(n.type)) continue;
@@ -364,7 +393,7 @@ export function validateGraph(graph: unknown): GraphIssue[] {
   if (triggers.length === 1) {
     const byId = new Map(g.nodes.map((n) => [n.id, n]));
     const seen = new Set<string>();
-    const stack = [triggers[0].id];
+    const stack = [triggers[0].id, ...entryNodeIds(g).filter((id) => ids.has(id))];
     while (stack.length) {
       const id = stack.pop()!;
       if (seen.has(id)) continue;
@@ -402,6 +431,10 @@ function configIssues(n: JourneyNode): GraphIssue[] {
         bad('Default country code must be 1–4 digits, e.g. 91');
       }
       if (t === 'schedule') out.push(...scheduleIssues(n.id, cfg));
+      if (cfg.callback_no_answer_limit !== undefined) {
+        const lim = Number(cfg.callback_no_answer_limit);
+        if (!Number.isInteger(lim) || lim < 1 || lim > 10) bad('"No answer" limit must be 1–10');
+      }
       break;
     }
     case 'wait':
@@ -416,6 +449,7 @@ function configIssues(n: JourneyNode): GraphIssue[] {
       if (!CONDITION_KINDS.includes(cfg.kind)) bad('Choose a condition');
       if (cfg.kind === 'has_tag' && !cfg.tag_id) bad('Choose a tag');
       if (cfg.kind === 'replied' && cfg.since !== undefined && !REPLIED_SINCE.includes(cfg.since)) bad('Choose when to start counting replies');
+      if (cfg.kind === 'feature_enabled' && !isFeature(cfg.feature)) bad('Choose a feature');
       if (cfg.kind === 'expression') {
         if (!nonEmpty(cfg.left)) bad('Set the value to check');
         if (!COMPARE_OPS.includes(cfg.op as CompareOp)) bad('Choose a comparison');

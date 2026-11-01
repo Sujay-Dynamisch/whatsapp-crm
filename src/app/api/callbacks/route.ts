@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     let q = supabase
       .from('callback_requests')
       .select(
-        `id, contact_id, conversation_id, status, source, note, requested_at, handled_at, handled_by, contacts${search ? '!inner' : ''}(name, phone)`
+        `id, contact_id, conversation_id, status, source, note, requested_at, handled_at, handled_by, no_answer_count, contacts${search ? '!inner' : ''}(name, phone)`
       )
       .eq('account_id', accountId)
       .order('requested_at', { ascending: false })

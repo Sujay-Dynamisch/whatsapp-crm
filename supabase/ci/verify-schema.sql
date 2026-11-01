@@ -195,6 +195,34 @@ BEGIN
     RAISE EXCEPTION 'journey workflow schema incomplete — migration 054 did not apply';
   END IF;
 
+  -- 059: callback follow-ups. The Callbacks API counts "No answer" marks
+  -- and the tick stamps reminders.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'callback_requests'
+      AND column_name IN ('no_answer_count', 'reminded_at')
+  ) <> 2 THEN
+    RAISE EXCEPTION 'callback follow-up columns missing — migration 059 did not apply';
+  END IF;
+
+  -- 060: failed messages + health. A missing default-off trigger would
+  -- silently give the feature to every new account.
+  IF to_regclass('public.lead_sync_issues') IS NULL
+     OR to_regclass('public.system_heartbeats') IS NULL
+     OR to_regclass('public.health_summaries') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'zz_accounts_default_off_features') THEN
+    RAISE EXCEPTION 'failed messages / health schema incomplete — migration 060 did not apply';
+  END IF;
+
+  -- 061: a lost lead writing back is stored as a 'lead_returned'
+  -- notification; without the type the insert fails silently (best effort).
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'notifications_type_check' AND pg_get_constraintdef(oid) LIKE '%lead_returned%'
+  ) THEN
+    RAISE EXCEPTION 'notification type lead_returned missing — migration 061 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

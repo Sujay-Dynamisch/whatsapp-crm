@@ -123,6 +123,11 @@ export function AccountFeaturesDialog({
                   <div>
                     <p className="text-sm font-medium text-foreground">
                       {FEATURE_INFO[feature].label}
+                      {FEATURE_INFO[feature].defaultOff && (
+                        <span className="ml-2 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                          Off by default
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {parent

@@ -86,7 +86,7 @@ describe('GET', () => {
     expect(byKey.broadcast_scheduling).toMatchObject({ enabled: false, switchedOff: false });
     expect(byKey.pipelines).toMatchObject({ enabled: true, switchedOff: false });
     expect(byKey.callbacks).toMatchObject({ enabled: true, switchedOff: false, label: 'Callback requests' });
-    // Every feature, once, in catalogue order (14 since callbacks was added).
+    // Every feature, once, in catalogue order.
     expect(body.features.map((f: { key: string }) => f.key)).toEqual([
       'pipelines',
       'broadcasts',
@@ -102,6 +102,7 @@ describe('GET', () => {
       'api_access',
       'button_analytics',
       'callbacks',
+      'failed_messages',
     ]);
   });
 

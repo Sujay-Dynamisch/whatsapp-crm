@@ -15,6 +15,7 @@
     "createAccount": "Criar conta"
   },
   "Sidebar": {
+    "failedMessages": "Mensagens com falha",
     "title": "Modelo de CRM para WhatsApp",
     "primaryNav": "Principal",
     "dashboard": "Painel",
@@ -47,6 +48,7 @@
     "journeys": "Jornadas"
   },
   "Header": {
+    "failedMessages": "Mensagens com falha",
     "dashboard": "Painel",
     "callbacks": "Retornos de ligação",
     "inbox": "Caixa de entrada",
@@ -2199,7 +2201,26 @@
     "updateFailed": "Não foi possível atualizar o pedido",
     "toastTitle": "📞 Novo pedido de ligação",
     "aContact": "Um contato",
-    "open": "Abrir"
+    "open": "Abrir",
+    "markNoAnswerAgain": "Não atendeu de novo",
+    "noAnswerTimes": "Não atendeu ×{count}",
+    "backToNurture": "Voltar para a nutrição",
+    "backToNurtureTitle": "Colocar {name} de volta na nutrição?",
+    "backToNurtureBody": "Use quando não conseguir falar com a pessoa. A solicitação é fechada e ela volta a receber as mensagens de nutrição (11h a cada 2 dias, depois perdida após 15 dias).",
+    "backedToNurture": "De volta à nutrição — solicitação fechada",
+    "followMessaged": "Marcado como não atendeu — enviamos “tentamos ligar para você”",
+    "followMessagedHint": "{left, plural, one {Mais um “Não atendeu” a coloca de volta na nutrição.} other {Mais # “Não atendeu” a colocam de volta na nutrição.}}",
+    "followReturned": "Não atendeu {count}× — solicitação fechada, lead de volta à nutrição",
+    "overdueToastTitle": "⏰ Retorno esperando há mais de 4 horas",
+    "returnedToastTitle": "↩ Lead de volta à nutrição (sem contato)",
+    "reason": {
+      "not_in_journey": "Nunca esteve em uma jornada, então nenhuma mensagem foi enviada.",
+      "not_configured": "A jornada não tem etapa de acompanhamento de retorno.",
+      "opted_out": "Cancelou (STOP) — nenhuma mensagem enviada.",
+      "closed": "Marcado como pago/fechado — nenhuma mensagem enviada.",
+      "busy": "A jornada está ocupada agora — tente de novo em um minuto.",
+      "start_failed": "Não foi possível reiniciar a jornada — tente de novo."
+    }
   },
   "ButtonClicks": {
     "title": "Cliques em botões",
@@ -2433,6 +2454,7 @@
       "schedule": "Por agendamento"
     },
     "condition": {
+      "feature_enabled": "Recurso está ativo",
       "replied": "Respondeu",
       "clicked_button": "Tocou em um botão",
       "has_tag": "Tem uma etiqueta",
@@ -2479,6 +2501,9 @@
       "chooseMember": "Escolha um membro da equipe"
     },
     "form": {
+      "feature": "Recurso",
+      "featureHelp": "Sim quando o administrador do sistema ativou este recurso para a conta.",
+      "chooseFeature": "Escolha um recurso…",
       "startsWhen": "Começa quando",
       "tag": "Etiqueta",
       "chooseTag": "Escolha uma etiqueta…",
@@ -2601,6 +2626,8 @@
       "stepId": "Id do passo:"
     },
     "editor": {
+      "callbacksOff": "As solicitações de retorno estão desativadas nesta conta, então quem pedir uma ligação não aparece na página de retornos e ninguém é avisado. Peça ao administrador do sistema para ativar, ou adicione uma etapa “Se / senão → Recurso está ativo (Solicitações de retorno)” antes da tag de retorno.",
+      "callbacksOffGuarded": "As solicitações de retorno estão desativadas nesta conta — esta jornada pula a tag de retorno e passa o lead direto para a equipe.",
       "back": "Voltar às jornadas",
       "name": "Nome da jornada",
       "addStep": "Adicionar etapa",
@@ -2767,6 +2794,122 @@
         "exited": "Saiu",
         "failed": "Com falha"
       }
+    }
+  },
+  "FailedMessages": {
+    "title": "Mensagens com falha",
+    "subtitle": "Mensagens e templates que não chegaram — reenviar, agendar, enviar um texto personalizado ou dispensar.",
+    "refresh": "Atualizar",
+    "loadFailed": "Não foi possível carregar as mensagens com falha",
+    "actionFailed": "Não foi possível — tente de novo",
+    "done": "{count, plural, one {Feito} other {Feito para # mensagens}}",
+    "partly": "{ok} feitas, {failed} não",
+    "dismissConfirm": "Dispensar {count} mensagens com falha?",
+    "dismissed": "{count, plural, one {Dispensada} other {# dispensadas}}",
+    "textSent": "Mensagem enviada",
+    "scheduled": "Reenvio agendado para {when}",
+    "resent": "Enviada de novo",
+    "unscheduled": "Agendamento cancelado",
+    "reg": {
+      "fixTitle": "Corrigir o número de {name}",
+      "phoneLabel": "Número de WhatsApp",
+      "added": "Contato adicionado — a jornada começou",
+      "restarted": "Já era contato — a jornada foi reiniciada",
+      "hint": "Inscrições do site ignoradas porque o número não era válido. Corrija o número para adicionar o contato e iniciar a jornada.",
+      "empty": "Nenhuma inscrição ignorada",
+      "number": "Número",
+      "noNumber": "nenhum",
+      "fix": "Corrigir e adicionar"
+    },
+    "health": {
+      "scheduler": "Agendador (timers, lembretes)",
+      "waiting": "Aguardando a primeira execução",
+      "running": "Funcionando",
+      "stopped": "PARADO — última execução {when}",
+      "leadFeed": "Feed de leads do site",
+      "off": "Não configurado",
+      "working": "Funcionando",
+      "failing": "Com falha",
+      "skipped": "Inscrições ignoradas",
+      "skippedCount": "{count, plural, =0 {Nenhuma} one {# para corrigir} other {# para corrigir}}"
+    },
+    "stat": {
+      "open": "Ainda com falha",
+      "fixed": "Resolvidas",
+      "scheduled": "Agendadas",
+      "windowOpen": "Janela de 24h aberta"
+    },
+    "last14": "Falhas, últimos 14 dias",
+    "tab": {
+      "messages": "Mensagens",
+      "registrations": "Inscrições ignoradas ({count})"
+    },
+    "day": {
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "week": "Últimos 7 dias"
+    },
+    "status": {
+      "open": "Ainda com falha",
+      "resolved": "Resolvidas",
+      "all": "Todas"
+    },
+    "pickDate": "Escolher data",
+    "selectAll": "Selecionar tudo",
+    "selected": "{count} selecionadas",
+    "resend": "Reenviar",
+    "schedule": "Agendar",
+    "dismiss": "Dispensar",
+    "emptyOpen": "Nenhuma falha aqui 🎉",
+    "empty": "Nenhuma mensagem aqui",
+    "unknown": "Contato desconhecido",
+    "fromJourney": "Jornada: {name}",
+    "fromInbox": "Caixa de entrada / automação",
+    "textMessage": "mensagem de texto",
+    "optedOut": "Cancelou — não pode receber",
+    "windowOpen": "Janela de 24h aberta até {time} — pode enviar uma mensagem normal",
+    "windowClosed": "Janela de 24h fechada — só templates",
+    "scheduledFor": "Reenviar em {when}",
+    "resolved": {
+      "resent": "Enviada de novo",
+      "custom_text": "Enviada como texto",
+      "dismissed": "Dispensada",
+      "retried": "Reenviada automaticamente",
+      "fallback_sent": "Enviada como texto quando respondeu",
+      "expired": "Desistiu (tarde demais)",
+      "superseded": "Substituída por uma mais nova",
+      "opted_out": "Cancelou"
+    },
+    "openChat": "Abrir conversa",
+    "cancelSchedule": "Cancelar agendamento",
+    "sendText": "Enviar como texto",
+    "err": {
+      "not_found": "Não encontrada",
+      "already_resolved": "Já resolvida",
+      "opted_out": "Cancelou — sem mensagens",
+      "window_closed": "A janela de 24 horas está fechada — só template",
+      "needs_variables": "Este template precisa de variáveis que não temos — envie como texto",
+      "no_contact": "O contato não existe mais",
+      "bad_time": "Escolha um horário nos próximos 30 dias",
+      "empty_text": "Escreva a mensagem primeiro",
+      "send_failed": "A Meta recusou de novo"
+    },
+    "textTitle": "Enviar mensagem para {name}",
+    "textDesc": "A janela de 24 horas está aberta até {time}, então dá para enviar uma mensagem normal. Começa com o texto do template — edite à vontade.",
+    "cancel": "Cancelar",
+    "send": "Enviar",
+    "scheduleTitle": "{count, plural, one {Reenviar depois} other {Reenviar # mensagens depois}}",
+    "scheduleDesc": "O mesmo template é enviado de novo neste horário.",
+    "preset": {
+      "hour": "Em 1 hora",
+      "evening": "Hoje, 18h",
+      "tomorrow": "Amanhã, 11h",
+      "custom": "Escolher horário"
+    },
+    "banner": {
+      "schedulerDown": "O agendador parou (última execução {when}) — timers de jornada, lembretes e o feed de leads estão parados.",
+      "feedFailing": "O feed de leads do site está falhando — novas inscrições não estão chegando.",
+      "open": "Abrir"
     }
   }
 }
