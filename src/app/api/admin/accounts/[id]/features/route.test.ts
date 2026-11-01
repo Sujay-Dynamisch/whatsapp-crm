@@ -85,7 +85,24 @@ describe('GET', () => {
     // Off because its parent is off, not switched off itself.
     expect(byKey.broadcast_scheduling).toMatchObject({ enabled: false, switchedOff: false });
     expect(byKey.pipelines).toMatchObject({ enabled: true, switchedOff: false });
-    expect(body.features).toHaveLength(13);
+    expect(byKey.callbacks).toMatchObject({ enabled: true, switchedOff: false, label: 'Callback requests' });
+    // Every feature, once, in catalogue order (14 since callbacks was added).
+    expect(body.features.map((f: { key: string }) => f.key)).toEqual([
+      'pipelines',
+      'broadcasts',
+      'broadcast_scheduling',
+      'smart_sending',
+      'automations',
+      'flows',
+      'journeys',
+      'ai_agents',
+      'window_keepalive',
+      'translation',
+      'voice_transcription',
+      'api_access',
+      'button_analytics',
+      'callbacks',
+    ]);
   });
 
   it('400s a malformed id and 404s an unknown account', async () => {
