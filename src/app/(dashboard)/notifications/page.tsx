@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { Notification } from "@/types";
-import { Activity, AlarmClock, Bell, CheckCheck, Loader2, PhoneCall, Repeat, ShieldAlert, UserPlus } from "lucide-react";
+import { Activity, AlarmClock, Bell, CheckCheck, Loader2, MessageCircleReply, PhoneCall, Repeat, ShieldAlert, UserPlus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ const TYPE_ICON: Record<Notification["type"], typeof Bell> = {
   callback_returned: Repeat,
   health_alert: ShieldAlert,
   health_summary: Activity,
+  lead_returned: MessageCircleReply,
 };
 
 export default function NotificationsPage() {

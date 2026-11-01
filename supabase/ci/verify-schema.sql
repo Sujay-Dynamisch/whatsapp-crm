@@ -214,6 +214,15 @@ BEGIN
     RAISE EXCEPTION 'failed messages / health schema incomplete — migration 060 did not apply';
   END IF;
 
+  -- 061: a lost lead writing back is stored as a 'lead_returned'
+  -- notification; without the type the insert fails silently (best effort).
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'notifications_type_check' AND pg_get_constraintdef(oid) LIKE '%lead_returned%'
+  ) THEN
+    RAISE EXCEPTION 'notification type lead_returned missing — migration 061 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

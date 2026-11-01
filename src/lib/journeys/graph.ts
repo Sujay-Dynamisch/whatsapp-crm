@@ -124,12 +124,16 @@ export interface TriggerConfig extends Partial<ScheduleConfig> {
   callback_missed_node?: string;
   /** Callbacks: after this many "No answer" marks the lead goes back to `callback_return_node` (default 2). */
   callback_no_answer_limit?: number;
+  /** Lost lead writes back: the tag that marks a lost lead (e.g. closed_lost)… */
+  revive_tag_id?: string;
+  /** …and the step their new run starts at (their message is {{ reply.text }}). */
+  revive_node?: string;
 }
 
 /** Steps a run can start at besides the trigger (callback follow-ups). */
 export function entryNodeIds(graph: JourneyGraph): string[] {
   const cfg = (findTrigger(graph)?.config ?? {}) as TriggerConfig;
-  return [cfg.callback_return_node, cfg.callback_missed_node].filter((x): x is string => Boolean(x));
+  return [cfg.callback_return_node, cfg.callback_missed_node, cfg.revive_node].filter((x): x is string => Boolean(x));
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -365,7 +369,11 @@ export function validateGraph(graph: unknown): GraphIssue[] {
   if (triggers.length !== 1) issues.push({ nodeId: null, message: 'A journey needs exactly one trigger' });
   if (triggers.length === 1) {
     for (const id of entryNodeIds(g)) {
-      if (!ids.has(id)) issues.push({ nodeId: triggers[0].id, message: `Callback follow-up step "${id}" does not exist` });
+      if (!ids.has(id)) issues.push({ nodeId: triggers[0].id, message: `Follow-up step "${id}" does not exist` });
+    }
+    const tc = triggers[0].config as TriggerConfig;
+    if (Boolean(tc?.revive_node) !== Boolean(tc?.revive_tag_id)) {
+      issues.push({ nodeId: triggers[0].id, message: 'Set both the lost-lead tag and the step a returning lead starts at' });
     }
   }
 

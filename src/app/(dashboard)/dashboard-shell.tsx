@@ -10,6 +10,7 @@ import { AccountAccessAlert } from "@/components/layout/account-access-alert";
 import { HealthBanner } from "@/components/layout/health-banner";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { BrowserNotificationsListener } from "@/components/notifications/browser-notifications-listener";
+import { LeadAlertsListener } from "@/components/notifications/lead-alerts-listener";
 import { FeatureGate } from "@/components/layout/feature-gate";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
@@ -53,6 +54,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       {/* Desktop alerts for new customer messages (opt-in via Settings →
           Your profile). Headless — renders nothing. */}
       <BrowserNotificationsListener />
+      {/* Popup when a lost lead writes back (061). Headless. */}
+      <LeadAlertsListener />
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />

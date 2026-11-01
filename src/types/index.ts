@@ -213,7 +213,8 @@ export type NotificationType =
   | 'callback_overdue'
   | 'callback_returned'
   | 'health_alert'
-  | 'health_summary';
+  | 'health_summary'
+  | 'lead_returned';
 
 export interface Notification {
   id: string;

@@ -20,7 +20,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { accountHasFeature } from '@/lib/features-server';
 import { enrollContact, type JourneyDeps, type JourneyRow } from '@/lib/journeys/engine';
-import { findTrigger, type JourneyGraph, type TriggerConfig } from '@/lib/journeys/graph';
+import { findTrigger, type TriggerConfig } from '@/lib/journeys/graph';
+import { carriedContext } from '@/lib/journeys/restart';
 
 export const CALLBACK_TAG = 'callback_requested';
 /** A request still "New" this long gets a reminder. */
@@ -88,20 +89,6 @@ async function journeyFor(
   return { journey: usable.find((j) => j.id === latest.journey_id)!, last: latest };
 }
 
-/** Ids of the steps reachable from `start` (their old outputs would be stale). */
-function reachable(graph: JourneyGraph, start: string): Set<string> {
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-  const seen = new Set<string>();
-  const stack = [start];
-  while (stack.length) {
-    const id = stack.pop()!;
-    if (seen.has(id) || !byId.has(id)) continue;
-    seen.add(id);
-    for (const t of Object.values(byId.get(id)!.next ?? {})) if (t) stack.push(t);
-  }
-  return seen;
-}
-
 /** Why this contact must not be messaged by `journey`, or null. */
 async function blocked(db: SupabaseClient, journey: JourneyRow, contactId: string): Promise<FollowUpReason | null> {
   const { data } = await db.from('contact_tags').select('tag_id, tags(name)').eq('contact_id', contactId);
@@ -157,9 +144,7 @@ export async function startFollowUp(
       .eq('status', 'waiting');
   }
 
-  const prev = (last.context ?? {}) as { vars?: Record<string, unknown>; nodes?: Record<string, unknown> };
-  const ahead = reachable(journey.graph, startAt);
-  const nodes = Object.fromEntries(Object.entries(prev.nodes ?? {}).filter(([id]) => !ahead.has(id)));
+  const { vars, nodes } = carriedContext(journey.graph, last.context, startAt);
   const r = await enrollContact(
     db,
     journey,
@@ -169,7 +154,7 @@ export async function startFollowUp(
       trigger: 'callback',
       trigger_data: { type: 'callback', followup: args.kind },
       // They asked for a call, so they did answer the menu.
-      vars: { ...(prev.vars ?? {}), menu_replied: 'yes' },
+      vars: { ...vars, menu_replied: 'yes' },
       nodes,
     },
     { reentry: true, startAt }

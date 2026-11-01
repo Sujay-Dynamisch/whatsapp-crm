@@ -1077,7 +1077,7 @@ describe('callback follow-ups', () => {
     expect(t).toMatchObject({ callback_missed_node: 'cb_missed', callback_return_node: 'c_slot', callback_no_answer_limit: 2 });
     expect(validateGraph(g)).toEqual([]);
     t.callback_missed_node = 'nope';
-    expect(validateGraph(g)).toContainEqual({ nodeId: 'trigger', message: 'Callback follow-up step "nope" does not exist' });
+    expect(validateGraph(g)).toContainEqual({ nodeId: 'trigger', message: 'Follow-up step "nope" does not exist' });
   });
 });
 
@@ -1101,5 +1101,96 @@ describe('callbacks feature off', () => {
     await reply('4', '2026-11-03 08:00');
     expect(hasTag('callback_requested')).toBe(true);
     expect(tables.callback_requests).toHaveLength(1);
+  });
+});
+
+// ============================================================
+// A closed-lost lead writes back (migration 061)
+// ============================================================
+describe('closed-lost lead writes back', () => {
+  /** Mon 2 Nov registration, no replies → closed-lost Sat 21 Nov 11 AM. */
+  const goLost = async () => {
+    await register('2026-11-02 10:00');
+    await runUntil('2026-11-25 10:00');
+    expect(hasTag('closed_lost')).toBe(true);
+    expect(run().status).toBe('completed');
+  };
+  const notes = () => tables.notifications.filter((n) => n.type === 'lead_returned');
+
+  it('“hi” → team notified, closed_lost removed, menu sent again; “1” → payment link', async () => {
+    await goLost();
+    const before = sent.length;
+    await reply('hi', '2026-11-25 10:05');
+    expect(hasTag('closed_lost')).toBe(false);
+    expect(sent.slice(before).map((s) => s.text?.split('\n')[0])).toEqual(['Welcome back, Asha! 👋 Great to hear from you.']);
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: 'reply_menu' });
+    expect(notes()).toEqual([
+      expect.objectContaining({
+        user_id: 'owner',
+        conversation_id: 'conv1',
+        title: 'A lost lead wrote back — menu sent again',
+        body: 'Asha · +919800000001: “hi”',
+      }),
+    ]);
+    await reply('1', '2026-11-25 10:10');
+    expect(sent.at(-1)!.text).toContain(LINKS.pay); // settings carried over
+    expect(notes()).toHaveLength(1); // the follow-up reply is the run's, not a new alert
+  });
+
+  it('their message is already a choice (“I want to join”) → straight to the payment link', async () => {
+    await goLost();
+    const before = sent.length;
+    await reply('I want to join', '2026-11-25 10:05');
+    expect(sent.slice(before).map((s) => s.text?.split('\n')[0])).toEqual(['Great decision, Asha! 🎉']);
+  });
+
+  it('quiet again after writing back → Stage C nurture → closed-lost again', async () => {
+    await goLost();
+    await reply('hi', '2026-11-25 10:05');
+    await runUntil('2026-12-15 00:00');
+    expect(templates('sg_nurture_coldlead')).toHaveLength(8);
+    expect(hasTag('closed_lost')).toBe(true);
+    expect(run().status).toBe('completed');
+  });
+
+  it('the chat’s assignee is told too', async () => {
+    await goLost();
+    tables.conversations[0].assigned_agent_id = 'agent';
+    await reply('hello', '2026-11-25 10:05');
+    expect(notes().map((n) => n.user_id).sort()).toEqual(['agent', 'owner']);
+  });
+
+  it('“Not proceeding” lead writes back → team told to reply, no automated message', async () => {
+    await register('2026-11-02 10:00');
+    await reply('1', '2026-11-03 10:00');
+    await reply('Not Proceeding', '2026-11-04 12:00');
+    const before = sent.length;
+    await reply('actually can I still join?', '2026-11-10 12:00');
+    expect(sent.length).toBe(before);
+    expect(notes()).toEqual([expect.objectContaining({ title: 'A closed lead wrote back — please reply' })]);
+  });
+
+  it('STOP from a lost lead → nothing', async () => {
+    await goLost();
+    const before = sent.length;
+    await reply('STOP', '2026-11-25 10:05');
+    expect(sent.length).toBe(before);
+    expect(notes()).toEqual([]);
+    expect(hasTag('closed_lost')).toBe(true);
+  });
+
+  it('a lead whose run ended at a callback (not lost) → nothing extra', async () => {
+    await register('2026-11-02 10:00');
+    await reply('4', '2026-11-03 08:00');
+    const before = sent.length;
+    await reply('when will you call?', '2026-11-03 12:00');
+    expect(sent.length).toBe(before);
+    expect(notes()).toEqual([]);
+  });
+
+  it('a lead still in the journey → their reply is the run’s, no alert', async () => {
+    await register('2026-11-02 10:00');
+    await reply('hello', '2026-11-08 12:00'); // during Stage A nurture
+    expect(notes()).toEqual([]);
   });
 });

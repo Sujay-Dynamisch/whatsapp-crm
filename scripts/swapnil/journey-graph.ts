@@ -159,6 +159,9 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     callback_missed_node: 'cb_missed',
     callback_return_node: 'c_slot',
     callback_no_answer_limit: CALLBACK_NO_ANSWER_LIMIT,
+    // A closed-lost lead writes back → team notified, menu again.
+    revive_tag_id: tag.closed_lost,
+    revive_node: 'revived',
   }, { next: 'settings' });
   add('settings', 'set_variable', 'Settings (edit me)', {
     assignments: [
@@ -199,26 +202,33 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
 
   // ---------- Conversion menu (typed 1–4 or the template's buttons) ----------
   add('mark_menu', 'set_variable', 'Mark: answered the menu', { assignments: [{ key: 'menu_replied', value: 'yes' }] }, { next: 'menu' });
-  add('menu', 'switch', 'Menu choice', {
-    value: lc,
-    cases: [
-      { op: 'starts_with', value: '1', label: '1 Join' },
-      { op: 'contains', value: 'join', label: 'Ready to Join' },
-      { op: 'starts_with', value: '2', label: '2 Success stories' },
-      { op: 'contains', value: 'testimon', label: 'Testimonials' },
-      { op: 'starts_with', value: '3', label: '3 Next session' },
-      { op: 'contains', value: 'attend', label: "Couldn't attend" },
-      { op: 'starts_with', value: '4', label: '4 Callback' },
-      { op: 'contains', value: 'call', label: 'Request a callback' },
-      { op: 'contains', value: 'question', label: 'Questions' },
-    ],
-  }, {
+  const MENU_CASES: NodeConfigs['switch']['cases'] = [
+    { op: 'starts_with', value: '1', label: '1 Join' },
+    { op: 'contains', value: 'join', label: 'Ready to Join' },
+    { op: 'starts_with', value: '2', label: '2 Success stories' },
+    { op: 'contains', value: 'testimon', label: 'Testimonials' },
+    { op: 'starts_with', value: '3', label: '3 Next session' },
+    { op: 'contains', value: 'attend', label: "Couldn't attend" },
+    { op: 'starts_with', value: '4', label: '4 Callback' },
+    { op: 'contains', value: 'call', label: 'Request a callback' },
+    { op: 'contains', value: 'question', label: 'Questions' },
+  ];
+  const menuNext = (fallback: string) => ({
     case_0: 'pay_link', case_1: 'pay_link',
     case_2: 'testimonials', case_3: 'testimonials',
     case_4: 'set_reschedule', case_5: 'set_reschedule',
     case_6: 'callback_on', case_7: 'callback_on', case_8: 'callback_on',
-    default: 'menu_retry',
+    default: fallback,
   });
+  add('menu', 'switch', 'Menu choice', { value: lc, cases: MENU_CASES }, menuNext('menu_retry'));
+  // Closed-lost lead wrote back (journey restarted here; their message is
+  // {{ reply.text }}): a menu choice goes straight through, anything else
+  // gets the menu again. Quiet again → Stage C → closed-lost later.
+  add('revived', 'set_variable', 'Lost lead wrote back', { assignments: [{ key: 'revived', value: 'yes' }, { key: 'menu_replied', value: 'yes' }] }, { next: 'revive_pick' });
+  add('revive_pick', 'switch', 'Their message a menu choice?', { value: lc, cases: MENU_CASES }, menuNext('revive_menu'));
+  add('revive_menu', 'send_text', 'Welcome back + menu', {
+    text: `Welcome back, ${NAME}! 👋 Great to hear from you.\n\nReply with:\n1️⃣ Join Revibe today (Get the payment link)\n2️⃣ See real success stories\n3️⃣ Get the next webinar session\n4️⃣ Request a callback from my team\n\n— Swapnil Gautam`,
+  }, { next: 'reply_menu' });
   add('menu_retry', 'send_text', 'Ask for 1–4', { text: 'Please reply with 1, 2, 3 or 4 so I can help you with your next step. 🙏' }, { next: 'reply_menu' });
 
   // Payment link → up to 2 daytime nudges inside the 24-hour window →
