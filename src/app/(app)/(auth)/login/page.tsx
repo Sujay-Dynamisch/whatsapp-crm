@@ -95,7 +95,7 @@ function LoginPageInner() {
             ) : (
               <Image
                 src="/logo.png"
-                alt="WACRM"
+                alt="Flowza"
                 width={56}
                 height={56}
                 className="h-9 w-9 object-contain drop-shadow"

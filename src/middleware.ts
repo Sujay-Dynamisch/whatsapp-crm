@@ -45,7 +45,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Root page - redirect admin to /admin and regular users to /dashboard
-  if (request.nextUrl.pathname === '/') {
+  // Signed-in users go straight to the app; visitors see the landing page.
+  if (request.nextUrl.pathname === '/' && user) {
     const url = request.nextUrl.clone()
     if (user?.email?.toLowerCase() === 'admin@gmail.com') {
       url.pathname = '/admin'

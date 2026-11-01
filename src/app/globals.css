@@ -330,3 +330,93 @@ body {
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover, oklch(0.55 0.01 260 / 0.9));
 }
+/* ============================================================
+   Landing page (src/components/landing) — animations & effects.
+   ============================================================ */
+@keyframes lp-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes lp-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes lp-dash {
+  to { stroke-dashoffset: -32; }
+}
+@keyframes lp-marquee {
+  to { transform: translateX(-50%); }
+}
+@keyframes lp-shine {
+  to { background-position: 200% center; }
+}
+@keyframes lp-twinkle {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.8; }
+}
+@keyframes lp-border-spin {
+  to { --lp-angle: 360deg; }
+}
+@property --lp-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.lp { scroll-behavior: smooth; }
+.lp-gradient-text {
+  background-size: 200% auto;
+  animation: lp-shine 6s linear infinite;
+}
+.lp-stars {
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.7), transparent),
+    radial-gradient(1px 1px at 30% 70%, rgba(255,255,255,.5), transparent),
+    radial-gradient(1.5px 1.5px at 55% 30%, rgba(255,255,255,.6), transparent),
+    radial-gradient(1px 1px at 75% 80%, rgba(255,255,255,.5), transparent),
+    radial-gradient(1px 1px at 85% 15%, rgba(255,255,255,.7), transparent),
+    radial-gradient(1.5px 1.5px at 45% 90%, rgba(255,255,255,.4), transparent),
+    radial-gradient(1px 1px at 92% 50%, rgba(255,255,255,.5), transparent),
+    radial-gradient(1px 1px at 5% 85%, rgba(255,255,255,.5), transparent);
+  background-size: 600px 600px;
+  animation: lp-twinkle 5s ease-in-out infinite;
+}
+.lp-spot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .3s;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(37, 211, 102, 0.10), transparent 45%);
+}
+.lp-spot:hover::before { opacity: 1; }
+.lp-glow-border {
+  box-shadow: 0 0 0 1px rgba(37, 211, 102, 0.25), 0 20px 60px -20px rgba(37, 211, 102, 0.35);
+}
+.lp-glow-border::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--lp-angle), transparent 60%, #25d366, #a78bfa, transparent 90%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: lp-border-spin 5s linear infinite;
+  pointer-events: none;
+}
+.lp-marquee-mask {
+  mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp *, .lp *::before, .lp *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* Scroll reveal: visible by default (server HTML); hidden only by JS for
+   elements still below the fold, then revealed. */
+.lp-reveal { transition: opacity .7s ease-out, transform .7s ease-out, filter .7s ease-out; }
+.lp-reveal.lp-reveal-hidden { opacity: 0; transform: translateY(24px); filter: blur(2px); }
