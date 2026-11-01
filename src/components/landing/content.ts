@@ -136,12 +136,54 @@ export const CONTACT = {
 export const demoLink = (plan?: string) =>
   `https://wa.me/${CONTACT.phone}?text=${encodeURIComponent(plan ? `Hi Sujal, I'm interested in the ${plan} plan of the WhatsApp CRM. Can I get a free live demo?` : CONTACT.demoText)}`;
 
+/**
+ * UPI payments for plans. NEXT_PUBLIC_PAYMENT_UPI_ID overrides the UPI ID
+ * (set at build time); empty hides the "Pay via UPI" buttons.
+ */
+export const PAYMENT = {
+  upiId: (process.env.NEXT_PUBLIC_PAYMENT_UPI_ID ?? 'khedekarsujay5-1@okicici').trim(),
+  /** Shown as the payee in UPI apps (the bank's verified name is shown too). */
+  payee: 'wacrm',
+};
+
+/** "Choose plan": open WhatsApp with a purchase message. */
+export const purchaseLink = (plan: Plan) =>
+  `https://wa.me/${CONTACT.phone}?text=${encodeURIComponent(
+    plan.amount
+      ? `Hi Sujal, I want to subscribe to the ${plan.name} plan (${plan.price}/month) of the WhatsApp CRM. Please share the payment details.`
+      : `Hi Sujal, I'm interested in the ${plan.name} plan of the WhatsApp CRM. Can we talk?`
+  )}`;
+
+/** UPI deep link with the plan amount filled in (opens WhatsApp Pay / GPay / PhonePe on phones). */
+// Encoded the way UPI apps expect: "@" kept as is, spaces as %20 (some
+// apps don't decode "%40" or "+").
+const upiValue = (v: string) => encodeURIComponent(v).replace(/%40/g, '@');
+export const upiLink = (plan: Plan) =>
+  'upi://pay?' +
+  [
+    ['pa', PAYMENT.upiId],
+    ['pn', PAYMENT.payee],
+    ['am', (plan.amount ?? 0).toFixed(2)],
+    ['cu', 'INR'],
+    ['tn', `wacrm ${plan.name} plan - 1 month`],
+  ]
+    .map(([k, v]) => `${k}=${upiValue(v)}`)
+    .join('&');
+
+/** After paying: tell Sujal on WhatsApp. */
+export const paidLink = (plan: Plan) =>
+  `https://wa.me/${CONTACT.phone}?text=${encodeURIComponent(
+    `Hi Sujal, I've paid ${plan.price} via UPI for the ${plan.name} plan (1 month) of the WhatsApp CRM. UPI reference: `
+  )}`;
+
 /** Approximate charge per marketing message (Meta's rate in India; changes with Meta pricing). */
 export const MARKETING_MESSAGE_PRICE = '₹0.89';
 
 export interface Plan {
   name: string;
   price: string;
+  /** Monthly amount in ₹ for UPI payment (none = talk to us). */
+  amount?: number;
   period: string;
   blurb: string;
   highlight?: boolean;
@@ -155,6 +197,7 @@ export const PLANS: Plan[] = [
   {
     name: 'Starter',
     price: '₹999',
+    amount: 999,
     period: '/month',
     blurb: 'For small businesses getting off manual WhatsApp.',
     features: [
@@ -170,6 +213,7 @@ export const PLANS: Plan[] = [
   {
     name: 'Growth',
     price: '₹1,999',
+    amount: 1999,
     period: '/month',
     blurb: 'For teams that want follow-ups to run themselves.',
     highlight: true,
@@ -190,6 +234,7 @@ export const PLANS: Plan[] = [
   {
     name: 'Business',
     price: '₹3,999',
+    amount: 3999,
     period: '/month',
     blurb: 'For growing teams that need control and integrations.',
     includes: 'Everything in Growth, plus',
