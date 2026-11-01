@@ -21,6 +21,8 @@ let rpcResult: { data: string[] | null; error: { message: string } | null } = {
   error: null,
 };
 const rpcCalls: string[] = [];
+// `permResult` — what my_permissions() resolves to (migration 062).
+let permResult: { data: unknown; error: { message: string } | null } = { data: null, error: null };
 
 vi.mock("@supabase/ssr", () => ({
   createServerClient: (
@@ -33,7 +35,7 @@ vi.mock("@supabase/ssr", () => ({
     // my_disabled_features() — migration 045's request gate.
     rpc: (fn: string) => {
       rpcCalls.push(fn);
-      return Promise.resolve(rpcResult);
+      return Promise.resolve(fn === "my_permissions" ? permResult : rpcResult);
     },
     auth: {
       // Mirrors real auth-js: an expired access token is transparently
@@ -56,6 +58,7 @@ beforeEach(() => {
   mockUser = null;
   refreshedCookies = [];
   rpcResult = { data: [], error: null };
+  permResult = { data: null, error: null };
   rpcCalls.length = 0;
 });
 
@@ -174,7 +177,7 @@ describe("middleware — account feature entitlements (migration 045)", () => {
 
     const res = await run("/inbox");
     expect(res.status).toBe(200);
-    expect(rpcCalls).toEqual([]);
+    expect(rpcCalls).not.toContain("my_disabled_features");
   });
 
   it("does not look features up for signed-out requests (auth redirect wins)", async () => {
@@ -217,5 +220,64 @@ describe("middleware — button analytics gate (migration 046)", () => {
     );
     const api = await middleware(new NextRequest("https://app.test/api/button-clicks"));
     expect(api.status).toBe(403);
+  });
+});
+
+describe("middleware — custom role permissions (migration 062)", () => {
+  const run = (path: string, init?: ConstructorParameters<typeof NextRequest>[1]) =>
+    middleware(new NextRequest(`https://app.test${path}`, init));
+  const role = (permissions: Record<string, string>) => ({
+    data: { custom_role_id: "r1", name: "Sales agent", base_role: "agent", permissions },
+    error: null,
+  });
+
+  it("members without a custom role are not restricted", async () => {
+    mockUser = { id: "user-1" };
+    permResult = { data: null, error: null };
+    expect((await run("/broadcasts")).status).toBe(200);
+    expect((await run("/api/contacts", { method: "POST" })).status).toBe(200);
+  });
+
+  it("None: the page redirects to the dashboard with the area; the API answers 403", async () => {
+    mockUser = { id: "user-1" };
+    permResult = role({ inbox: "edit", broadcasts: "none" });
+    const page = await run("/broadcasts");
+    expect(page.status).toBe(307);
+    expect(new URL(page.headers.get("location")!).searchParams.get("no_access")).toBe("broadcasts");
+    const api = await run("/api/whatsapp/broadcast/abc", { method: "GET" });
+    expect(api.status).toBe(403);
+    expect(await api.json()).toMatchObject({ code: "no_access", area: "broadcasts" });
+  });
+
+  it("View: pages and reads work, writes answer 403 (read-like POSTs allowed)", async () => {
+    mockUser = { id: "user-1" };
+    permResult = role({ contacts: "view", inbox: "view" });
+    expect((await run("/contacts")).status).toBe(200);
+    expect((await run("/api/contacts")).status).toBe(200);
+    const write = await run("/api/contacts", { method: "POST" });
+    expect(write.status).toBe(403);
+    expect(await write.json()).toMatchObject({ code: "view_only", area: "contacts" });
+    expect((await run("/api/messages/translate", { method: "POST" })).status).toBe(200);
+  });
+
+  it("an area missing from the role counts as None", async () => {
+    mockUser = { id: "user-1" };
+    permResult = role({ inbox: "edit" });
+    expect((await run("/journeys")).status).toBe(307);
+  });
+
+  it("ungated paths (dashboard, cron, webhooks) never look permissions up", async () => {
+    mockUser = { id: "user-1" };
+    permResult = role({});
+    expect((await run("/dashboard")).status).toBe(200);
+    expect((await run("/api/journeys/hooks/tok", { method: "POST" })).status).toBe(200);
+    expect(rpcCalls).not.toContain("my_permissions");
+  });
+
+  it("fails open on a lookup error (database policies still enforce)", async () => {
+    mockUser = { id: "user-1" };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    permResult = { data: null, error: { message: "boom" } };
+    expect((await run("/broadcasts")).status).toBe(200);
   });
 });

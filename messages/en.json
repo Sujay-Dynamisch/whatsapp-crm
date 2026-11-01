@@ -2911,5 +2911,120 @@
       "feedFailing": "The website lead feed is failing — new registrations are not coming in.",
       "open": "Open"
     }
+  },
+  "Permissions": {
+    "redirected": "Your role doesn't include {area}, so you were taken to the dashboard.",
+    "noAccessTitle": "Not part of your role",
+    "noAccessDesc": "Your role ({role}) doesn't include {area}. Ask an admin if you need it.",
+    "viewOnly": "View only — your role ({role}) can look at {area} but not change anything.",
+    "levels": {
+      "none": "None",
+      "view": "View",
+      "edit": "Edit"
+    },
+    "presets": {
+      "sales": "Sales agent",
+      "support": "Support agent",
+      "marketing": "Marketing",
+      "manager": "Read-only manager"
+    },
+    "saveFailed": "Could not save the role",
+    "roleUpdated": "Role “{name}” updated",
+    "roleCreated": "Role “{name}” created",
+    "editRole": "Edit role “{name}”",
+    "newRole": "New role",
+    "editorDesc": "Choose what people with this role can see and change. A role builds on a base role and can only take access away from it.",
+    "startFrom": "Start from:",
+    "name": "Role name",
+    "namePlaceholder": "e.g. Sales agent",
+    "baseRole": "Base role",
+    "baseHint": {
+      "admin": "Admins can be given edit access everywhere, including team and settings.",
+      "agent": "Agents can edit day-to-day work; settings, templates, AI, team and API at most view.",
+      "viewer": "Viewers never change anything — view access at most."
+    },
+    "description": "Description",
+    "optional": "optional",
+    "descriptionPlaceholder": "What is this role for?",
+    "accessTitle": "Access by area",
+    "allTo": "All {level}",
+    "featureOff": "off for this account",
+    "aboveBase": "Not possible with the {base} base role",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create role",
+    "deleteConfirm": "Delete the role “{name}”?",
+    "deleteFailed": "Could not delete the role",
+    "roleDeleted": "Role “{name}” deleted",
+    "rolesTitle": "Roles",
+    "rolesHint": "Custom roles decide which parts of the CRM each person can see and change. Members without one keep their built-in role.",
+    "noRoles": "No custom roles yet — everyone has a built-in role.",
+    "basedOn": "Based on {base}",
+    "usage": "{members, plural, =0 {No members} one {# member} other {# members}}{invites, plural, =0 {} one { · # pending invite} other { · # pending invites}}",
+    "edit": "Edit",
+    "delete": "Delete",
+    "customRoles": "Custom roles",
+    "areas": {
+      "inbox": {
+        "label": "Inbox",
+        "desc": "Conversations, sending messages, AI drafts"
+      },
+      "contacts": {
+        "label": "Contacts",
+        "desc": "Contacts, tags, notes, custom field values"
+      },
+      "pipelines": {
+        "label": "Pipelines & deals",
+        "desc": "Pipelines, stages and deals"
+      },
+      "broadcasts": {
+        "label": "Broadcasts",
+        "desc": "Bulk template campaigns"
+      },
+      "templates": {
+        "label": "Message templates",
+        "desc": "WhatsApp templates and carousels"
+      },
+      "automations": {
+        "label": "Automations",
+        "desc": "Trigger-based automations"
+      },
+      "flows": {
+        "label": "Flows",
+        "desc": "Chatbot flows"
+      },
+      "journeys": {
+        "label": "Journeys",
+        "desc": "Customer journeys and their runs"
+      },
+      "ai_agents": {
+        "label": "AI agents",
+        "desc": "AI settings, knowledge base, playground"
+      },
+      "callbacks": {
+        "label": "Callbacks",
+        "desc": "Callback requests"
+      },
+      "button_clicks": {
+        "label": "Button clicks",
+        "desc": "Button click analytics"
+      },
+      "failed_messages": {
+        "label": "Failed messages",
+        "desc": "Failed messages, skipped registrations, health"
+      },
+      "settings": {
+        "label": "Account settings",
+        "desc": "WhatsApp connection, fields, quick replies, delivery, language"
+      },
+      "members": {
+        "label": "Team & roles",
+        "desc": "Members, invitations and roles"
+      },
+      "api_access": {
+        "label": "API & webhooks",
+        "desc": "API keys and outbound webhooks"
+      }
+    }
   }
 }

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { areaForPath } from "@/lib/auth/permissions";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useOpenCallbacks } from "@/hooks/use-open-callbacks";
@@ -131,7 +132,7 @@ import { useTranslations } from "next-intl";
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
-  const { user, profile, profileLoading, account, accountRole, signOut, hasFeature } = useAuth();
+  const { user, profile, profileLoading, account, accountRole, signOut, hasFeature, can } = useAuth();
   const isSysAdmin = isSystemAdmin(user?.email, profile?.role);
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
@@ -230,7 +231,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.filter((item) => !item.feature || hasFeature(item.feature)).map((item) => {
+            {navItems
+              .filter((item) => !item.feature || hasFeature(item.feature))
+              // Custom roles (062): areas the role can't see are hidden.
+              .filter((item) => {
+                const area = areaForPath(item.href);
+                return !area || can(area);
+              })
+              .map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));

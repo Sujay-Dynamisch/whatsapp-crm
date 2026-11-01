@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { featureDisabledBody, featureForPath, isFeatureEnabled } from '@/lib/features'
+import { accessVerdict, areaForPath, parseAccess } from '@/lib/auth/permissions'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -123,6 +124,39 @@ export async function middleware(request: NextRequest) {
       url.pathname = '/dashboard'
       url.search = `?feature_disabled=${feature}`
       return withRefreshedCookies(NextResponse.redirect(url))
+    }
+  }
+
+  // Custom roles (migration 062): None → blocked, View → no API writes.
+  const area = user ? areaForPath(request.nextUrl.pathname) : null
+  if (area) {
+    const { data: access, error } = await supabase.rpc('my_permissions')
+    if (error) {
+      // Before 062 (or a lookup hiccup) the database policies still apply.
+      if (!/my_permissions/.test(error.message)) console.error('[middleware] permission lookup failed:', error.message)
+    } else {
+      const verdict = accessVerdict(parseAccess(access), request.nextUrl.pathname, request.method)
+      if (!verdict.ok) {
+        if (request.nextUrl.pathname.startsWith('/api/')) {
+          return withRefreshedCookies(
+            NextResponse.json(
+              {
+                error:
+                  verdict.reason === 'view_only'
+                    ? 'Your role can only view this — ask an admin for edit access'
+                    : 'Your role does not have access to this',
+                code: verdict.reason,
+                area: verdict.area,
+              },
+              { status: 403 }
+            )
+          )
+        }
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard'
+        url.search = `?no_access=${verdict.area}`
+        return withRefreshedCookies(NextResponse.redirect(url))
+      }
     }
   }
 

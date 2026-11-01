@@ -2911,5 +2911,120 @@
       "feedFailing": "O feed de leads do site está falhando — novas inscrições não estão chegando.",
       "open": "Abrir"
     }
+  },
+  "Permissions": {
+    "redirected": "Sua função não inclui {area}, então você foi levado ao painel.",
+    "noAccessTitle": "Fora da sua função",
+    "noAccessDesc": "Sua função ({role}) não inclui {area}. Peça a um administrador se precisar.",
+    "viewOnly": "Somente visualização — sua função ({role}) pode ver {area}, mas não alterar.",
+    "levels": {
+      "none": "Nenhum",
+      "view": "Ver",
+      "edit": "Editar"
+    },
+    "presets": {
+      "sales": "Vendedor",
+      "support": "Suporte",
+      "marketing": "Marketing",
+      "manager": "Gestor (somente leitura)"
+    },
+    "saveFailed": "Não foi possível salvar a função",
+    "roleUpdated": "Função “{name}” atualizada",
+    "roleCreated": "Função “{name}” criada",
+    "editRole": "Editar função “{name}”",
+    "newRole": "Nova função",
+    "editorDesc": "Escolha o que as pessoas com esta função podem ver e alterar. Uma função parte de uma função base e só pode tirar acessos dela.",
+    "startFrom": "Começar de:",
+    "name": "Nome da função",
+    "namePlaceholder": "ex.: Vendedor",
+    "baseRole": "Função base",
+    "baseHint": {
+      "admin": "Administradores podem ter edição em tudo, inclusive equipe e configurações.",
+      "agent": "Agentes podem editar o dia a dia; configurações, templates, IA, equipe e API no máximo ver.",
+      "viewer": "Visualizadores nunca alteram nada — no máximo ver."
+    },
+    "description": "Descrição",
+    "optional": "opcional",
+    "descriptionPlaceholder": "Para que serve esta função?",
+    "accessTitle": "Acesso por área",
+    "allTo": "Tudo {level}",
+    "featureOff": "desativado nesta conta",
+    "aboveBase": "Não é possível com a função base {base}",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "create": "Criar função",
+    "deleteConfirm": "Excluir a função “{name}”?",
+    "deleteFailed": "Não foi possível excluir a função",
+    "roleDeleted": "Função “{name}” excluída",
+    "rolesTitle": "Funções",
+    "rolesHint": "Funções personalizadas definem quais partes do CRM cada pessoa pode ver e alterar. Membros sem uma mantêm a função padrão.",
+    "noRoles": "Nenhuma função personalizada ainda — todos têm uma função padrão.",
+    "basedOn": "Baseada em {base}",
+    "usage": "{members, plural, =0 {Nenhum membro} one {# membro} other {# membros}}{invites, plural, =0 {} one { · # convite pendente} other { · # convites pendentes}}",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "customRoles": "Funções personalizadas",
+    "areas": {
+      "inbox": {
+        "label": "Caixa de entrada",
+        "desc": "Conversas, envio de mensagens, rascunhos de IA"
+      },
+      "contacts": {
+        "label": "Contatos",
+        "desc": "Contatos, tags, notas, valores de campos"
+      },
+      "pipelines": {
+        "label": "Pipelines e negócios",
+        "desc": "Pipelines, etapas e negócios"
+      },
+      "broadcasts": {
+        "label": "Transmissões",
+        "desc": "Campanhas de templates em massa"
+      },
+      "templates": {
+        "label": "Templates de mensagem",
+        "desc": "Templates e carrosséis do WhatsApp"
+      },
+      "automations": {
+        "label": "Automações",
+        "desc": "Automações por gatilho"
+      },
+      "flows": {
+        "label": "Fluxos",
+        "desc": "Fluxos de chatbot"
+      },
+      "journeys": {
+        "label": "Jornadas",
+        "desc": "Jornadas de clientes e execuções"
+      },
+      "ai_agents": {
+        "label": "Agentes de IA",
+        "desc": "Configurações de IA, base de conhecimento, playground"
+      },
+      "callbacks": {
+        "label": "Retornos",
+        "desc": "Solicitações de retorno"
+      },
+      "button_clicks": {
+        "label": "Cliques em botões",
+        "desc": "Análise de cliques em botões"
+      },
+      "failed_messages": {
+        "label": "Mensagens com falha",
+        "desc": "Mensagens com falha, inscrições ignoradas, saúde"
+      },
+      "settings": {
+        "label": "Configurações da conta",
+        "desc": "Conexão WhatsApp, campos, respostas rápidas, envio, idioma"
+      },
+      "members": {
+        "label": "Equipe e funções",
+        "desc": "Membros, convites e funções"
+      },
+      "api_access": {
+        "label": "API e webhooks",
+        "desc": "Chaves de API e webhooks de saída"
+      }
+    }
   }
 }

@@ -19,6 +19,7 @@ import type { PostgrestError } from "@supabase/supabase-js";
 
 import { requireRole, toErrorResponse } from "@/lib/auth/account";
 import { isAccountRole } from "@/lib/auth/roles";
+import { UUID_RE } from "@/lib/journeys/api";
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -58,9 +59,23 @@ export async function PATCH(
     const { userId } = await params;
 
     const body = (await request.json().catch(() => null)) as
-      | { role?: unknown }
+      | { role?: unknown; custom_role_id?: unknown }
       | null;
     const role = body?.role;
+
+    // A custom role (migration 062): the role sets the base role too.
+    if (body?.custom_role_id !== undefined && body.custom_role_id !== null) {
+      if (typeof body.custom_role_id !== "string" || !UUID_RE.test(body.custom_role_id)) {
+        return NextResponse.json({ error: "'custom_role_id' must be a role id" }, { status: 400 });
+      }
+      const { error } = await ctx.supabase.rpc("set_member_access", {
+        p_user_id: userId,
+        p_role: null,
+        p_custom_role_id: body.custom_role_id,
+      });
+      if (error) return rpcErrorToResponse(error);
+      return NextResponse.json({ ok: true });
+    }
 
     if (!isAccountRole(role)) {
       return NextResponse.json(
@@ -81,10 +96,19 @@ export async function PATCH(
       );
     }
 
-    const { error } = await ctx.supabase.rpc("set_member_role", {
+    // set_member_access also clears a custom role; set_member_role is the
+    // pre-062 fallback.
+    let { error } = await ctx.supabase.rpc("set_member_access", {
       p_user_id: userId,
-      p_new_role: role,
+      p_role: role,
+      p_custom_role_id: null,
     });
+    if (error && (error.code === "PGRST202" || /set_member_access/.test(error.message))) {
+      ({ error } = await ctx.supabase.rpc("set_member_role", {
+        p_user_id: userId,
+        p_new_role: role,
+      }));
+    }
 
     if (error) return rpcErrorToResponse(error);
 

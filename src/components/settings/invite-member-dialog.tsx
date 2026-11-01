@@ -37,11 +37,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTranslations } from 'next-intl';
+import type { CustomRole } from './custom-roles';
 import { useAuth } from '@/hooks/use-auth';
 
 type InviteRole = 'admin' | 'agent' | 'viewer';
 
 interface InviteMemberDialogProps {
+  /** Custom roles the inviter may hand out (migration 062). */
+  customRoles?: CustomRole[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called after a successful create so the parent re-fetches the
@@ -62,7 +65,8 @@ const MAX_LABEL_LEN = 80;
 
 interface CreatedInvite {
   url: string;
-  role: InviteRole;
+  /** Role name shown on the result step (built-in or custom). */
+  roleName: string;
   expiresInDays: number;
   /** Snapshotted at creation time so a later account rename can't
    *  retroactively change the wa.me message text on the result step. */
@@ -70,14 +74,19 @@ interface CreatedInvite {
 }
 
 export function InviteMemberDialog({
+  customRoles = [],
   open,
   onOpenChange,
   onCreated,
 }: InviteMemberDialogProps) {
   const t = useTranslations('Settings.invite');
   const tRoles = useTranslations('Settings.roles');
+  const tPerm = useTranslations('Permissions');
   const { account } = useAuth();
-  const [role, setRole] = useState<InviteRole>('agent');
+  // Built-in role or "custom:<id>" (migration 062).
+  const [role, setRole] = useState<string>('agent');
+  const custom = role.startsWith('custom:') ? customRoles.find((r) => `custom:${r.id}` === role) ?? null : null;
+  const roleLabel = custom ? custom.name : tRoles(role as InviteRole);
   const [expiry, setExpiry] = useState<string>('7');
   const [label, setLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -109,7 +118,7 @@ export function InviteMemberDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          role,
+          ...(custom ? { custom_role_id: custom.id } : { role }),
           expiresInDays: Number(expiry),
           label: trimmedLabel || undefined,
         }),
@@ -128,7 +137,7 @@ export function InviteMemberDialog({
 
       setResult({
         url: data.url,
-        role,
+        roleName: roleLabel,
         expiresInDays: data.expiresInDays,
         // Snapshot the account name into the result so the wa.me
         // share message has team context. Falls back to a generic
@@ -190,7 +199,7 @@ export function InviteMemberDialog({
               </DialogTitle>
               <DialogDescription className="text-muted-foreground">
                 {t.rich('inviteCreatedDesc', {
-                  role: tRoles(result.role),
+                  role: result.roleName,
                   days: result.expiresInDays,
                   bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>
                 })}
@@ -271,19 +280,33 @@ export function InviteMemberDialog({
                 <Label className="text-muted-foreground">{t('roleLabel')}</Label>
                 <Select
                   value={role}
-                  onValueChange={(v) => v && setRole(v as InviteRole)}
+                  onValueChange={(v) => v && setRole(String(v))}
                 >
                   <SelectTrigger className="w-full bg-muted border-border text-foreground">
-                    <SelectValue>{tRoles(role)}</SelectValue>
+                    <SelectValue>{roleLabel}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">{tRoles('admin')}</SelectItem>
                     <SelectItem value="agent">{tRoles('agent')}</SelectItem>
                     <SelectItem value="viewer">{tRoles('viewer')}</SelectItem>
+                    {customRoles.length > 0 && (
+                      <>
+                        <div className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                          {tPerm('customRoles')}
+                        </div>
+                        {customRoles.map((r) => (
+                          <SelectItem key={r.id} value={`custom:${r.id}`}>
+                            {r.name}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {tRoles(`${role}Hint` as 'adminHint' | 'agentHint' | 'viewerHint')}
+                  {custom
+                    ? custom.description || tPerm('basedOn', { base: tRoles(custom.base_role) })
+                    : tRoles(`${role}Hint` as 'adminHint' | 'agentHint' | 'viewerHint')}
                 </p>
               </div>
 
