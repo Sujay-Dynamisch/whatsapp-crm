@@ -1,10 +1,13 @@
 'use client';
 
-// A rotating dotted globe with WhatsApp messages arcing between cities
-// (canvas, no dependencies). Drag to spin. Still frame when the visitor
-// prefers reduced motion; paused while off-screen.
+// A rotating 3D Earth — continents as lit dots on a shaded ocean, with an
+// atmosphere — and WhatsApp messages arcing between cities (canvas, no
+// dependencies; land from Natural Earth via ./land-mask). Drag to spin.
+// Still frame when the visitor prefers reduced motion; paused off-screen.
 
 import { useEffect, useRef } from 'react';
+
+import { isLand } from './land-mask';
 
 const CITIES: [number, number][] = [
   [19.07, 72.88], [28.61, 77.21], [12.97, 77.59], [18.52, 73.86], [22.57, 88.36], // Mumbai, Delhi, Bengaluru, Pune, Kolkata
@@ -46,15 +49,29 @@ export function Globe({ className }: { className?: string }) {
     if (!ctx) return;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // Dots on a Fibonacci sphere.
-    const N = 2400;
+    // Land dots: a dense Fibonacci sphere, kept where there is land.
+    const N = 22000;
     const dots: V3[] = [];
     for (let i = 0; i < N; i++) {
       const y = 1 - (i / (N - 1)) * 2;
       const r = Math.sqrt(1 - y * y);
       const th = Math.PI * (3 - Math.sqrt(5)) * i;
-      dots.push([Math.cos(th) * r, y, Math.sin(th) * r]);
+      const v: V3 = [Math.cos(th) * r, y, Math.sin(th) * r];
+      // Back to lat / lon (inverse of toVec).
+      const lat = (Math.asin(v[1]) * 180) / Math.PI;
+      const lon = (Math.atan2(v[0], v[2]) * 180) / Math.PI;
+      if (isLand(lat, lon)) dots.push(v);
     }
+    // Brightness levels for the land dots (night-side teal → sunlit mint).
+    const SHADES = 12;
+    const SHADE_COLORS = Array.from({ length: SHADES }, (_, i) => {
+      const k = (i + 0.5) / SHADES;
+      return `rgba(${Math.round(30 + 170 * k * k)}, ${Math.round(120 + 135 * k)}, ${Math.round(110 + 90 * k)}, ${(0.3 + 0.7 * k).toFixed(3)})`;
+    });
+    const buckets: number[][] = Array.from({ length: SHADES }, () => []);
+    // Sun direction in view space (upper left, towards the viewer).
+    const L: V3 = [-0.55, 0.5, 0.67];
+    const lightOf = (p: { x3: number; y3: number; z: number }) => Math.max(0, p.x3 * L[0] + p.y3 * L[1] + p.z * L[2]);
     const cities = CITIES.map(([la, lo]) => toVec(la, lo));
 
     let w = 0;
@@ -73,7 +90,9 @@ export function Globe({ className }: { className?: string }) {
     ro.observe(canvas);
 
     let rot = 1.2; // start over India
-    let vel = reduce ? 0 : 0.0016;
+    // Negative = the real Earth's direction (surface moves west → east).
+    const CRUISE = -0.0016;
+    let vel = reduce ? 0 : CRUISE;
     const tilt = 0.32;
     let dragging = false;
     let lastX = 0;
@@ -90,7 +109,7 @@ export function Globe({ className }: { className?: string }) {
       const y = v[1] * ct - z0 * st;
       const z = v[1] * st + z0 * ct;
       const R = Math.min(w, h) * 0.42;
-      return { x: w / 2 + x * R, y: h / 2 - y * R, z, R };
+      return { x: w / 2 + x * R, y: h / 2 - y * R, z, R, x3: x, y3: y };
     };
 
     const draw = (t: number) => {
@@ -100,39 +119,113 @@ export function Globe({ className }: { className?: string }) {
       const cy = h / 2;
       // Atmosphere (kept inside the canvas so it never shows as a square).
       const halo = Math.min(w, h) * 0.5;
-      const g = ctx.createRadialGradient(cx, cy, R * 0.92, cx, cy, halo);
-      g.addColorStop(0, 'rgba(37, 211, 102, 0.22)');
-      g.addColorStop(0.45, 'rgba(37, 211, 102, 0.06)');
+      const g = ctx.createRadialGradient(cx, cy, R * 0.96, cx, cy, halo);
+      g.addColorStop(0, 'rgba(56, 189, 248, 0.28)');
+      g.addColorStop(0.3, 'rgba(37, 211, 102, 0.10)');
       g.addColorStop(1, 'rgba(37, 211, 102, 0)');
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(cx, cy, halo, 0, Math.PI * 2);
       ctx.fill();
-      // Globe body, lit from the top-left, with a rim.
-      const body = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.1, cx, cy, R);
-      body.addColorStop(0, '#17222e');
-      body.addColorStop(1, '#0a0f15');
-      ctx.fillStyle = body;
+
+      // Ocean: a sphere lit from the sun's side, dark on the night side.
+      const sx = cx + L[0] * R * 0.55;
+      const sy = cy - L[1] * R * 0.55;
+      const ocean = ctx.createRadialGradient(sx, sy, R * 0.05, cx, cy, R);
+      ocean.addColorStop(0, '#1d4f7a');
+      ocean.addColorStop(0.45, '#0d2c4a');
+      ocean.addColorStop(0.85, '#06172a');
+      ocean.addColorStop(1, '#030b16');
+      ctx.fillStyle = ocean;
       ctx.beginPath();
       ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(37, 211, 102, 0.35)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
 
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.clip();
+
+      // Graticule: faint parallels and meridians.
+      ctx.lineWidth = 0.6;
+      ctx.strokeStyle = 'rgba(148, 197, 255, 0.07)';
+      for (let lat = -60; lat <= 60; lat += 30) {
+        ctx.beginPath();
+        let on = false;
+        for (let lon = -180; lon <= 180; lon += 4) {
+          const p = project(toVec(lat, lon));
+          if (p.z < 0) { on = false; continue; }
+          if (on) ctx.lineTo(p.x, p.y); else { ctx.moveTo(p.x, p.y); on = true; }
+        }
+        ctx.stroke();
+      }
+      for (let lon = -180; lon < 180; lon += 30) {
+        ctx.beginPath();
+        let on = false;
+        for (let lat = -88; lat <= 88; lat += 4) {
+          const p = project(toVec(lat, lon));
+          if (p.z < 0) { on = false; continue; }
+          if (on) ctx.lineTo(p.x, p.y); else { ctx.moveTo(p.x, p.y); on = true; }
+        }
+        ctx.stroke();
+      }
+
+      // Continents: dots shaded by sunlight, bigger towards the centre.
+      // Batched into brightness buckets — one fill per bucket per frame.
+      for (const b of buckets) b.length = 0;
       for (const d of dots) {
         const p = project(d);
-        if (p.z < -0.05) continue;
-        const a = 0.15 + p.z * 0.65;
-        ctx.fillStyle = `rgba(148, 163, 184, ${a})`;
-        ctx.fillRect(p.x, p.y, 1.4, 1.4);
+        if (p.z < 0.02) continue;
+        const shade = (0.3 + 0.7 * lightOf(p)) * (0.45 + 0.55 * Math.min(1, p.z * 1.4));
+        const size = 0.9 + p.z * 1.35;
+        buckets[Math.min(SHADES - 1, Math.floor(shade * SHADES))].push(p.x - size / 2, p.y - size / 2, size);
       }
+      for (let i = 0; i < SHADES; i++) {
+        const b = buckets[i];
+        if (!b.length) continue;
+        ctx.fillStyle = SHADE_COLORS[i];
+        ctx.beginPath();
+        for (let j = 0; j < b.length; j += 3) ctx.rect(b[j], b[j + 1], b[j + 2], b[j + 2]);
+        ctx.fill();
+      }
+
+      // Rim light + night-side shade over everything on the sphere.
+      const rim = ctx.createRadialGradient(cx, cy, R * 0.7, cx, cy, R);
+      rim.addColorStop(0, 'rgba(56, 189, 248, 0)');
+      rim.addColorStop(1, 'rgba(56, 189, 248, 0.22)');
+      ctx.fillStyle = rim;
+      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      const night = ctx.createLinearGradient(sx, sy, cx - L[0] * R, cy + L[1] * R);
+      night.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      night.addColorStop(0.6, 'rgba(0, 0, 0, 0.05)');
+      night.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
+      ctx.fillStyle = night;
+      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      // Sun glare on the ocean.
+      const glare = ctx.createRadialGradient(sx, sy, 0, sx, sy, R * 0.45);
+      glare.addColorStop(0, 'rgba(186, 230, 253, 0.16)');
+      glare.addColorStop(1, 'rgba(186, 230, 253, 0)');
+      ctx.fillStyle = glare;
+      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      ctx.restore();
+
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.stroke();
+
       for (const c of cities) {
         const p = project(c);
         if (p.z < 0) continue;
-        ctx.fillStyle = `rgba(37, 211, 102, ${0.5 + p.z * 0.5})`;
+        const a = 0.5 + p.z * 0.5;
+        ctx.fillStyle = `rgba(37, 211, 102, ${a * 0.25})`;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(220, 252, 231, ${a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -198,7 +291,7 @@ export function Globe({ className }: { className?: string }) {
     const loop = (t: number) => {
       if (!dragging) {
         rot += vel;
-        vel += ((reduce ? 0 : 0.0016) - vel) * 0.02; // ease back to cruise
+        vel += ((reduce ? 0 : CRUISE) - vel) * 0.02; // ease back to cruise
       }
       draw(t);
       if (!reduce && visible) raf = requestAnimationFrame(loop);
