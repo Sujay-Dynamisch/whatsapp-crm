@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 
 import { Globe } from './globe';
+import { PlanActions } from './plan-actions';
 import { CompareTable } from './compare-table';
 import { InboxDemo, JourneyDemo, RecoveryDemo, RolesDemo } from './demos';
 import { Counter, Reveal, SpotlightGrid } from './reveal';
@@ -364,16 +365,7 @@ export function LandingPage() {
                   <span className="text-4xl font-semibold tracking-tight text-white">{plan.price}</span>
                   <span className="text-sm text-slate-500">{plan.period}</span>
                 </p>
-                <a
-                  href={demoLink(plan.name)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`mt-5 rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition-colors ${
-                    plan.highlight ? 'bg-emerald-400 text-black hover:bg-emerald-300' : 'border border-white/15 bg-white/5 text-white hover:bg-white/10'
-                  }`}
-                >
-                  {plan.cta}
-                </a>
+                <PlanActions plan={plan} />
                 {plan.includes && <p className="mt-6 text-xs font-medium text-slate-400">{plan.includes}</p>}
                 <ul className={`${plan.includes ? 'mt-3' : 'mt-6'} space-y-2.5`}>
                   {plan.features.map((f) => (
