@@ -26,7 +26,7 @@ import {
  *   • `mode`  — light / dark (`data-mode` on <html>)
  * The two are independent, so any accent renders in either mode.
  *
- * The boot script in `src/app/layout.tsx` has already applied both
+ * The boot script in `src/app/(app)/layout.tsx` has already applied both
  * `data-theme` and `data-mode` before React hydrates, so by the time
  * this Provider mounts the page is already painted correctly. We just
  * read what's there and keep it in sync going forward.

@@ -141,7 +141,7 @@ function SignupPageInner() {
             {inviteToken ? (
               <UsersRound className="h-6 w-6 text-primary" />
             ) : (
-              <Image src="/logo.png" alt="WACRM" width={48} height={48} className="h-10 w-10 object-contain" />
+              <Image src="/logo.png" alt="Flowza" width={48} height={48} className="h-10 w-10 object-contain" />
             )}
           </div>
           <CardTitle className="text-xl text-foreground">

@@ -416,3 +416,7 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+/* Scroll reveal: visible by default (server HTML); hidden only by JS for
+   elements still below the fold, then revealed. */
+.lp-reveal { transition: opacity .7s ease-out, transform .7s ease-out, filter .7s ease-out; }
+.lp-reveal.lp-reveal-hidden { opacity: 0; transform: translateY(24px); filter: blur(2px); }

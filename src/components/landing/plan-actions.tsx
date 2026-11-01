@@ -8,8 +8,15 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import QRCode from 'qrcode';
-import { Check, Copy, IndianRupee, MessageCircle, QrCode, Smartphone, X } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  IndianRupee,
+  MessageCircle,
+  QrCode,
+  Smartphone,
+  X,
+} from 'lucide-react';
 
 import { PAYMENT, paidLink, purchaseLink, upiLink, type Plan } from './content';
 
@@ -23,7 +30,9 @@ export function PlanActions({ plan }: { plan: Plan }) {
         target="_blank"
         rel="noopener noreferrer"
         className={`mt-5 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition-colors ${
-          plan.highlight ? 'bg-emerald-400 text-black hover:bg-emerald-300' : 'border border-white/15 bg-white/5 text-white hover:bg-white/10'
+          plan.highlight
+            ? 'bg-emerald-400 text-black hover:bg-emerald-300'
+            : 'border border-white/15 bg-white/5 text-white hover:bg-white/10'
         }`}
       >
         <MessageCircle className="h-4 w-4" />
@@ -41,7 +50,11 @@ export function PlanActions({ plan }: { plan: Plan }) {
       )}
       {/* Portal: the card's reveal animation (a transform) would otherwise
           trap this fixed overlay inside the card. */}
-      {open && createPortal(<PayDialog plan={plan} onClose={() => setOpen(false)} />, document.body)}
+      {open &&
+        createPortal(
+          <PayDialog plan={plan} onClose={() => setOpen(false)} />,
+          document.body
+        )}
     </>
   );
 }
@@ -53,7 +66,16 @@ function PayDialog({ plan, onClose }: { plan: Plan; onClose: () => void }) {
 
   useEffect(() => {
     let alive = true;
-    QRCode.toString(link, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#0d1117', light: '#ffffff' } })
+    // Loaded only when someone opens the payment window.
+    import('qrcode')
+      .then((QRCode) =>
+        QRCode.toString(link, {
+          type: 'svg',
+          margin: 1,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#0d1117', light: '#ffffff' },
+        })
+      )
       .then((svg) => alive && setQr(svg))
       .catch(() => alive && setQr(null));
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -91,10 +113,19 @@ function PayDialog({ plan, onClose }: { plan: Plan; onClose: () => void }) {
       >
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-semibold tracking-[0.15em] text-emerald-400 uppercase">{plan.name} plan · 1 month</p>
-            <p className="mt-1 text-3xl font-semibold text-white">{plan.price}</p>
+            <p className="text-xs font-semibold tracking-[0.15em] text-emerald-400 uppercase">
+              {plan.name} plan · 1 month
+            </p>
+            <p className="mt-1 text-3xl font-semibold text-white">
+              {plan.price}
+            </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -107,23 +138,41 @@ function PayDialog({ plan, onClose }: { plan: Plan; onClose: () => void }) {
           <Smartphone className="h-4 w-4" />
           Pay with WhatsApp Pay / GPay / PhonePe
         </a>
-        <p className="mt-1.5 text-center text-[11px] text-slate-500">Opens your UPI app with the amount filled in (on your phone)</p>
+        <p className="mt-1.5 text-center text-[11px] text-slate-400">
+          Opens your UPI app with the amount filled in (on your phone)
+        </p>
 
         {/* Computer: scan the QR with a phone */}
         <div className="mt-5 flex items-center gap-4 rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="h-28 w-28 shrink-0 overflow-hidden rounded-lg bg-white" aria-label="UPI QR code">
+          <div
+            className="h-28 w-28 shrink-0 overflow-hidden rounded-lg bg-white"
+            aria-label="UPI QR code"
+          >
             {qr ? (
-              <div className="h-full w-full [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: qr }} />
+              <div
+                className="h-full w-full [&>svg]:h-full [&>svg]:w-full"
+                dangerouslySetInnerHTML={{ __html: qr }}
+              />
             ) : (
               <QrCode className="m-auto h-full w-12 text-slate-400" />
             )}
           </div>
           <div className="min-w-0 text-xs">
             <p className="font-medium text-white">On a computer?</p>
-            <p className="mt-0.5 text-slate-400">Scan with any UPI app on your phone.</p>
-            <button type="button" onClick={() => void copy()} className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-md bg-white/5 px-2 py-1 font-mono text-[11px] text-slate-200 hover:bg-white/10">
+            <p className="mt-0.5 text-slate-400">
+              Scan with any UPI app on your phone.
+            </p>
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-md bg-white/5 px-2 py-1 font-mono text-[11px] text-slate-200 hover:bg-white/10"
+            >
               <span className="truncate">{PAYMENT.upiId}</span>
-              {copied ? <Check className="h-3 w-3 shrink-0 text-emerald-400" /> : <Copy className="h-3 w-3 shrink-0" />}
+              {copied ? (
+                <Check className="h-3 w-3 shrink-0 text-emerald-400" />
+              ) : (
+                <Copy className="h-3 w-3 shrink-0" />
+              )}
             </button>
           </div>
         </div>
@@ -138,8 +187,9 @@ function PayDialog({ plan, onClose }: { plan: Plan; onClose: () => void }) {
           <MessageCircle className="h-4 w-4 text-emerald-400" />
           Paid? Send the receipt on WhatsApp
         </a>
-        <p className="mt-3 text-center text-[11px] leading-relaxed text-slate-500">
-          Your account is activated once we confirm the payment. WhatsApp message charges are billed separately at Meta’s rates.
+        <p className="mt-3 text-center text-[11px] leading-relaxed text-slate-400">
+          Your account is activated once we confirm the payment. WhatsApp
+          message charges are billed separately at Meta’s rates.
         </p>
       </div>
     </div>
