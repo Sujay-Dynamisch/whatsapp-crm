@@ -38,6 +38,15 @@ function LoginPageInner() {
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite");
   const t = useTranslations("LoginPage");
+  // Set by /auth/callback when an emailed link (confirmation, password
+  // reset) could not be turned into a session — see src/lib/auth/callback.ts.
+  const linkError = searchParams.get("error");
+  const linkErrorMessage =
+    linkError === "link_expired"
+      ? t("linkExpired")
+      : linkError === "link_invalid"
+        ? t("linkInvalid")
+        : null;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -118,6 +127,11 @@ function LoginPageInner() {
 
         <CardContent className="pt-0">
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            {linkErrorMessage && !error && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+                {linkErrorMessage}
+              </div>
+            )}
             {error && (
               <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive animate-in fade-in zoom-in-95">
                 {error}
@@ -149,20 +163,12 @@ function LoginPageInner() {
 
             {/* Password Field */}
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <Label
-                  htmlFor="password"
-                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  {t("passwordLabel")}
-                </Label>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
-                >
-                  {t("forgotPassword")}
-                </Link>
-              </div>
+              <Label
+                htmlFor="password"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                {t("passwordLabel")}
+              </Label>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -189,6 +195,13 @@ function LoginPageInner() {
                   )}
                 </button>
               </div>
+              {/* Below the input so Tab goes email -> password -> link. */}
+              <Link
+                href="/forgot-password"
+                className="self-end text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+              >
+                {t("forgotPassword")}
+              </Link>
             </div>
 
             {isAdmin && (

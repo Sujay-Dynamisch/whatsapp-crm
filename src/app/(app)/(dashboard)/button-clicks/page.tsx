@@ -20,7 +20,6 @@ import { useTranslations } from 'next-intl';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { startOfLocalDay } from '@/lib/dashboard/date-utils';
 import { cn } from '@/lib/utils';
 
 const RANGES = ['today', 7, 30, 90] as const;
@@ -78,6 +77,13 @@ const ACCENTS = [
 
 function pct(n: number, d: number): number {
   return d ? Math.round((n / d) * 1000) / 10 : 0;
+}
+
+/** Midnight today in the viewer's time zone. */
+function startOfLocalDay(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function csvCell(v: string): string {

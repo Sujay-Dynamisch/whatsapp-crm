@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { countAudience } from '@/lib/broadcast-audience';
 import { parseBroadcastCsv } from '@/lib/broadcast-csv';
 import { CustomField, Tag } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -145,94 +146,35 @@ export function Step2SelectAudience({
     fetchFields();
   }, [audience.type]);
 
+  const estimateSeq = useRef(0);
   const fetchEstimatedCount = useCallback(async () => {
+    const seq = ++estimateSeq.current;
     setLoadingCount(true);
+    let count: number | null;
     try {
       const supabase = createClient();
-
-      // Base query — produces the superset before exclude is applied.
-      let baseIds: Set<string> | null = null; // null means "all contacts"
-
-      if (audience.type === 'all') {
-        // Handled below — full-table count adjusted by excludes.
-      } else if (
-        audience.type === 'tags' &&
-        audience.tagIds &&
-        audience.tagIds.length > 0
-      ) {
-        const { data } = await supabase
-          .from('contact_tags')
-          .select('contact_id')
-          .in('tag_id', audience.tagIds);
-        baseIds = new Set((data ?? []).map((r) => r.contact_id));
-      } else if (
-        audience.type === 'custom_field' &&
-        audience.customField?.fieldId &&
-        audience.customField.value
-      ) {
-        const { fieldId, operator, value } = audience.customField;
-        let q = supabase
-          .from('contact_custom_values')
-          .select('contact_id')
-          .eq('custom_field_id', fieldId);
-        if (operator === 'is') q = q.eq('value', value);
-        else if (operator === 'is_not') q = q.neq('value', value);
-        else q = q.ilike('value', `%${value}%`);
-        const { data } = await q;
-        baseIds = new Set((data ?? []).map((r) => r.contact_id));
-      } else if (
-        audience.type === 'csv' &&
-        audience.csvContacts &&
-        audience.csvContacts.length > 0
-      ) {
-        setEstimatedCount(audience.csvContacts.length);
-        return;
-      } else {
-        // Partially-configured audience — wait for the user to finish.
-        setEstimatedCount(null);
-        return;
-      }
-
-      // Fetch unsubscribe tag id to always exclude unsubscribed contacts
+      // Contacts tagged "unsubscribe" never receive broadcasts — leave
+      // them out of the estimate too.
       const { data: unsubTag } = await supabase
         .from('tags')
         .select('id')
         .ilike('name', 'unsubscribe')
         .maybeSingle();
-
-      const combinedExcludeTagIds = Array.from(
-        new Set([
-          ...(audience.excludeTagIds ?? []),
-          ...(unsubTag ? [unsubTag.id] : []),
-        ])
-      );
-
-      // Apply exclude tags
-      let excludeSet: Set<string> | null = null;
-      if (combinedExcludeTagIds.length > 0) {
-        const { data: excludeRows } = await supabase
-          .from('contact_tags')
-          .select('contact_id')
-          .in('tag_id', combinedExcludeTagIds);
-        excludeSet = new Set((excludeRows ?? []).map((r) => r.contact_id));
-      }
-
-      if (baseIds) {
-        const effective = [...baseIds].filter(
-          (id) => !excludeSet?.has(id),
-        );
-        setEstimatedCount(effective.length);
-      } else {
-        // "All" — fetch the total, then subtract exclude set if any.
-        const { count } = await supabase
-          .from('contacts')
-          .select('*', { count: 'exact', head: true });
-        const total = count ?? 0;
-        setEstimatedCount(excludeSet ? Math.max(0, total - excludeSet.size) : total);
-      }
-    } finally {
-      setLoadingCount(false);
+      count = await countAudience(supabase, {
+        type: audience.type,
+        tagIds: audience.tagIds,
+        customField: audience.customField,
+        csvContacts: audience.csvContacts,
+        excludeTagIds: Array.from(
+          new Set([...(audience.excludeTagIds ?? []), ...(unsubTag ? [unsubTag.id as string] : [])])
+        ),
+      });
+    } catch {
+      count = null;
     }
+    if (seq !== estimateSeq.current) return;
+    setEstimatedCount(count);
+    setLoadingCount(false);
   }, [
     audience.type,
     audience.tagIds,
@@ -557,7 +499,7 @@ export function Step2SelectAudience({
               <span className="text-sm text-foreground font-semibold">
                 {estimatedCount.toLocaleString()}
               </span>
-              <span className="text-xs text-muted-foreground">estimated recipients</span>
+              <span className="text-xs text-muted-foreground">{t('selectAudience.estimatedRecipients')}</span>
             </div>
             <p className="text-xs text-muted-foreground">
               ⚡ Contacts with the <span className="font-semibold text-red-400">unsubscribe</span> tag are automatically excluded from broadcasts.
@@ -565,7 +507,7 @@ export function Step2SelectAudience({
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Select an audience type to see the estimate.
+            {t('selectAudience.selectTypeForEstimate')}
           </p>
         )}
       </div>

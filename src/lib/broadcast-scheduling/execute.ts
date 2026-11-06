@@ -27,11 +27,11 @@ import {
   finalizeBroadcastStatus,
 } from '@/lib/whatsapp/broadcast-core';
 import {
-  DELIVERY_LOCK_STALE_MS,
   claimBroadcastDelivery,
   planBroadcastResume,
   releaseBroadcastDelivery,
 } from '@/lib/whatsapp/broadcast-resume';
+import { DELIVERY_LOCK_STALE_MS } from '@/lib/whatsapp/broadcast-delivery-lease';
 import { getUnsubscribedContactIds } from '@/lib/contacts/unsubscribe';
 import { isFeatureEnabled } from '@/lib/features';
 import { loadDisabledFeatures } from '@/lib/features-server';

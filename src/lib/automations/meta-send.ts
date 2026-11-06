@@ -10,11 +10,16 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity'
+import { assertConversationInAccount } from '@/lib/whatsapp/conversation-scope'
 import {
   resolveTemplateRow,
   templateContentText,
+  templateHeaderMediaUrl,
 } from '@/lib/whatsapp/template-body'
 import { supabaseAdmin } from './admin-client'
+import { getT } from '@/lib/i18n/translate'
+
+const t = getT('LibErrors')
 
 // ------------------------------------------------------------
 // Automation-side Meta sender.
@@ -132,15 +137,19 @@ async function sendViaMeta(input: SendInput): Promise<SendViaMetaResult> {
     .eq('account_id', input.accountId)
     .maybeSingle()
   if (contactErr || !contact) {
-    throw new Error('contact not found for this account')
+    throw new Error(t('send.contactNotFound'))
   }
+
+  // Same for the conversation the message lands in — see
+  // conversation-scope.ts (GHSA-m4fx-g6pr-hrw8).
+  await assertConversationInAccount(db, input.conversationId, input.accountId)
 
   // Phone number, or the business-scoped user ID when Meta has never
   // given us a number for this customer (issue #519).
   const sendTarget = resolveContactSendTarget(contact)
   if (!sendTarget) {
     throw new Error(
-      `contact has no usable WhatsApp address (phone: ${contact.phone || 'none'})`
+      t('send.noWhatsAppAddress', { phone: contact.phone || t('send.none') })
     )
   }
   const sanitized = sendTarget.target
@@ -151,15 +160,13 @@ async function sendViaMeta(input: SendInput): Promise<SendViaMetaResult> {
     .eq('account_id', input.accountId)
     .single()
   if (configErr || !config) {
-    throw new Error('WhatsApp not configured for this account')
+    throw new Error(t('send.notConfigured'))
   }
 
   const accessToken = decrypt(config.access_token)
 
-  // Local template row — read for the body we persist below, not for
-  // the Meta payload (the wire shape is deliberately unchanged here).
-  // A missing row is fine: the send still goes out, we just can't
-  // reconstruct the text the customer saw.
+  // Local template row. A missing row is fine: the send still goes
+  // out, we just can't reconstruct the text the customer saw.
   const templateRow =
     input.kind === 'template'
       ? (
@@ -180,6 +187,7 @@ async function sendViaMeta(input: SendInput): Promise<SendViaMetaResult> {
         to: phone,
         templateName: input.templateName,
         language: input.language,
+        template: templateRow ?? undefined,
         params: input.params,
       })
       return r.messageId
@@ -236,6 +244,7 @@ async function sendViaMeta(input: SendInput): Promise<SendViaMetaResult> {
     sender_type: 'bot',
     content_type,
     content_text,
+    media_url: templateHeaderMediaUrl(templateRow),
     template_name,
     message_id: waMessageId,
     status: 'sent',
@@ -243,7 +252,7 @@ async function sendViaMeta(input: SendInput): Promise<SendViaMetaResult> {
   if (msgErr) {
     // Meta already has the message; record the DB error but don't pretend
     // the send failed. The engine wraps this in a log line.
-    throw new Error(`sent to Meta but DB insert failed: ${msgErr.message}`)
+    throw new Error(t('send.dbInsertFailed', { message: msgErr.message }))
   }
 
   await db
@@ -257,6 +266,7 @@ async function sendViaMeta(input: SendInput): Promise<SendViaMetaResult> {
       updated_at: new Date().toISOString(),
     })
     .eq('id', input.conversationId)
+    .eq('account_id', input.accountId)
 
   return { whatsapp_message_id: waMessageId, content_text: content_text ?? null }
 }

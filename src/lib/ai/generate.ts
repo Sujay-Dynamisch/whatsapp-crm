@@ -33,6 +33,7 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
     systemPrompt,
     messages,
     timeoutMs,
+    baseUrl: config.baseUrl,
   }
 
   const info = isAiProvider(config.provider) ? AI_PROVIDER_INFO[config.provider] : null
@@ -52,11 +53,11 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
       result = await generateAnthropic(providerArgs)
       break
     case 'openai_compatible':
-      result = await generateOpenAiCompatible({
-        ...providerArgs,
-        baseUrl: info.baseUrl!,
-        providerLabel: info.label,
-      })
+      // Catalogue providers use their fixed URL; the "OpenAI-compatible"
+      // provider uses the account's own (SSRF-checked) base URL.
+      result = info.baseUrl
+        ? await generateOpenAiCompatible({ ...providerArgs, baseUrl: info.baseUrl, providerLabel: info.label, trusted: true })
+        : await generateOpenAiCompatible({ ...providerArgs, providerLabel: info.label })
       break
   }
 

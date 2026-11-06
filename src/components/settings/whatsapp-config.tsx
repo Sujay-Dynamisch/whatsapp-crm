@@ -118,6 +118,7 @@ export function WhatsAppConfig() {
   const [appSecret, setAppSecret] = useState('');
   const [appSecretEdited, setAppSecretEdited] = useState(false);
   const [showAppSecret, setShowAppSecret] = useState(false);
+  const [verifyEdited, setVerifyEdited] = useState(false);
 
   // Inbound-media mirror (issue #466). Unlike everything else on this
   // page it is NOT part of handleSave: that path insists on re-entering
@@ -177,7 +178,11 @@ export function WhatsAppConfig() {
         setPhoneNumberId(data.phone_number_id || '');
         setWabaId(data.waba_id || '');
         setAccessToken(MASKED_TOKEN);
-        setVerifyToken('');
+        // Same treatment as the access token: the row carries the encrypted
+        // value, which is enough to know one exists. Show a mask instead of
+        // an empty box so nobody concludes the token was never saved.
+        setVerifyToken(data.verify_token ? MASKED_TOKEN : '');
+        setVerifyEdited(false);
         setPin('');
         setTokenEdited(false);
         setAppId(data.app_id || '');
@@ -197,6 +202,7 @@ export function WhatsAppConfig() {
         setAppId('');
         setAppSecret('');
         setAppSecretEdited(false);
+        setVerifyEdited(false);
         setMirrorMedia(true);
       }
       // Clear any stale probe result when reloading the row.
@@ -317,7 +323,14 @@ export function WhatsAppConfig() {
       const payload: Record<string, unknown> = {
         phone_number_id: phoneNumberId.trim(),
         waba_id: wabaId.trim() || null,
-        verify_token: verifyToken.trim() || null,
+        // Only sent when the user actually typed one. Left out otherwise
+        // (undefined is dropped from the JSON body) so the server keeps the
+        // stored token instead of nulling it — see resolveVerifyTokenForSave.
+        ...(verifyEdited &&
+        verifyToken.trim() &&
+        verifyToken.trim() !== MASKED_TOKEN
+          ? { verify_token: verifyToken.trim() }
+          : {}),
         // Optional — only sent when the user filled it in. The server
         // requires it on first save or when changing numbers; for a
         // simple token rotation, leaving it blank skips re-register.
@@ -370,7 +383,7 @@ export function WhatsAppConfig() {
       //                         is human-readable from Meta.
       if (data.registered === false && data.registration_error) {
         setSaveFailure({
-          message: `Saved, but Meta couldn't register the number: ${data.registration_error}`,
+          message: t('savedButRegistrationFailed', { error: data.registration_error }),
           meta: data.meta ?? null,
         });
         toast.error(
@@ -492,6 +505,7 @@ export function WhatsAppConfig() {
       setAccessToken('');
       setVerifyToken('');
       setTokenEdited(false);
+      setVerifyEdited(false);
       setConnectionStatus('disconnected');
       setResetReason(null);
       setStatusMessage('');
@@ -882,11 +896,22 @@ export function WhatsAppConfig() {
               <Input
                 placeholder={t('webhookVerifyTokenPlaceholder')}
                 value={verifyToken}
-                onChange={(e) => setVerifyToken(e.target.value)}
+                onChange={(e) => {
+                  setVerifyToken(e.target.value);
+                  setVerifyEdited(true);
+                }}
+                onFocus={() => {
+                  if (verifyToken === MASKED_TOKEN) {
+                    setVerifyToken('');
+                    setVerifyEdited(true);
+                  }
+                }}
                 className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
               />
               <p className="text-xs text-muted-foreground">
-                {t('webhookVerifyTokenHint')}
+                {config?.verify_token && !verifyEdited
+                  ? t('webhookVerifyTokenSaved')
+                  : t('webhookVerifyTokenHint')}
               </p>
             </div>
 

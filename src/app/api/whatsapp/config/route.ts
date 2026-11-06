@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import {
+  ForbiddenError,
+  UnauthorizedError,
+  requireRole,
+  toErrorResponse,
+} from '@/lib/auth/account'
+import {
   getSubscribedApps,
   listWabaPhoneNumbers,
   registerPhoneNumber,
@@ -23,6 +29,11 @@ import {
   phoneNumberBelongsToWaba,
 } from '@/lib/whatsapp/waba-pairing'
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
+import { resolveVerifyTokenForSave } from '@/lib/whatsapp/verify-token'
+import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
+import { getT } from '@/lib/i18n/translate'
+
+const t = getT('Api')
 
 /**
  * Resolve the caller's account_id from their profile. Inlined here
@@ -146,7 +157,7 @@ export async function GET() {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: t('common.unauthorized') }, { status: 401 })
     }
 
     const accountId = await resolveAccountId(supabase, user.id)
@@ -155,7 +166,7 @@ export async function GET() {
         {
           connected: false,
           reason: 'no_account',
-          message: 'Your profile is not linked to an account.',
+          message: t('common.profileNotLinked'),
         },
         { status: 200 },
       )
@@ -170,7 +181,7 @@ export async function GET() {
     if (configError) {
       console.error('Error fetching whatsapp_config:', configError)
       return NextResponse.json(
-        { connected: false, reason: 'db_error', message: 'Failed to fetch configuration' },
+        { connected: false, reason: 'db_error', message: t('whatsappConfig.fetchFailed') },
         { status: 200 }
       )
     }
@@ -180,7 +191,7 @@ export async function GET() {
         {
           connected: false,
           reason: 'no_config',
-          message: 'No WhatsApp configuration saved yet. Fill in the form and click Save Configuration.',
+          message: t('whatsappConfig.noConfig'),
         },
         { status: 200 }
       )
@@ -199,7 +210,7 @@ export async function GET() {
           reason: 'token_corrupted',
           needs_reset: true,
           message:
-            'The stored access token cannot be decrypted with the current ENCRYPTION_KEY. This usually means the key changed, or it differs between environments (local vs Hostinger vs Vercel). Click "Reset Configuration" below, then re-save.',
+            t('whatsappConfig.tokenCorrupted'),
         },
         { status: 200 }
       )
@@ -294,7 +305,7 @@ export async function GET() {
   } catch (error) {
     console.error('Error in WhatsApp config GET:', error)
     return NextResponse.json(
-      { connected: false, reason: 'unknown', message: 'Internal server error' },
+      { connected: false, reason: 'unknown', message: t('common.internalServerError') },
       { status: 500 }
     )
   }
@@ -313,24 +324,10 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
+    const { supabase, accountId, userId } = await requireRole('admin')
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const accountId = await resolveAccountId(supabase, user.id)
-    if (!accountId) {
-      return NextResponse.json(
-        { error: 'Your profile is not linked to an account.' },
-        { status: 403 },
-      )
-    }
+    const limit = checkRateLimit(`whatsapp-admin:${userId}`, RATE_LIMITS.whatsappAdmin)
+    if (!limit.success) return rateLimitResponse(limit)
 
     const body = await request.json()
     const { phone_number_id, waba_id, access_token, verify_token, pin } = body
@@ -339,7 +336,7 @@ export async function POST(request: Request) {
 
     if (!access_token || !phone_number_id) {
       return NextResponse.json(
-        { error: 'access_token and phone_number_id are required' },
+        { error: t('whatsappConfig.credentialsRequired') },
         { status: 400 }
       )
     }
@@ -352,7 +349,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Phone Number ID must contain only digits — it is the numeric id shown under Meta → WhatsApp → API Setup, not the phone number itself.',
+            t('whatsappConfig.phoneIdDigits'),
           field: 'phone_number_id',
         },
         { status: 400 }
@@ -362,7 +359,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'WhatsApp Business Account ID must contain only digits — copy it from Meta → WhatsApp → API Setup.',
+            t('whatsappConfig.wabaIdDigits'),
           field: 'waba_id',
         },
         { status: 400 }
@@ -388,7 +385,7 @@ export async function POST(request: Request) {
     if (pin !== undefined && pin !== null && pin !== '') {
       if (typeof pin !== 'string' || !/^\d{6}$/.test(pin)) {
         return NextResponse.json(
-          { error: 'PIN must be exactly 6 digits.' },
+          { error: t('whatsappConfig.pinDigits') },
           { status: 400 }
         )
       }
@@ -411,7 +408,7 @@ export async function POST(request: Request) {
     if (claimedError) {
       console.error('Error checking phone_number_id ownership:', claimedError)
       return NextResponse.json(
-        { error: 'Failed to validate configuration' },
+        { error: t('whatsappConfig.validateFailed') },
         { status: 500 }
       )
     }
@@ -420,7 +417,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'This WhatsApp phone number is already linked to another account on this instance. Each phone number can only be connected to one wacrm user.',
+            t('whatsappConfig.numberLinkedElsewhere'),
         },
         { status: 409 }
       )
@@ -473,10 +470,12 @@ export async function POST(request: Request) {
     // Look up any pre-existing row for this account so we know whether
     // this number is already registered with Meta — if so we can skip
     // /register when the user didn't provide a PIN this time around.
-    // Also lets an unchanged App Secret be kept without re-entry.
+    // Also lets an unchanged App Secret be kept without re-entry, and
+    // keeps the stored verify_token — the settings form never shows it,
+    // so a save that leaves the field blank must not null it out.
     const { data: existing } = await supabase
       .from('whatsapp_config')
-      .select('id, registered_at, phone_number_id, app_id, app_secret')
+      .select('id, registered_at, phone_number_id, app_id, app_secret, verify_token')
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -516,7 +515,10 @@ export async function POST(request: Request) {
     let encryptedAppSecret: string | null
     try {
       encryptedAccessToken = encrypt(access_token)
-      encryptedVerifyToken = verify_token ? encrypt(verify_token) : null
+      encryptedVerifyToken = resolveVerifyTokenForSave(
+        verify_token,
+        existing?.verify_token ?? null
+      )
       encryptedAppSecret = appId ? encrypt(appSecret) : null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown encryption error'
@@ -524,7 +526,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Failed to encrypt token. Check that ENCRYPTION_KEY is a valid 64-character hex string in your environment variables.',
+            t('whatsappConfig.encryptFailed'),
         },
         { status: 500 }
       )
@@ -541,7 +543,7 @@ export async function POST(request: Request) {
     // when the same number is already registered and no PIN was
     // supplied — re-registering an already-active number with a
     // stale PIN would actually fail and undo the active subscription.
-    let registeredAt: string | null = existing?.registered_at ?? null
+    let registeredAt: string | null = sameNumber ? existing.registered_at : null
     let registrationError: string | null = null
     let registrationMeta: ReturnType<typeof metaErrorPayload> | null = null
     // True when registration was deliberately skipped because no PIN
@@ -670,7 +672,7 @@ export async function POST(request: Request) {
       if (updateError) {
         console.error('Error updating whatsapp_config:', updateError)
         return NextResponse.json(
-          { error: 'Failed to update configuration' },
+          { error: t('whatsappConfig.updateFailed') },
           { status: 500 }
         )
       }
@@ -683,14 +685,14 @@ export async function POST(request: Request) {
         .from('whatsapp_config')
         .insert({
           account_id: accountId,
-          user_id: user.id,
+          user_id: userId,
           ...baseRow,
         })
 
       if (insertError) {
         console.error('Error inserting whatsapp_config:', insertError)
         return NextResponse.json(
-          { error: 'Failed to save configuration' },
+          { error: t('whatsappConfig.saveFailed') },
           { status: 500 }
         )
       }
@@ -724,8 +726,11 @@ export async function POST(request: Request) {
       meta_app: appId ? { id: appId, name: appName } : null,
     })
   } catch (error) {
+    if (error instanceof UnauthorizedError || error instanceof ForbiddenError) {
+      return toErrorResponse(error)
+    }
     console.error('Error in WhatsApp config POST:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: t('common.internalServerError') }, { status: 500 })
   }
 }
 
@@ -738,24 +743,7 @@ export async function POST(request: Request) {
  */
 export async function DELETE() {
   try {
-    const supabase = await createClient()
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const accountId = await resolveAccountId(supabase, user.id)
-    if (!accountId) {
-      return NextResponse.json(
-        { error: 'Your profile is not linked to an account.' },
-        { status: 403 },
-      )
-    }
+    const { supabase, accountId } = await requireRole('admin')
 
     const { error: deleteError } = await supabase
       .from('whatsapp_config')
@@ -765,14 +753,17 @@ export async function DELETE() {
     if (deleteError) {
       console.error('Error deleting whatsapp_config:', deleteError)
       return NextResponse.json(
-        { error: 'Failed to delete configuration' },
+        { error: t('whatsappConfig.deleteFailed') },
         { status: 500 }
       )
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof UnauthorizedError || error instanceof ForbiddenError) {
+      return toErrorResponse(error)
+    }
     console.error('Error in WhatsApp config DELETE:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: t('common.internalServerError') }, { status: 500 })
   }
 }

@@ -17,6 +17,9 @@ import {
 } from '@/lib/rate-limit'
 import { checkQualityGuard } from '@/lib/smart-sending/quality'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
+import { getT } from '@/lib/i18n/translate'
+
+const t = getT('Api')
 
 interface BroadcastResult {
   phone: string
@@ -125,7 +128,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Provide either `recipients` (preferred) or `phone_numbers` — must be a non-empty array',
+            t('broadcast.recipientsRequired'),
         },
         { status: 400 }
       )
@@ -133,7 +136,7 @@ export async function POST(request: Request) {
 
     if (!template_name) {
       return NextResponse.json(
-        { error: 'template_name is required' },
+        { error: t('broadcast.templateNameRequired') },
         { status: 400 }
       )
     }
@@ -148,7 +151,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'WhatsApp not configured. Please set up your WhatsApp integration first.',
+            t('common.whatsappNotConfiguredSetup'),
         },
         { status: 400 }
       )
@@ -171,7 +174,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Template row is malformed locally — run "Sync from Meta" in Settings to repair it before broadcasting.',
+            t('broadcast.templateMalformed'),
         },
         { status: 500 },
       )
@@ -189,7 +192,7 @@ export async function POST(request: Request) {
         results.push({
           phone: recipient.phone,
           status: 'failed',
-          error: 'Invalid phone number format',
+          error: t('broadcast.invalidPhoneFormat'),
         })
         failedCount++
         continue
@@ -218,7 +221,7 @@ export async function POST(request: Request) {
           break
         } catch (error) {
           const errorMessage =
-            error instanceof Error ? error.message : 'Unknown error'
+            error instanceof Error ? error.message : t('common.unknownError')
           if (!isRecipientNotAllowedError(errorMessage)) {
             lastError = errorMessage
             break
@@ -243,7 +246,7 @@ export async function POST(request: Request) {
         results.push({
           phone: recipient.phone,
           status: 'failed',
-          error: lastError || 'Unknown error',
+          error: lastError || t('common.unknownError'),
         })
         failedCount++
       }

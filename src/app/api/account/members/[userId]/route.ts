@@ -25,6 +25,9 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from "@/lib/rate-limit";
+import { getT } from "@/lib/i18n/translate";
+
+const t = getT("Api");
 
 // Map known SQLSTATEs from the RPCs (see migration 018) onto HTTP
 // statuses. The `error.code` field is the SQLSTATE; the `message`
@@ -38,7 +41,7 @@ function rpcErrorToResponse(err: PostgrestError): NextResponse {
   }
   console.error("[members route] unexpected RPC error:", err);
   return NextResponse.json(
-    { error: "Failed to update member" },
+    { error: t('account.members.updateFailed') },
     { status: 500 },
   );
 }
@@ -79,7 +82,7 @@ export async function PATCH(
 
     if (!isAccountRole(role)) {
       return NextResponse.json(
-        { error: "'role' must be one of owner, admin, agent, viewer" },
+        { error: t('account.members.roleInvalid') },
         { status: 400 },
       );
     }
@@ -90,7 +93,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            "Use POST /api/account/transfer-ownership to promote a member to owner",
+            t('account.members.useTransferOwnership'),
         },
         { status: 400 },
       );
