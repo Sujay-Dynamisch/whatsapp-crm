@@ -38,14 +38,23 @@ describe('feature registry', () => {
       'button_analytics',
       'callbacks',
       'failed_messages',
+      'payments',
     ]);
   });
 
   it('failed_messages is opt-in (off by default via migration 060) and gates its page and APIs', () => {
     expect(FEATURE_INFO.failed_messages.defaultOff).toBe(true);
-    expect(FEATURES.filter((f) => FEATURE_INFO[f].defaultOff)).toEqual(['failed_messages']);
+    // Each opt-in key is also added by a migration's default-off trigger (060, 064).
+    expect(FEATURES.filter((f) => FEATURE_INFO[f].defaultOff)).toEqual(['failed_messages', 'payments']);
     for (const path of ['/failed-messages', '/api/failed-messages', '/api/failed-messages/actions', '/api/health']) {
       expect(featureForPath(path), path).toBe('failed_messages');
+    }
+  });
+
+  it('payments is opt-in (off by default via migration 064) and gates its page and API', () => {
+    expect(FEATURE_INFO.payments.defaultOff).toBe(true);
+    for (const path of ['/payments', '/api/payments', '/api/payments/abc']) {
+      expect(featureForPath(path), path).toBe('payments');
     }
   });
 });
@@ -119,6 +128,8 @@ describe('featureForPath', () => {
     ['/button-clicks', 'button_analytics'],
     ['/api/button-clicks', 'button_analytics'],
     ['/callbacks', 'callbacks'],
+    ['/payments', 'payments'],
+    ['/api/payments/abc', 'payments'],
     ['/api/callbacks/abc', 'callbacks'],
     ['/api/delivery-settings', 'smart_sending'],
     ['/api/whatsapp/quality', 'smart_sending'],

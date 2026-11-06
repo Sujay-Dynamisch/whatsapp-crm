@@ -1,32 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
-import { toast } from "sonner";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { getNotificationPermission, readBrowserNotifyPref } from "@/lib/notifications/browser-notify";
 
 /**
  * Open (not Done) callback requests for the sidebar badge (migration 058).
- * RLS scopes reads to the user's account. Mounted once (sidebar), so it
- * also announces new requests: a toast, plus a desktop notification when
- * the device opted into browser notifications; also pops the 4-hour
- * reminder and "back in nurture" notices (top-right, like every toast).
- * Idle (0, no realtime)
- * while the account's "callbacks" feature is off.
+ * RLS scopes reads to the user's account. New requests, 4-hour reminders
+ * and "back in nurture" notices pop up through useNotificationPopups
+ * (they are notifications rows), so this only keeps the count live.
+ * Idle (0, no realtime) while the account's "callbacks" feature is off.
  */
 export function useOpenCallbacks(enabled = true): number {
   const [count, setCount] = useState(0);
-  const t = useTranslations("Callbacks");
-  // Latest translator for the long-lived realtime callback.
-  const tRef = useRef(t);
-  const router = useRouter();
-  const routerRef = useRef(router);
-  useEffect(() => {
-    tRef.current = t;
-    routerRef.current = router;
-  }, [t, router]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -42,61 +27,16 @@ export function useOpenCallbacks(enabled = true): number {
     };
     void refresh();
 
-    const announce = async (contactId: string) => {
-      const { data: c } = await supabase.from("contacts").select("name, phone").eq("id", contactId).maybeSingle();
-      const who = [c?.name, c?.phone].filter(Boolean).join(" · ") || tRef.current("aContact");
-      toast(tRef.current("toastTitle"), {
-        description: who,
-        action: { label: tRef.current("open"), onClick: () => routerRef.current.push("/callbacks") },
-      });
-      if (readBrowserNotifyPref() && getNotificationPermission() === "granted" && document.visibilityState !== "visible") {
-        const n = new window.Notification(tRef.current("toastTitle"), { body: who, tag: `callback-${contactId}` });
-        n.onclick = () => {
-          window.focus();
-          routerRef.current.push("/callbacks");
-        };
-      }
-    };
-
     const channel = supabase
       .channel("callback-requests-open")
-      .on("postgres_changes", { event: "*", schema: "public", table: "callback_requests" }, (payload) => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "callback_requests" }, () => {
         void refresh();
-        if (payload.eventType === "INSERT") {
-          const row = payload.new as { contact_id?: string };
-          if (row.contact_id) void announce(row.contact_id);
-        }
-      })
-      .subscribe();
-
-    // Reminders for this user (owner/admin): a request waiting 4+ hours,
-    // or a lead sent back to nurture automatically (migration 059).
-    const alerts = supabase
-      .channel("callback-alerts")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (payload) => {
-        const n = payload.new as { type?: string; body?: string | null };
-        if (n.type !== "callback_overdue" && n.type !== "callback_returned") return;
-        const title = tRef.current(n.type === "callback_overdue" ? "overdueToastTitle" : "returnedToastTitle");
-        const opts = {
-          description: n.body || tRef.current("aContact"),
-          action: { label: tRef.current("open"), onClick: () => routerRef.current.push("/callbacks") },
-        };
-        if (n.type === "callback_overdue") toast.warning(title, { ...opts, duration: 30_000 });
-        else toast(title, opts);
-        if (readBrowserNotifyPref() && getNotificationPermission() === "granted" && document.visibilityState !== "visible") {
-          const d = new window.Notification(title, { body: opts.description, tag: `callback-alert-${n.type}-${opts.description}` });
-          d.onclick = () => {
-            window.focus();
-            routerRef.current.push("/callbacks");
-          };
-        }
       })
       .subscribe();
 
     return () => {
       cancelled = true;
       supabase.removeChannel(channel);
-      supabase.removeChannel(alerts);
     };
   }, [enabled]);
 

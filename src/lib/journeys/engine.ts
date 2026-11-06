@@ -135,6 +135,8 @@ interface RunContext extends Record<string, unknown> {
   loops?: Record<string, LoopState>;
   loop_stack?: string[];
   wait_started_at?: string;
+  /** Send steps staff chose to skip once from the run history. */
+  skip_nodes?: string[];
 }
 
 function capOutput(value: unknown): unknown {
@@ -584,9 +586,17 @@ function errorSlot(node: JourneyNode, message: string, data: unknown): StepResul
   throw new StepError(message, data);
 }
 
+const SEND_STEP_TYPES = new Set<string>(['send_template', 'send_text', 'send_media', 'send_buttons']);
+
 /** Execute one node. */
 async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepResult> {
   const { db, journey, e, deps, context } = rt;
+  // Staff skipped this message from the run history: pass over it once.
+  if (SEND_STEP_TYPES.has(node.type) && context.skip_nodes?.includes(node.id)) {
+    context.skip_nodes = context.skip_nodes.filter((id) => id !== node.id);
+    await logEvent(db, e, node.id, 'skipped', 'Skipped by staff');
+    return { slot: 'next', output: { skipped: true } };
+  }
   switch (node.type) {
     case 'trigger':
       return { slot: 'next', output: triggerScope(context) };

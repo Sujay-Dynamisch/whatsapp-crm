@@ -3,7 +3,9 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import type { Message } from "@/types";
 import {
   DEFAULT_NOTIFICATION_LABELS,
@@ -52,6 +54,13 @@ export function useBrowserNotifications(): void {
   const enabled = useBrowserNotifyPref();
   const router = useRouter();
   const t = useTranslations("Settings.browserNotifications.labels");
+  const tAlert = useTranslations("Notifications");
+  const { user, accountRole } = useAuth();
+  // Who gets the on-screen pop-up: owner/admins and the chat's assignee.
+  const whoRef = useRef({ userId: user?.id ?? null, isAdmin: accountRole === "owner" || accountRole === "admin", tAlert });
+  useEffect(() => {
+    whoRef.current = { userId: user?.id ?? null, isAdmin: accountRole === "owner" || accountRole === "admin", tAlert };
+  });
 
   // Translated labels, read inside the async Realtime callback. Kept in
   // a ref (assigned in an effect, not during render) so a locale change
@@ -74,8 +83,6 @@ export function useBrowserNotifications(): void {
   const seenRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
-    if (!enabled) return;
-    if (getNotificationPermission() === "unsupported") return;
 
     const supabase = createClient();
     let cancelled = false;
@@ -85,7 +92,7 @@ export function useBrowserNotifications(): void {
       // failure here just means the generic fallback title.
       const { data } = await supabase
         .from("conversations")
-        .select("contact:contacts(name, wa_username, phone)")
+        .select("assigned_agent_id, contact:contacts(name, wa_username, phone)")
         .eq("id", msg.conversation_id)
         .maybeSingle();
       if (cancelled) return;
@@ -98,6 +105,21 @@ export function useBrowserNotifications(): void {
         pickContactDisplayName(contact),
         labelsRef.current,
       );
+
+      // On-screen pop-up for the people who should act on it.
+      const who = whoRef.current;
+      const assignee = (data as { assigned_agent_id?: string | null } | null)?.assigned_agent_id ?? null;
+      if (document.visibilityState === "visible" && (who.isAdmin || (assignee && assignee === who.userId))) {
+        toast(`💬 ${title}`, {
+          id: `message-${msg.conversation_id}`,
+          description: body,
+          duration: 10_000,
+          action: { label: who.tAlert("open"), onClick: () => router.push(conversationHref(msg.conversation_id)) },
+        });
+      }
+
+      // Desktop alert only when the user turned browser notifications on.
+      if (!enabled || getNotificationPermission() !== "granted") return;
 
       try {
         const notification = new Notification(title, {
@@ -125,9 +147,6 @@ export function useBrowserNotifications(): void {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
-          // Re-check every time: the user can revoke permission in the
-          // browser without the preference flipping.
-          if (getNotificationPermission() !== "granted") return;
           const msg = payload.new as Message;
           const shouldNotify = shouldNotifyForMessage(msg, {
             documentVisible: document.visibilityState === "visible",

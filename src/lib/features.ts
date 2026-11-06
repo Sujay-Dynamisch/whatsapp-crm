@@ -33,6 +33,7 @@ export const FEATURES = [
   'button_analytics',
   'callbacks',
   'failed_messages',
+  'payments',
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -107,6 +108,11 @@ export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
       'Failed messages page (resend, schedule, send as text, dismiss), skipped website registrations, daily health summary and scheduler / lead-feed alerts.',
     defaultOff: true,
   },
+  payments: {
+    label: 'Payments',
+    description: 'Payments page: see who was sent the payment link and mark leads as paid / not paid (stops their payment reminders).',
+    defaultOff: true,
+  },
   api_access: {
     label: 'API & webhooks',
     description: 'Public REST API keys and outbound webhooks.',
@@ -173,6 +179,7 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/journeys', feature: 'journeys' },
   { prefix: '/button-clicks', feature: 'button_analytics' },
   { prefix: '/callbacks', feature: 'callbacks' },
+  { prefix: '/payments', feature: 'payments' },
   { prefix: '/failed-messages', feature: 'failed_messages' },
   // Internal APIs
   { prefix: '/api/whatsapp/broadcast', feature: 'broadcasts' },
@@ -184,6 +191,7 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/api/account/api-keys', feature: 'api_access' },
   { prefix: '/api/button-clicks', feature: 'button_analytics' },
   { prefix: '/api/callbacks', feature: 'callbacks' },
+  { prefix: '/api/payments', feature: 'payments' },
   { prefix: '/api/failed-messages', feature: 'failed_messages' },
   { prefix: '/api/health', feature: 'failed_messages' },
   { prefix: '/api/delivery-settings', feature: 'smart_sending' },
