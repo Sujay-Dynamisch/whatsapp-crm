@@ -1,8 +1,12 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
+    // fileURLToPath, not URL#pathname: the latter keeps %20 and a leading
+    // "/E:" on Windows, so the alias never resolves there.
+    alias: { "@app-messages": fileURLToPath(new URL("./messages/en.json", import.meta.url)) },
   },
   test: {
     environment: "node",

@@ -9,6 +9,10 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
 import { normalizeMetaTemplate, type RawMetaTemplate } from '@/lib/whatsapp/template-normalize'
 import type { TemplateButton, TemplateSampleValues } from '@/types'
+import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
+import { getT } from '@/lib/i18n/translate'
+
+const t = getT('Api')
 
 /**
  * Sync message templates from Meta → local message_templates table.
@@ -138,6 +142,9 @@ export async function POST() {
     // Resolving account_id off the profile only proved membership.
     const { supabase, accountId, userId } = await requireRole('admin')
 
+    const limit = checkRateLimit(`whatsapp-admin:${userId}`, RATE_LIMITS.whatsappAdmin)
+    if (!limit.success) return rateLimitResponse(limit)
+
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
       .select('*')
@@ -148,7 +155,7 @@ export async function POST() {
       return NextResponse.json(
         {
           error:
-            'WhatsApp not configured. Connect your WhatsApp Business account in Settings first.',
+            t('common.whatsappNotConfiguredConnect'),
         },
         { status: 400 },
       )
@@ -158,7 +165,7 @@ export async function POST() {
       return NextResponse.json(
         {
           error:
-            'WABA (WhatsApp Business Account) ID missing. Re-connect your account in Settings.',
+            t('common.wabaIdMissing'),
         },
         { status: 400 },
       )
@@ -180,7 +187,7 @@ export async function POST() {
       })
 
       if (!metaRes.ok) {
-        let metaErr = `Meta API error: ${metaRes.status}`
+        let metaErr = t('templates.metaApiStatus', { status: metaRes.status })
         try {
           const body = await metaRes.json()
           if (body?.error?.message) metaErr = body.error.message
@@ -213,8 +220,9 @@ export async function POST() {
       const normalized = normalizeMetaTemplate(t as RawMetaTemplate)
 
       const row = {
+        // Account tenancy. account_id is NOT NULL on message_templates
+        // post-017, so an INSERT without it errors.
         account_id: accountId,
-        user_id: userId,
         name: t.name,
         category: normalized.category,
         language: t.language,
@@ -243,6 +251,9 @@ export async function POST() {
         .eq('account_id', accountId)
         .eq('name', t.name)
         .eq('language', t.language)
+        // Newest first, so the row kept below is the most recent one.
+        .order('updated_at', { ascending: false })
+        .order('id')
 
       if (lookupErr) {
         errors.push({
@@ -279,7 +290,7 @@ export async function POST() {
       } else {
         const { error: insErr } = await supabase
           .from('message_templates')
-          .insert(row)
+          .insert({ ...row, user_id: userId })
         if (insErr) {
           errors.push({
             name: t.name,
@@ -343,7 +354,7 @@ export async function POST() {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : 'Failed to sync templates',
+          error instanceof Error ? error.message : t('templates.syncFailed'),
       },
       { status: 500 },
     )

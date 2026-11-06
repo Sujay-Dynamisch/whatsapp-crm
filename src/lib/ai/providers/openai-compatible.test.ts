@@ -19,6 +19,7 @@ const args = {
   timeoutMs: 5_000,
   baseUrl: 'https://api.groq.com/openai/v1/',
   providerLabel: 'Groq',
+  trusted: true,
 };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -99,7 +100,9 @@ describe('generateReply dispatch', () => {
       embeddingsApiKey: null,
     }) as AiConfig;
 
-  it.each(AI_PROVIDERS.filter((p) => AI_PROVIDER_INFO[p].adapter === 'openai_compatible'))(
+  // Catalogue providers with a fixed URL; the custom endpoint is covered
+  // in openai-compatible-url.test.ts.
+  it.each(AI_PROVIDERS.filter((p) => AI_PROVIDER_INFO[p].adapter === 'openai_compatible' && AI_PROVIDER_INFO[p].baseUrl))(
     'routes %s to its own endpoint',
     async (provider) => {
       const fetchMock = vi.fn(async () => ok({ choices: [{ message: { content: 'OK' } }] }));

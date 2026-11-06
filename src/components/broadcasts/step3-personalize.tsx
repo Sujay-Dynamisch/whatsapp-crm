@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft, ArrowRight, Eye, ImageIcon, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { extractTemplateVariables } from '@/lib/whatsapp/template-validators';
 
 type VariableType = 'static' | 'field' | 'custom_field';
 
@@ -140,23 +141,17 @@ export function Step3Personalize({
   const placeholderInfos = useMemo<PlaceholderInfo[]>(() => {
     const list: PlaceholderInfo[] = [];
 
-    // Top-level body_text
+    // Top-level body_text — positional {{1}} or named {{customer_name}}.
     if (template.body_text) {
-      const matches = template.body_text.matchAll(/\{\{(\d+)\}\}/g);
-      const seen = new Set<number>();
-      for (const m of matches) {
-        const num = Number(m[1]);
-        if (Number.isFinite(num) && !seen.has(num)) {
-          seen.add(num);
-          const isCarousel =
-            template.template_type === 'carousel' || Boolean(template.carousel?.length);
-          list.push({
-            key: isCarousel ? `body_${num}` : `${num}`,
-            placeholder: `{{${num}}}`,
-            scope: 'body',
-            label: isCarousel ? `Top Message Body — {{${num}}}` : `{{${num}}}`,
-          });
-        }
+      const isCarousel =
+        template.template_type === 'carousel' || Boolean(template.carousel?.length);
+      for (const key of extractTemplateVariables(template.body_text)) {
+        list.push({
+          key: isCarousel ? `body_${key}` : key,
+          placeholder: `{{${key}}}`,
+          scope: 'body',
+          label: isCarousel ? `Top Message Body — {{${key}}}` : `{{${key}}}`,
+        });
       }
     }
 
@@ -265,7 +260,11 @@ export function Step3Personalize({
 
   const resolveMappingValue = (mapping?: VariableMapping) => {
     if (!mapping || !mapping.value) return null;
-    const contact = firstContact ?? SAMPLE_CONTACT;
+    const contact = firstContact ?? {
+      ...SAMPLE_CONTACT,
+      name: t('personalize.sampleName'),
+      company: t('personalize.sampleCompany'),
+    };
     const customValues = firstContact
       ? firstContactCustomValues
       : new Map<string, string>();
@@ -331,6 +330,7 @@ export function Step3Personalize({
     placeholderInfos,
     firstContact,
     firstContactCustomValues,
+    t,
   ]);
 
   const previewLabel = firstContact

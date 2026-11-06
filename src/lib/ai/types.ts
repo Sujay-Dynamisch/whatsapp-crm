@@ -17,6 +17,8 @@ import type { AiProviderId as AiProvider } from './providers/registry'
 export interface AiConfig {
   provider: AiProvider
   model: string
+  /** Base URL for OpenAI-compatible providers; null for native providers. */
+  baseUrl: string | null
   apiKey: string
   systemPrompt: string | null
   isActive: boolean

@@ -9,6 +9,15 @@ describe('AI provider registry', () => {
   it('describes every provider completely', () => {
     for (const p of AI_PROVIDERS) {
       const info = AI_PROVIDER_INFO[p];
+      // The custom endpoint has no fixed URL, key page or model list —
+      // the account enters its own base URL and model.
+      if (p === 'openai_compatible') {
+        expect(info.adapter).toBe('openai_compatible');
+        expect(info.baseUrl).toBeUndefined();
+        expect(info.label).toBeTruthy();
+        expect(info.note).toBeTruthy();
+        continue;
+      }
       expect(info.label).toBeTruthy();
       expect(info.defaultModel).toBeTruthy();
       expect(info.modelHints).toContain(info.defaultModel);
@@ -48,13 +57,13 @@ describe('AI provider registry', () => {
     expect(isAiProvider(undefined)).toBe(false);
   });
 
-  it('matches the provider list migration 047 allows in the database', () => {
+  it('matches the provider list migration 066 allows in the database', () => {
     const sql = readFileSync(
-      join(process.cwd(), 'supabase/migrations/047_ai_providers.sql'),
+      join(process.cwd(), 'supabase/migrations/066_ai_provider_check.sql'),
       'utf8'
     );
     const list = /CHECK \(provider IN \(([\s\S]*?)\)\)/.exec(sql)![1];
-    const inSql = [...list.matchAll(/''([a-z]+)''/g)].map((m) => m[1]);
+    const inSql = [...list.matchAll(/''([a-z_]+)''/g)].map((m) => m[1]);
     expect([...inSql].sort()).toEqual([...AI_PROVIDERS].sort());
   });
 });

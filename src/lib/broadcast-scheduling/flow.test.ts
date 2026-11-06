@@ -40,6 +40,13 @@ function splitTop(expr: string): string[] {
 }
 
 function orClause(clause: string): Pred {
+  // Nested groups: and(a,b) / or(a,b) — the delivery claim combines the
+  // stale lock and the wizard lease this way.
+  const group = /^(and|or)\((.*)\)$/.exec(clause);
+  if (group) {
+    const parts = splitTop(group[2]).map(orClause);
+    return group[1] === 'and' ? (r) => parts.every((p) => p(r)) : (r) => parts.some((p) => p(r));
+  }
   const [col, op, ...rest] = clause.split('.');
   const val = rest.join('.');
   if (op === 'is' && val === 'null') return (r) => r[col] === null || r[col] === undefined;

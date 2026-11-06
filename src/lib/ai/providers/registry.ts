@@ -24,6 +24,8 @@ export const AI_PROVIDERS = [
   'mistral',
   'deepseek',
   'cerebras',
+  // Any OpenAI-compatible endpoint the account enters (base_url, 046).
+  'openai_compatible',
 ] as const;
 
 export type AiProviderId = (typeof AI_PROVIDERS)[number];
@@ -32,7 +34,8 @@ export interface AiProviderInfo {
   label: string;
   /** Which adapter talks to it. */
   adapter: 'openai' | 'anthropic' | 'openai_compatible';
-  /** Chat-completions base URL for OpenAI-compatible providers. */
+  /** Chat-completions base URL for OpenAI-compatible providers. Absent
+   *  for 'openai_compatible', which uses the account's own base_url. */
   baseUrl?: string;
   defaultModel: string;
   /** A few model ids to try — shown as hints, never an allow-list. */
@@ -143,6 +146,16 @@ export const AI_PROVIDER_INFO: Record<AiProviderId, AiProviderInfo> = {
     keyUrl: 'https://cloud.cerebras.ai',
     freeTier: true,
     note: 'Free tier with daily token limits. Very fast open models.',
+  },
+  openai_compatible: {
+    label: 'OpenAI-compatible (custom endpoint)',
+    adapter: 'openai_compatible',
+    defaultModel: 'model-id',
+    modelHints: [],
+    keyPlaceholder: 'API key',
+    keyUrl: '',
+    freeTier: false,
+    note: 'Any gateway or self-hosted model with an OpenAI-style /chat/completions API. Enter its base URL (https).',
   },
 };
 

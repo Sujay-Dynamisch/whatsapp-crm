@@ -103,6 +103,7 @@ describe('GET', () => {
       'button_analytics',
       'callbacks',
       'failed_messages',
+      'payments',
     ]);
   });
 

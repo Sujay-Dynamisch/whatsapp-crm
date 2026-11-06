@@ -27,7 +27,7 @@ import {
   type ScheduleStatus,
 } from './store';
 import { computeArmTime, isValidTimeZone, schedulerCron, utcToZonedLocal } from './time';
-import { DELIVERY_LOCK_STALE_MS } from '@/lib/whatsapp/broadcast-resume';
+import { DELIVERY_LOCK_STALE_MS } from '@/lib/whatsapp/broadcast-delivery-lease';
 
 export class ScheduleError extends Error {
   readonly code: string;
