@@ -192,7 +192,11 @@ export async function windowKeepalive(req: Req, res: Res): Promise<void> {
     const s = guard(req, res);
     if (!s) return;
     const report = await runWindowKeepalive(s.db);
-    console.log(JSON.stringify({ fn: 'windowKeepalive', ...report }));
+    // "Reply soon" alerts for chats whose 24 h window is about to close
+    // with the customer's message unanswered (migration 065).
+    const { data: windowAlerts, error: alertErr } = await s.db.rpc('claim_window_closing_alerts');
+    if (alertErr) console.error('[windowKeepalive] window alerts:', alertErr.message);
+    console.log(JSON.stringify({ fn: 'windowKeepalive', ...report, windowAlerts: windowAlerts ?? 0 }));
     res.status(200).json(report);
   } catch (err) {
     console.error('[windowKeepalive]', err);

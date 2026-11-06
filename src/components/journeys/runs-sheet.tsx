@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import type { JourneyGraph, JourneyNode, NodeConfigs } from '@/lib/journeys/graph';
 import { NODE_ACCENT, NODE_ICON } from './node-meta';
+import { RunPlan } from './run-plan';
 
 interface RunRow {
   id: string;
@@ -260,7 +261,7 @@ export function RunsSheet({
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [openStep, setOpenStep] = useState<number | null>(null);
-  const { canEditSettings } = useAuth();
+  const { canEditSettings, canSendMessages } = useAuth();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -521,6 +522,16 @@ export function RunsSheet({
                 <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{detail.run.last_error}</p>
               )}
 
+              {/* Plain-language plan: what was sent, what's next, simple controls. */}
+              <RunPlan
+                journeyId={journeyId}
+                graph={graph}
+                run={detail.run}
+                sentCount={(detail.messages ?? []).filter((m) => m.status !== 'failed').length}
+                canControl={canSendMessages}
+                onChanged={() => openRun(detail.run.id)}
+              />
+
               {detail.messages && detail.messages.length > 0 && (
                 <div className="space-y-1.5">
                   <p className="text-xs font-medium">{t('runs.messages.title')}</p>
@@ -568,6 +579,12 @@ export function RunsSheet({
                 </div>
               )}
 
+              <details className="group rounded-lg border border-border">
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
+                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                  {t('runs.plan.technical')}
+                </summary>
+                <div className="space-y-3 border-t border-border p-2.5">
               <ol className="space-y-1.5">
                 {steps.map((s, i) => {
                   const node = byId.get(s.nodeId);
@@ -640,6 +657,8 @@ export function RunsSheet({
                   </div>
                 </div>
               )}
+                </div>
+              </details>
             </>
           )}
         </div>

@@ -218,7 +218,10 @@ export type NotificationType =
   | 'callback_returned'
   | 'health_alert'
   | 'health_summary'
-  | 'lead_returned';
+  | 'lead_returned'
+  | 'payment_click'
+  | 'message_failed'
+  | 'window_closing';
 
 export interface Notification {
   id: string;
