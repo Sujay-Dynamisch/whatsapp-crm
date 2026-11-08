@@ -101,8 +101,8 @@ export async function POST(request: Request) {
     const autoReplyEnabled = body.auto_reply_enabled === true
 
     let maxPer = Number(body.auto_reply_max_per_conversation)
-    if (!Number.isFinite(maxPer)) maxPer = 3
-    maxPer = Math.min(20, Math.max(1, Math.floor(maxPer)))
+    if (!Number.isFinite(maxPer)) maxPer = 20
+    maxPer = Math.min(100, Math.max(1, Math.floor(maxPer)))
 
     // Handoff routing target for auto-reply. A non-empty string must be a
     // member of this account (else the conversation would be assigned to a
