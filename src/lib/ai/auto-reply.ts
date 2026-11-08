@@ -16,7 +16,7 @@ import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 import { accountHasFeature } from '@/lib/features-server'
 
 /** How long a burst of customer messages may take before the AI answers. */
-const BURST_SETTLE_MS = 4000
+const BURST_SETTLE_MS = 2000
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -93,11 +93,27 @@ export async function dispatchInboundToAiReply(
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, last_message_at')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
     if (conv.assigned_agent_id) return // a human owns this thread
+
+    // Inactivity reset: If the last message was > 12h ago, grant returning customers
+    // a fresh conversation session rather than permanently blocking them with old limits.
+    const lastActive = (conv as { last_message_at?: string | null }).last_message_at
+      ? new Date((conv as { last_message_at?: string | null }).last_message_at!).getTime()
+      : 0
+    const isNewSession = lastActive > 0 && Date.now() - lastActive > 12 * 60 * 60 * 1000
+    if (isNewSession && (conv.ai_reply_count > 0 || conv.ai_autoreply_disabled)) {
+      await db
+        .from('conversations')
+        .update({ ai_reply_count: 0, ai_autoreply_disabled: false })
+        .eq('id', conversationId)
+      conv.ai_reply_count = 0
+      conv.ai_autoreply_disabled = false
+    }
+
     if (conv.ai_autoreply_disabled) return // handed off / turned off here
     // Cheap early-out; the authoritative cap check is the atomic claim
     // below (this read can race a concurrent inbound).
@@ -177,6 +193,20 @@ export async function dispatchInboundToAiReply(
     })
 
     if (handoff || !text) {
+      // If the model provided a polite message explaining the handoff, deliver it to the
+      // customer first so they are never left in confused silence.
+      const handoffText = (text || '').trim()
+      if (handoffText) {
+        await engineSendText({
+          accountId,
+          userId: configOwnerUserId,
+          conversationId,
+          contactId,
+          text: handoffText,
+          aiGenerated: true,
+        }).catch((err) => console.warn('[ai auto-reply] handoff message send failed:', err))
+      }
+
       // The model can't (or shouldn't) answer — stop auto-replying on
       // this thread and hand it to a human. We (a) pause the bot here
       // (sticky until re-enabled), (b) route the conversation to the

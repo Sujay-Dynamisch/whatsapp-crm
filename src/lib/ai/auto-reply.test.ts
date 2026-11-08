@@ -366,4 +366,25 @@ describe('dispatchInboundToAiReply — handoff', () => {
     expect(assign?.payload).toEqual({ assigned_agent_id: 'agent-7' })
     expect(assign?.isNull).toEqual(['assigned_agent_id'])
   })
+
+  it('delivers the handoff explanation message to the customer if provided', async () => {
+    h.generateReply.mockResolvedValue({ text: 'Connecting you to an agent!', handoff: true })
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conv-1', text: 'Connecting you to an agent!' }),
+    )
+    expect(h.state.updatePayload).toMatchObject({ ai_autoreply_disabled: true })
+  })
+
+  it('auto-refreshes conversation session after 12h of inactivity', async () => {
+    h.state.conv = {
+      assigned_agent_id: null,
+      ai_autoreply_disabled: true,
+      ai_reply_count: 5,
+      last_message_at: new Date(Date.now() - 15 * 60 * 60 * 1000).toISOString(),
+    }
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.state.updatePayload).toMatchObject({ ai_reply_count: 0, ai_autoreply_disabled: false })
+    expect(h.engineSendText).toHaveBeenCalled()
+  })
 })
