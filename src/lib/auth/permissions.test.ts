@@ -130,12 +130,12 @@ describe('parseRoleInput', () => {
 });
 
 describe('database contract', () => {
-  it('migration 062 (and later area additions) gates every area that has tables, using the same keys', () => {
-    // 062 plus later migrations that add areas in the same (table, area, gate) shape.
+  it('migration 079 (and later area additions) gates every area that has tables, using the same keys', () => {
+    // 079 plus later migrations that add areas in the same (table, area, gate) shape.
     const dir = path.resolve(__dirname, '../../../supabase/migrations');
     const sql = fs
       .readdirSync(dir)
-      .filter((f) => f >= '062_' && f.endsWith('.sql'))
+      .filter((f) => f >= '079_' && f.endsWith('.sql'))
       .map((f) => fs.readFileSync(path.join(dir, f), 'utf8'))
       .join('\n');
     const used = new Set([...sql.matchAll(/\('[a-z_]+',\s+'([a-z_]+)',\s+(?:true|false)\)/g)].map((m) => m[1]));

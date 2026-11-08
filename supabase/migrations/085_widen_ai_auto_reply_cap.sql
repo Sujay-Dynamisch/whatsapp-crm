@@ -1,5 +1,5 @@
 -- ============================================================
--- 068_widen_ai_auto_reply_cap.sql
+-- 085_widen_ai_auto_reply_cap.sql
 --
 -- Widen the AI auto-reply cap from max 20 to 100, set default to 20,
 -- and upgrade existing accounts currently on the old default (3)

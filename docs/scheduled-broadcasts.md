@@ -109,7 +109,7 @@ The queue is `broadcast-dispatch`, configured with `--max-attempts 5 --min-backo
 
 ## Deploy
 
-1. **Apply the migration.** Run `supabase/migrations/043_scheduled_broadcasts.sql` (or `supabase db push`). It is idempotent.
+1. **Apply the migration.** Run `supabase/migrations/045_scheduled_broadcasts.sql` (or `supabase db push`). It is idempotent.
 
 2. **Deploy the functions.** You need `gcloud` authenticated as a project owner or equivalent. The script runs in bash (Cloud Shell, Linux, macOS, or WSL):
 

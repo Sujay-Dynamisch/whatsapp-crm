@@ -9,6 +9,7 @@ import {
   seriesValues,
   type DashboardOverview,
 } from '@/lib/dashboard/overview'
+import { cn } from '@/lib/utils'
 import { KpiTile, KpiTileSkeleton, TargetBar } from './kpi-tile'
 import { Sparkline } from './sparkline'
 import { useFormatDuration } from './use-format-duration'
@@ -16,18 +17,26 @@ import { useFormatDuration } from './use-format-duration'
 export function KpiRow({
   data,
   currency,
+  showPipelines = true,
 }: {
   data: DashboardOverview | null
   currency: string
+  showPipelines?: boolean
 }) {
   const t = useTranslations('Dashboard.overview.kpi')
   const format = useFormatter()
   const formatDuration = useFormatDuration()
 
   if (!data) {
+    const skeletonCount = showPipelines ? 5 : 4
     return (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-3 sm:grid-cols-2',
+          showPipelines ? 'xl:grid-cols-5' : 'xl:grid-cols-4',
+        )}
+      >
+        {Array.from({ length: skeletonCount }).map((_, i) => (
           <KpiTileSkeleton key={i} />
         ))}
       </div>
@@ -41,7 +50,12 @@ export function KpiRow({
   const percent = (v: number) => format.number(v, { style: 'percent', maximumFractionDigits: 0 })
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div
+      className={cn(
+        'grid grid-cols-1 gap-3 sm:grid-cols-2',
+        showPipelines ? 'xl:grid-cols-5' : 'xl:grid-cols-4',
+      )}
+    >
       <KpiTile
         title={t('newConversations')}
         info={t('newConversationsInfo')}
@@ -66,15 +80,17 @@ export function KpiRow({
         comparisonLabel={comparisonLabel}
         footer={<Sparkline values={seriesValues(volume.series, 'resolved')} />}
       />
-      <KpiTile
-        title={t('dealsWon')}
-        info={t('dealsWonInfo')}
-        value={format.number(kpis.dealsWon)}
-        unit={formatCurrency(kpis.dealsWonValue, currency)}
-        change={compare(kpis.dealsWon, kpis.dealsWonPrevious)}
-        comparisonLabel={comparisonLabel}
-        footer={<Sparkline values={seriesValues(volume.series, 'dealsWon')} />}
-      />
+      {showPipelines && (
+        <KpiTile
+          title={t('dealsWon')}
+          info={t('dealsWonInfo')}
+          value={format.number(kpis.dealsWon)}
+          unit={formatCurrency(kpis.dealsWonValue, currency)}
+          change={compare(kpis.dealsWon, kpis.dealsWonPrevious)}
+          comparisonLabel={comparisonLabel}
+          footer={<Sparkline values={seriesValues(volume.series, 'dealsWon')} />}
+        />
+      )}
       <KpiTile
         title={t('readRate')}
         info={t('readRateInfo')}
