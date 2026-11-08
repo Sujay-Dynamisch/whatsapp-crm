@@ -57,9 +57,9 @@ describe('AI provider registry', () => {
     expect(isAiProvider(undefined)).toBe(false);
   });
 
-  it('matches the provider list migration 066 allows in the database', () => {
+  it('matches the provider list migration 083 allows in the database', () => {
     const sql = readFileSync(
-      join(process.cwd(), 'supabase/migrations/066_ai_provider_check.sql'),
+      join(process.cwd(), 'supabase/migrations/083_ai_provider_check.sql'),
       'utf8'
     );
     const list = /CHECK \(provider IN \(([\s\S]*?)\)\)/.exec(sql)![1];
