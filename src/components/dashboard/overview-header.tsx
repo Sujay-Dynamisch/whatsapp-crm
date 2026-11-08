@@ -4,6 +4,9 @@ import { useRouter } from 'next/navigation'
 import { Briefcase, ChevronDown, Plus, Radio, UserPlus, Zap } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
+import { useAuth } from '@/hooks/use-auth'
+import type { Area } from '@/lib/auth/permissions'
+import type { Feature } from '@/lib/features'
 import { buttonVariants } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -23,11 +26,19 @@ import { Skeleton } from './skeleton'
 import { useFormatDuration } from './use-format-duration'
 import { WhatsAppHealthChip } from './whatsapp-health-chip'
 
-const NEW_ITEMS = [
-  { key: 'newContact', href: '/contacts', icon: UserPlus },
-  { key: 'newDeal', href: '/pipelines', icon: Briefcase },
-  { key: 'newBroadcast', href: '/broadcasts/new', icon: Radio },
-  { key: 'newAutomation', href: '/automations/new', icon: Zap },
+interface NewItem {
+  key: string
+  href: string
+  icon: typeof UserPlus
+  area?: Area
+  feature?: Feature
+}
+
+const NEW_ITEMS: readonly NewItem[] = [
+  { key: 'newContact', href: '/contacts', icon: UserPlus, area: 'contacts' },
+  { key: 'newDeal', href: '/pipelines', icon: Briefcase, area: 'pipelines', feature: 'pipelines' },
+  { key: 'newBroadcast', href: '/broadcasts/new', icon: Radio, area: 'broadcasts', feature: 'broadcasts' },
+  { key: 'newAutomation', href: '/automations/new', icon: Zap, area: 'automations', feature: 'automations' },
 ] as const
 
 function partOfDay(date: Date): 'morning' | 'afternoon' | 'evening' {
@@ -53,7 +64,14 @@ export function OverviewHeader({
   const t = useTranslations('Dashboard.overview.header')
   const router = useRouter()
   const formatDuration = useFormatDuration()
-  const firstName = name?.trim().split(/\s+/)[0] || null
+  const { hasFeature, can } = useAuth()
+  const fullName = name?.trim() || null
+
+  const availableItems = NEW_ITEMS.filter((item) => {
+    if (item.feature && !hasFeature(item.feature)) return false
+    if (item.area && !can(item.area)) return false
+    return true
+  })
 
   let context: string | null = null
   if (data) {
@@ -73,8 +91,8 @@ export function OverviewHeader({
         {data ? (
           <>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">
-              {firstName
-                ? t(`greeting.${partOfDay(new Date(now))}`, { name: firstName })
+              {fullName
+                ? t(`greeting.${partOfDay(new Date(now))}`, { name: fullName })
                 : t(`greetingNoName.${partOfDay(new Date(now))}`)}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">{context}</p>
@@ -97,21 +115,23 @@ export function OverviewHeader({
             ))}
           </TabsList>
         </Tabs>
-        <DropdownMenu>
-          <DropdownMenuTrigger className={buttonVariants({ size: 'sm' })}>
-            <Plus aria-hidden />
-            {t('new')}
-            <ChevronDown className="opacity-70" aria-hidden />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            {NEW_ITEMS.map(({ key, href, icon: Icon }) => (
-              <DropdownMenuItem key={key} onClick={() => router.push(href)}>
-                <Icon aria-hidden />
-                {t(key)}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {availableItems.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger className={buttonVariants({ size: 'sm' })}>
+              <Plus aria-hidden />
+              {t('new')}
+              <ChevronDown className="opacity-70" aria-hidden />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {availableItems.map(({ key, href, icon: Icon }) => (
+                <DropdownMenuItem key={key} onClick={() => router.push(href)}>
+                  <Icon aria-hidden />
+                  {t(key)}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   )

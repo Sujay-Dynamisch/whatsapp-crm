@@ -47,7 +47,8 @@ function DashboardPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const range = parseOverviewRange(searchParams.get('range'))
-  const { defaultCurrency, profile } = useAuth()
+  const { defaultCurrency, profile, user, hasFeature, can } = useAuth()
+  const canAccessPipelines = hasFeature('pipelines') && can('pipelines')
 
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [failed, setFailed] = useState(false)
@@ -130,6 +131,12 @@ function DashboardPageInner() {
     [overview, now],
   )
 
+  const visibleActivity = useMemo(() => {
+    if (!activity) return null
+    if (canAccessPipelines) return activity
+    return activity.filter((item) => item.kind !== 'deal')
+  }, [activity, canAccessPipelines])
+
   if (failed && !data) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
@@ -146,7 +153,7 @@ function DashboardPageInner() {
       <OverviewHeader
         data={data}
         now={now}
-        name={profile?.full_name ?? null}
+        name={profile?.full_name ?? (user?.user_metadata?.full_name as string | undefined) ?? null}
         range={range}
         onRangeChange={handleRangeChange}
       />
@@ -156,22 +163,28 @@ function DashboardPageInner() {
       ) : (
         <>
           <AttentionRow data={data} now={now} onlineCount={onlineCount} />
-          <KpiRow data={data} currency={defaultCurrency} />
+          <KpiRow data={data} currency={defaultCurrency} showPipelines={canAccessPipelines} />
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
             <MessageVolumeCard data={data} />
             <ReplyQueueCard data={data} now={now} />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-            <PipelineCard data={data} currency={defaultCurrency} />
+          <div
+            className={
+              canAccessPipelines
+                ? 'grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3'
+                : 'grid grid-cols-1 gap-4 lg:grid-cols-2'
+            }
+          >
+            {canAccessPipelines && <PipelineCard data={data} currency={defaultCurrency} />}
             <TeamCard data={data} now={now} />
-            <div className="lg:col-span-2 2xl:col-span-1">
+            <div className={canAccessPipelines ? 'lg:col-span-2 2xl:col-span-1' : undefined}>
               <CampaignsCard data={data} />
             </div>
           </div>
 
-          <ActivityFeed items={activity} loading={activityLoading} />
+          <ActivityFeed items={visibleActivity} loading={activityLoading} />
         </>
       )}
     </div>
