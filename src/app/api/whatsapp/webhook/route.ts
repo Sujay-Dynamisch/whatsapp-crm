@@ -22,7 +22,7 @@ import { readCappedBody } from '@/lib/whatsapp/webhook-body'
 import { resumeAwaitingReply, runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
-import { recordButtonClick } from '@/lib/whatsapp/button-clicks'
+import { recordButtonClick, requestCallbackFromTap } from '@/lib/whatsapp/button-clicks'
 import { refreshQuality } from '@/lib/smart-sending/quality'
 import { startInboundLanguage } from '@/lib/language/inbound'
 import { dispatchJourneyInbound } from '@/lib/journeys/dispatch'
@@ -895,6 +895,8 @@ async function processMessage(
     message,
     clickedAt: new Date(parseInt(message.timestamp) * 1000),
   })
+  // Callback button tapped anywhere → open a Callback request (tag trigger).
+  await requestCallbackFromTap(supabaseAdmin(), { accountId, contactId: contactRecord.id, message })
 
   // Translation + voice-note transcription (migration 049). Runs before
   // automations and the AI so a voice note's transcript can trigger

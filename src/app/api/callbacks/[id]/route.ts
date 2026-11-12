@@ -77,7 +77,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         .ilike('name', 'callback_requested')
         .limit(1)
         .maybeSingle();
-      if (tag) await supabase.from('contact_tags').delete().eq('contact_id', row.contact_id).eq('tag_id', tag.id);
+      // Service role: the caller's RLS (custom roles without contacts edit)
+      // can silently block this, leaving the tag so later taps never re-open.
+      if (tag) await supabaseAdmin().from('contact_tags').delete().eq('contact_id', row.contact_id).eq('tag_id', tag.id);
     }
     // Follow up with the lead (message / back to nurture). Best effort:
     // the status change above stands either way.
