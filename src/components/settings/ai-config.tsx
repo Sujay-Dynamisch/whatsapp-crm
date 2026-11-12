@@ -243,12 +243,7 @@ export function AiConfig() {
   if (loading || profileLoading) {
     return (
       <div className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-border/60 bg-card/40 p-8 text-muted-foreground shadow-xs">
-        <div className="relative flex items-center justify-center">
-          <div className="absolute inset-0 rounded-full bg-primary/20 blur-lg animate-pulse" />
-          <div className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          </div>
-        </div>
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
         <p className="mt-4 text-sm font-medium text-foreground">
           {t('loadFailed')}...
         </p>
