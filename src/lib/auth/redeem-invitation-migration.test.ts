@@ -19,6 +19,15 @@ const tablesWithoutDomainData = new Set([
   "delivery_settings",
   "language_settings",
   "health_summaries",
+  // Caller management (086): settings, or rows that only exist alongside
+  // contacts (already guarded via the contacts check).
+  "callers",
+  "round_robin_state",
+  "engagements",
+  "caller_assignment_history",
+  // 087: reminder policy (settings) and per-engagement link state (alongside contacts).
+  "callback_settings",
+  "payment_link_state",
 ]);
 
 function accountScopedTables(): Set<string> {

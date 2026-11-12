@@ -6,10 +6,13 @@
 import { NextResponse } from 'next/server';
 
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
+import { isScopedCaller } from '@/lib/callers/scope';
 
 export async function GET(request: Request) {
   try {
     const { supabase, accountId } = await getCurrentAccount();
+    // Skipped registrations belong to no caller yet — admins only (086).
+    if (await isScopedCaller(supabase)) return NextResponse.json({ registrations: [] });
     const all = new URL(request.url).searchParams.get('status') === 'all';
     let q = supabase
       .from('lead_sync_issues')

@@ -224,7 +224,9 @@ export type NotificationType =
   | 'lead_returned'
   | 'payment_click'
   | 'message_failed'
-  | 'window_closing';
+  | 'window_closing'
+  /** A lead / callback was given to you (caller management, 086). */
+  | 'callback_assigned';
 
 export interface Notification {
   id: string;

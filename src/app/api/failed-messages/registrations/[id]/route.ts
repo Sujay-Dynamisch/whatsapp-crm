@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { isScopedCaller } from '@/lib/callers/scope';
 import { findOrCreateContact, setContactTags } from '@/lib/api/v1/contacts';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { UUID_RE } from '@/lib/journeys/api';
@@ -18,6 +19,8 @@ import { toInternationalPhone } from '@/lib/lead-sync/registrations';
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { supabase, accountId, userId } = await requireRole('agent');
+    // Skipped registrations aren't anyone's lead yet — admins handle them (086).
+    if (await isScopedCaller(supabase)) return NextResponse.json({ error: 'Only admins can fix skipped registrations' }, { status: 403 });
     const { id } = await params;
     if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     const body = (await request.json().catch(() => ({}))) as { action?: string; phone?: string };

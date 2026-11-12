@@ -27,6 +27,7 @@ const TYPE_ICON: Record<Notification["type"], typeof Bell> = {
   payment_click: Wallet,
   message_failed: TriangleAlert,
   window_closing: Timer,
+  callback_assigned: UserPlus,
 };
 
 export default function NotificationsPage() {

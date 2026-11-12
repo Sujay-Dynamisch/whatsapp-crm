@@ -12,7 +12,7 @@ const STAGES: Record<string, string> = {
   a: 'Stage A — pre-webinar dropout (sg_nurture_prewebinar)',
   b: 'Stage B — post check-in cold (sg_nurture_postwebinar)',
   c: 'Stage C — conversion menu cold (sg_nurture_coldlead)',
-  d: 'Stage D — payment abandoned (sg_nurture_payment)',
+  d: 'Stage D — payment abandoned (sg_testimonial_reprompt)',
 };
 
 const ist = (iso: unknown) =>

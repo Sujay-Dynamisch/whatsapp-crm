@@ -1,5 +1,6 @@
 'use client';
 
+import { playAlertSound, readAlertSoundPref, unlockAlertSound, writeAlertSoundPref } from '@/lib/notifications/sound';
 import { useState, useSyncExternalStore } from 'react';
 import { Bell, BellRing, CircleAlert, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -38,6 +39,48 @@ function subscribePermission(onChange: () => void): () => void {
 }
 
 const serverPermission = (): BrowserNotifyPermission => 'unsupported';
+
+/** In-app chime switch (lib/notifications/sound) — plays only when no desktop notification shows. */
+function AlertSoundRow() {
+  const [on, setOn] = useState(() => readAlertSoundPref());
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">Alert sound in the app</p>
+        <p className="text-xs text-muted-foreground">
+          Plays a short chime for new alerts when no browser notification is shown (that one brings your computer&apos;s own sound) — so you hear exactly one sound.
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            unlockAlertSound();
+            writeAlertSoundPref(true);
+            setOn(true);
+            playAlertSound();
+          }}
+        >
+          Test
+        </Button>
+        <Switch
+          checked={on}
+          onCheckedChange={(next) => {
+            writeAlertSoundPref(next);
+            setOn(next);
+            if (next) {
+              unlockAlertSound();
+              playAlertSound();
+            }
+          }}
+          aria-label="Alert sound in the app"
+        />
+      </div>
+    </div>
+  );
+}
 
 /**
  * "Browser notifications" card — device-scoped opt-in for desktop
@@ -148,6 +191,8 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
                 <span>{t('deniedHint')}</span>
               </p>
             )}
+
+            <AlertSoundRow />
 
             <Button
               type="button"

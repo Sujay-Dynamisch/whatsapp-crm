@@ -170,7 +170,8 @@ export async function POST(request: Request) {
     }
 
     const db = supabaseAdmin();
-    const { data: contact } = await db
+    // RLS client: a scoped caller (086) can only mark their own leads.
+    const { data: contact } = await supabase
       .from('contacts')
       .select('id')
       .eq('id', body.contact_id)

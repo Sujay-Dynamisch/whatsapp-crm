@@ -26,8 +26,9 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { confirmDialog, promptDialog } from '@/components/ui/confirm-dialog';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
+import { CallbackNoteDialog } from '@/components/callbacks/callback-note-dialog';
 
 type Status = 'new' | 'called' | 'no_answer' | 'done';
 type StatusFilter = 'open' | Status | 'all';
@@ -44,6 +45,13 @@ interface CallbackRequest {
   handled_at: string | null;
   /** "No answer" marks so far (migration 059). */
   no_answer_count?: number;
+  /** Caller management (086): 'high' = the customer asked for a call. */
+  priority?: 'normal' | 'high';
+  source_kind?: string | null;
+  caller_name?: string | null;
+  note_by_name?: string | null;
+  note_at?: string | null;
+  ai_meta?: { confidence?: number; requested_time?: string; language?: string } | null;
   contact_name: string | null;
   contact_phone: string | null;
 }
@@ -198,15 +206,9 @@ export default function CallbacksPage() {
     }
   }
 
-  async function editNote(r: CallbackRequest) {
-    const note = await promptDialog({
-      title: t('noteTitle', { name: r.contact_name || r.contact_phone || '' }),
-      placeholder: t('notePlaceholder'),
-      defaultValue: r.note ?? '',
-      maxLength: 500,
-    });
-    if (note === null) return;
-    await update(r, { note }, t('noteSaved'));
+  const [noteFor, setNoteFor] = useState<CallbackRequest | null>(null);
+  function editNote(r: CallbackRequest) {
+    setNoteFor(r);
   }
 
   async function copy(phone: string) {
@@ -359,7 +361,7 @@ export default function CallbacksPage() {
                 key={r.id}
                 className={cn(
                   'rounded-2xl border bg-card p-4 transition-shadow hover:shadow-md',
-                  overdue ? 'border-rose-500/50' : 'border-border',
+                  overdue ? 'border-rose-500/50' : r.priority === 'high' && r.status !== 'done' ? 'border-amber-500/60' : 'border-border',
                   busy && 'opacity-60'
                 )}
               >
@@ -373,6 +375,25 @@ export default function CallbacksPage() {
                       <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium', STATUS_STYLE[r.status])}>
                         {t(`status.${r.status}`)}
                       </span>
+                      {r.priority === 'high' && r.status !== 'done' && (
+                        <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-semibold text-white">Priority</span>
+                      )}
+                      {r.source_kind === 'engagement' && r.priority !== 'high' && (
+                        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">New lead</span>
+                      )}
+                      {r.source_kind === 'ai_inbox_text' && (
+                        <span className="rounded-full border border-violet-500/40 px-2 py-0.5 text-[11px] text-violet-700 dark:text-violet-300">
+                          Typed request{r.ai_meta?.requested_time ? ` · ${r.ai_meta.requested_time}` : ''}
+                        </span>
+                      )}
+                      {r.source_kind === 'ai_review' && r.status !== 'done' && (
+                        <span className="rounded-full border border-amber-500/50 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+                          Needs review{typeof r.ai_meta?.confidence === 'number' ? ` · ${Math.round(r.ai_meta.confidence * 100)}%` : ''}
+                        </span>
+                      )}
+                      {r.caller_name && (
+                        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">{r.caller_name}</span>
+                      )}
                       {(r.no_answer_count ?? 0) > 0 && (
                         <span className="rounded-full border border-rose-500/30 px-2 py-0.5 text-[11px] text-rose-600 dark:text-rose-400">
                           {t('noAnswerTimes', { count: r.no_answer_count ?? 0 })}
@@ -408,10 +429,18 @@ export default function CallbacksPage() {
                       </p>
                     )}
                     {r.note && (
-                      <p className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
-                        <StickyNote className="mt-0.5 h-3 w-3 shrink-0" />
-                        <span className="break-words">{r.note}</span>
-                      </p>
+                      <div className="mt-2.5 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2">
+                        <p className="flex items-start gap-1.5 text-sm text-foreground">
+                          <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                          <span className="break-words">{r.note}</span>
+                        </p>
+                        {(r.note_by_name || r.note_at) && (
+                          <p className="mt-1 pl-5 text-[11px] text-muted-foreground">
+                            {r.note_by_name ? `— ${r.note_by_name}` : ''}
+                            {r.note_at ? `${r.note_by_name ? ' · ' : ''}${formatDistanceToNow(new Date(r.note_at), { addSuffix: true })}` : ''}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -477,6 +506,17 @@ export default function CallbacksPage() {
           })}
         </ul>
         </div>
+      )}
+      {noteFor && (
+        <CallbackNoteDialog
+          key={noteFor.id}
+          open
+          name={noteFor.contact_name || noteFor.contact_phone || t('unknown')}
+          phone={noteFor.contact_phone}
+          initial={noteFor.note ?? ''}
+          onClose={() => setNoteFor(null)}
+          onSave={(note) => update(noteFor, { note }, t('noteSaved'))}
+        />
       )}
     </div>
   );

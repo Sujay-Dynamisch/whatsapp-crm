@@ -16,6 +16,12 @@ vi.mock('@/lib/journeys/dispatch', () => ({
   restartJourneysOnReregistration: journeys.restart,
 }));
 
+// Caller management (086) is off unless a test turns it on.
+const features = vi.hoisted(() => ({ managed: false }));
+vi.mock('@/lib/features-server', () => ({
+  accountHasFeature: async (_db: unknown, _acct: string, f: string) => (f === 'caller_management' ? features.managed : true),
+}));
+
 const health = vi.hoisted(() => ({ leadFeedChanged: vi.fn(async () => undefined) }));
 vi.mock('@/lib/health/health', () => health);
 
@@ -24,6 +30,8 @@ import { runLeadSync } from './registrations';
 // Minimal query builder: lead_sync_sources select / update, custom_fields lookups.
 let upserts: { table: string; row: Record<string, unknown>; opts: unknown }[] = [];
 let sourceReport: unknown = null;
+let rpcCalls: { fn: string; args: Record<string, unknown> }[] = [];
+let verdicts: Record<string, { accepted: boolean; reason: string }> = {};
 function fakeDb(): SupabaseClient {
   const builder = (data: unknown, table: string) => {
     const b: Record<string, unknown> = {};
@@ -35,6 +43,10 @@ function fakeDb(): SupabaseClient {
     return b;
   };
   return {
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ fn, args });
+      return { data: verdicts[args.p_registration_id as string] ?? { accepted: true, reason: 'ROUND_ROBIN' }, error: null };
+    },
     from: (table: string) =>
       builder(
         table === 'lead_sync_sources'
@@ -49,6 +61,9 @@ const NOW = new Date('2026-11-02T05:00:00Z');
 
 beforeEach(() => {
   upserts = [];
+  rpcCalls = [];
+  verdicts = {};
+  features.managed = false;
   sourceReport = null;
   health.leadFeedChanged.mockClear();
   contacts.created.clear();
@@ -89,6 +104,17 @@ describe('lead sync → journeys', () => {
       registrationId: 'r-again',
       registeredAt: '2026-11-02T04:59:00Z',
     });
+  });
+
+  it('caller management: every registration goes through accept_registration; a repeat inside 15 days is suppressed', async () => {
+    features.managed = true;
+    contacts.created.set('+919800000001', true);
+    verdicts['r-again'] = { accepted: false, reason: 'within_15_days' };
+    const out = await runLeadSync(fakeDb(), NOW);
+    expect(rpcCalls.map((c) => c.args.p_registration_id)).toEqual(['r-new', 'r-again']);
+    expect(out.acct).toMatchObject({ created: 1, existing: 1, restarted: 0, suppressed: 1 });
+    expect(journeys.dispatch).toHaveBeenCalledTimes(1);
+    expect(journeys.restart).not.toHaveBeenCalled();
   });
 
   it('an invalid number is kept for a human to fix — once per registration', async () => {

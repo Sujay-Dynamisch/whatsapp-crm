@@ -256,7 +256,74 @@ export async function handleNoAnswer(
 export interface FollowUpReport {
   reminded: number;
   returned: number;
+  /** Caller management (087): policy reminders sent / escalations. */
+  policyReminders?: number;
+  escalated?: number;
   errors: string[];
+}
+
+/** Reminder policy (callback_settings, 087) — defaults when the row is missing. */
+export interface ReminderPolicy {
+  priority_initial_min: number;
+  priority_repeat_min: number;
+  priority_max_reminders: number;
+  standard_initial_min: number;
+  standard_repeat_min: number;
+  standard_max_reminders: number;
+  window_start_hour: number;
+  window_end_hour: number;
+  window_days: number[];
+  timezone: string;
+  escalate_to: 'admins' | 'none';
+  repeat_until_handled: boolean;
+}
+
+export const DEFAULT_POLICY: ReminderPolicy = {
+  priority_initial_min: 15,
+  priority_repeat_min: 30,
+  priority_max_reminders: 3,
+  standard_initial_min: 240,
+  standard_repeat_min: 240,
+  standard_max_reminders: 1,
+  window_start_hour: 9,
+  window_end_hour: 21,
+  window_days: [1, 2, 3, 4, 5, 6],
+  timezone: 'Asia/Kolkata',
+  escalate_to: 'admins',
+  repeat_until_handled: false,
+};
+
+/** Is `now` inside the policy's allowed reminder hours/days (in its timezone)? */
+export function inReminderWindow(now: Date, p: Pick<ReminderPolicy, 'window_start_hour' | 'window_end_hour' | 'window_days' | 'timezone'>): boolean {
+  let tz = p.timezone || 'Asia/Kolkata';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+  } catch {
+    tz = 'Asia/Kolkata';
+  }
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23', weekday: 'short' }).formatToParts(now);
+  const hour = Number(parts.find((x) => x.type === 'hour')?.value ?? 0);
+  const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.find((x) => x.type === 'weekday')?.value ?? '') + 1;
+  return p.window_days.includes(wd) && hour >= p.window_start_hour && hour < p.window_end_hour;
+}
+
+/**
+ * After a reminder: next due time (null = stop) and whether to escalate
+ * now (the max count was just reached).
+ */
+export function afterReminder(
+  count: number,
+  priority: 'high' | 'normal',
+  p: ReminderPolicy,
+  now: Date
+): { next: Date | null; escalate: boolean } {
+  const max = priority === 'high' ? p.priority_max_reminders : p.standard_max_reminders;
+  const repeat = (priority === 'high' ? p.priority_repeat_min : p.standard_repeat_min) * 60_000;
+  const atMax = count >= max;
+  return {
+    next: !atMax || p.repeat_until_handled ? new Date(now.getTime() + repeat) : null,
+    escalate: atMax && count === max && p.escalate_to === 'admins',
+  };
 }
 
 /** Every minute (journeyTick): reminders for waiting requests, 48h rule for "No answer". */
@@ -267,6 +334,11 @@ export async function runCallbackFollowUps(db: SupabaseClient, deps: JourneyDeps
   const on = async (accountId: string) => {
     if (!enabled.has(accountId)) enabled.set(accountId, await accountHasFeature(db, accountId, 'callbacks'));
     return enabled.get(accountId)!;
+  };
+  const managedMap = new Map<string, boolean>();
+  const managed = async (accountId: string) => {
+    if (!managedMap.has(accountId)) managedMap.set(accountId, await accountHasFeature(db, accountId, 'caller_management'));
+    return managedMap.get(accountId)!;
   };
 
   // Still "New" after 4h → remind owners/admins once.
@@ -280,6 +352,9 @@ export async function runCallbackFollowUps(db: SupabaseClient, deps: JourneyDeps
   for (const req of (waiting ?? []) as CallbackRow[]) {
     try {
       if (!(await on(req.account_id))) continue;
+      // Caller-managed accounts use their own reminder policy (below);
+      // that also covers new-lead follow-ups (086), never customer requests.
+      if ((req as { source_kind?: string | null }).source_kind === 'engagement' || (await managed(req.account_id))) continue;
       const { data: claimed } = await db
         .from('callback_requests')
         .update({ reminded_at: now.toISOString() })
@@ -322,5 +397,69 @@ export async function runCallbackFollowUps(db: SupabaseClient, deps: JourneyDeps
       report.errors.push(`stale ${req.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+  await runPolicyReminders(db, now, on, managed, report);
   return report;
+}
+
+/** Caller management (087): reminders by the account's policy. */
+async function runPolicyReminders(
+  db: SupabaseClient,
+  now: Date,
+  on: (accountId: string) => Promise<boolean>,
+  managed: (accountId: string) => Promise<boolean>,
+  report: FollowUpReport
+): Promise<void> {
+  const { data: due } = await db
+    .from('callback_requests')
+    .select('id, account_id, contact_id, conversation_id, priority, status, assigned_caller_id, reminder_count, next_reminder_at')
+    .in('status', ['new', 'no_answer'])
+    .lte('next_reminder_at', now.toISOString())
+    .limit(200);
+  const policies = new Map<string, ReminderPolicy>();
+  for (const req of (due ?? []) as (CallbackRow & {
+    priority: 'high' | 'normal';
+    assigned_caller_id: string | null;
+    reminder_count: number;
+    next_reminder_at: string;
+  })[]) {
+    try {
+      if (!(await on(req.account_id)) || !(await managed(req.account_id))) continue;
+      if (!policies.has(req.account_id)) {
+        const { data } = await db.from('callback_settings').select('*').eq('account_id', req.account_id).maybeSingle();
+        policies.set(req.account_id, { ...DEFAULT_POLICY, ...((data ?? {}) as Partial<ReminderPolicy>) });
+      }
+      const policy = policies.get(req.account_id)!;
+      if (!inReminderWindow(now, policy)) continue; // fires once the window opens
+
+      const count = (Number(req.reminder_count) || 0) + 1;
+      const { next, escalate } = afterReminder(count, req.priority, policy, now);
+      // Claim (a parallel tick or a status change in between wins).
+      const { data: claimed } = await db
+        .from('callback_requests')
+        .update({ reminder_count: count, last_reminded_at: now.toISOString(), next_reminder_at: next?.toISOString() ?? null })
+        .eq('id', req.id)
+        .eq('next_reminder_at', req.next_reminder_at)
+        .in('status', ['new', 'no_answer'])
+        .select('id');
+      if (!claimed?.length) continue;
+
+      const title = req.priority === 'high' ? 'Reminder: priority callback waiting' : 'Reminder: lead follow-up waiting';
+      await db.rpc('notify_callback_owner', {
+        p_account_id: req.account_id,
+        p_contact_id: req.contact_id,
+        p_conversation_id: req.conversation_id,
+        p_caller: req.assigned_caller_id,
+        p_type: 'callback_overdue',
+        p_title: title,
+      });
+      report.policyReminders = (report.policyReminders ?? 0) + 1;
+      if (escalate && req.assigned_caller_id) {
+        await notifyAdmins(db, req, 'callback_overdue', `Escalated: callback not handled after ${count} reminders`);
+        await db.from('callback_requests').update({ escalated_at: now.toISOString() }).eq('id', req.id);
+        report.escalated = (report.escalated ?? 0) + 1;
+      }
+    } catch (err) {
+      report.errors.push(`policy ${req.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }

@@ -19,6 +19,7 @@
 // against an in-memory database without Meta.
 // ============================================================
 
+import { claimPaymentLink, markPaymentLinkSent, releasePaymentLink } from '@/lib/payments/link-once';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
@@ -711,8 +712,15 @@ async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepR
         params,
         retry_until: retryUntil(cfg.retry_until, s, now),
       };
+      // Payment link at most once per engagement (087; caller-managed accounts).
+      const linkClaim = await claimPaymentLink(db, { accountId: e.account_id, contactId: e.contact_id, journeyId: journey.id, nodeId: node.id, config: cfg });
+      if (linkClaim && !linkClaim.claimed) {
+        await logEvent(db, e, node.id, 'payment_link_skipped', 'Payment link already sent for this engagement');
+        return { slot: 'next', output: { template: cfg.template_name, skipped: 'payment_link_already_sent' } };
+      }
       try {
         const sent = (await deps.sendTemplate(await rt.sendCtx(), { ...cfg, params })) || {};
+        await markPaymentLinkSent(db, linkClaim, sent.whatsapp_message_id);
         await rt.record(node.id, { ...logged, content_text: sent.content_text ?? null, wa_message_id: sent.whatsapp_message_id ?? null, status: 'sent' });
         return { slot: 'next', output: { template: cfg.template_name, params, message_id: sent.whatsapp_message_id ?? null } };
       } catch (err) {
@@ -738,8 +746,20 @@ async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepR
       if (!(await windowOpen(db, e, now))) throw new Error(WINDOW_CLOSED);
       const text = renderTemplate(cfg.text, await rt.scope());
       if (!text.trim()) throw new Error('The message is empty after filling in the variables');
+      const linkClaim = await claimPaymentLink(db, { accountId: e.account_id, contactId: e.contact_id, journeyId: journey.id, nodeId: node.id, config: cfg });
+      if (linkClaim && !linkClaim.claimed) {
+        await logEvent(db, e, node.id, 'payment_link_skipped', 'Payment link already sent for this engagement');
+        return { slot: 'next', output: { text, skipped: 'payment_link_already_sent' } };
+      }
       const sendCtx = await rt.sendCtx();
-      const sent = await trackSend(rt, node.id, 'text', text, () => deps.sendText(sendCtx, text));
+      let sent: SendResult;
+      try {
+        sent = await trackSend(rt, node.id, 'text', text, () => deps.sendText(sendCtx, text));
+      } catch (err) {
+        await releasePaymentLink(db, linkClaim);
+        throw err;
+      }
+      await markPaymentLinkSent(db, linkClaim, sent.whatsapp_message_id);
       return { slot: 'next', output: { text, message_id: sent.whatsapp_message_id ?? null } };
     }
 

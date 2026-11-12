@@ -21,7 +21,7 @@ import {
   type AccountRole,
 } from "@/lib/auth/roles";
 import { isFeatureEnabled, type Feature } from "@/lib/features";
-import { atLeast, levelFor, parseAccess, type AccessLevel, type Area, type MyAccess } from "@/lib/auth/permissions";
+import { atLeast, callersLevel, levelFor, parseAccess, type AccessLevel, type Area, type MyAccess } from "@/lib/auth/permissions";
 
 interface Profile {
   id: string;
@@ -462,8 +462,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const can = useCallback(
-    (area: Area, level: AccessLevel = "view") => atLeast(levelFor(access, area), level),
-    [access],
+    (area: Area, level: AccessLevel = "view") =>
+      atLeast(
+        area === "callers"
+          ? callersLevel(access, (profile?.account_role as AccountRole | undefined) ?? null)
+          : levelFor(access, area),
+        level,
+      ),
+    [access, profile?.account_role],
   );
 
   // Signed out is not a broken account — the shell redirects to /login

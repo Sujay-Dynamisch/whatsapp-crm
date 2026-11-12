@@ -6,6 +6,7 @@ export function notificationHref(n: Pick<Notification, "type" | "conversation_id
     case "callback_requested":
     case "callback_overdue":
     case "callback_returned":
+    case "callback_assigned":
       return "/callbacks";
     case "health_alert":
     case "health_summary":
