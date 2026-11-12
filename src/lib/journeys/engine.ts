@@ -1023,6 +1023,60 @@ export async function resumeOnReply(
   return resumed;
 }
 
+/** How long a finished run still answers a late menu tap. */
+const LATE_TAP_COMPLETED_MS = 3 * 864e5;
+
+/**
+ * A menu button tapped when no run was waiting for a reply — e.g. the
+ * lead tapped two buttons back to back and the run was still busy with
+ * the first, then moved on to a timer / finished. Resume the contact's
+ * latest run at its `late_taps` reply step as if the tap answered it, so
+ * the second tap gets the journey's reply too. Never for opted-out /
+ * exit-tagged (paid, closed) leads, nor long-finished runs.
+ */
+export async function resumeLateMenuTap(
+  db: SupabaseClient,
+  accountId: string,
+  contactId: string,
+  deps: JourneyDeps,
+  reply: { text?: string | null; button?: string | null }
+): Promise<number> {
+  const { data: rows } = await db
+    .from('journey_enrollments')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('contact_id', contactId)
+    .in('status', ['waiting', 'completed'])
+    .order('entered_at', { ascending: false })
+    .limit(1);
+  const row = (rows ?? [])[0] as (EnrollmentRow & { completed_at?: string | null }) | undefined;
+  if (!row) return 0;
+  if (row.status === 'waiting' && row.wait_kind === 'reply') return 0; // the normal reply path owns it
+  if (row.status === 'completed' && Date.parse(row.completed_at ?? '') < deps.now().getTime() - LATE_TAP_COMPLETED_MS) return 0;
+  const journey = await loadJourney(db, row.journey_id);
+  if (!journey || journey.status !== 'active') return 0;
+  const target = journey.graph.nodes.find(
+    (n) => n.type === 'wait_for_reply' && (n.config as NodeConfigs['wait_for_reply']).late_taps === true
+  );
+  if (!target) return 0;
+  if (await stopReason(db, journey, row, reply.text)) return 0;
+
+  const { data: claimed } = await db
+    .from('journey_enrollments')
+    .update({ status: 'active', locked_at: deps.now().toISOString(), wait_kind: null, current_node_id: target.id, completed_at: null })
+    .eq('id', row.id)
+    .eq('status', row.status)
+    .select('id');
+  if (!claimed?.length) return 0;
+  await logEvent(db, row, target.id, 'late_tap', `Menu tap "${(reply.button ?? reply.text ?? '').slice(0, 60)}" after the run had moved on`);
+  const context: RunContext = {
+    ...(row.context as RunContext),
+    reply: { text: reply.text ?? undefined, ...(reply.button ? { button: reply.button } : {}), at: deps.now().toISOString() },
+  };
+  await advanceEnrollment(db, journey, { ...row, status: 'active', wait_kind: null, current_node_id: target.id, context }, deps, 'replied');
+  return 1;
+}
+
 export type StopOutcome = 'stopped' | 'not_found' | 'busy' | 'finished';
 
 /**

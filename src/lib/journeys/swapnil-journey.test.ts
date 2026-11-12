@@ -253,6 +253,15 @@ async function reply(text: string, when?: string, contactId = 'c1') {
   if (isUnsubscribeText(text)) addTag(contactId, 'tag-unsub');
 }
 
+/** A template button tap (quick reply): text and button title are the same. */
+async function tap(button: string, when?: string, contactId = 'c1') {
+  if (when) await runUntil(when);
+  const conv = tables.conversations.find((c) => c.contact_id === contactId)!;
+  tables.messages.push({ id: `m-${++seq}`, conversation_id: conv.id, sender_type: 'customer', created_at: clock.toISOString() });
+  conv.last_customer_message_at = clock.toISOString();
+  await dispatchJourneyInbound(db(), { accountId: 'acct', contactId, text: button, buttonText: button }, deps);
+}
+
 const run = (contactId = 'c1') =>
   tables.journey_enrollments.filter((e) => e.contact_id === contactId).at(-1) as Row & { status: string; current_node_id: string };
 /** "Mon 02 14:00 sg_webinar_session_reminder" lines. */
@@ -1204,5 +1213,42 @@ describe('closed-lost lead writes back', () => {
     await register('2026-11-02 10:00');
     await reply('hello', '2026-11-08 12:00'); // during Stage A nurture
     expect(notes()).toEqual([]);
+  });
+});
+
+describe('two check-in buttons tapped back to back — both get a reply', () => {
+  it('“Ready to Join” then “Want to see testimonials” → payment link, then testimonials', async () => {
+    await register('2026-11-02 10:00');
+    await tap('Ready to Join', '2026-11-03 10:00');
+    expect(sent.at(-1)!.text).toContain('Great decision');
+    await tap('Want to see testimonials');
+    expect(sent.at(-1)!.text).toContain('Results may vary');
+  });
+
+  it('“Request a callback” (run finished) then “Ready to Join” → the link still goes out', async () => {
+    await register('2026-11-02 10:00');
+    await tap('Request a callback', '2026-11-03 10:00');
+    expect(sent.at(-1)!.text).toContain('My team will call you shortly');
+    expect(run().status).toBe('completed');
+    await tap('Ready to Join');
+    expect(sent.at(-1)!.text).toContain('Great decision');
+    expect(sent.at(-1)!.text).toContain(LINKS.pay);
+  });
+
+  it('“Couldn’t attend” (run parked on a timer) then “Ready to Join” → the link goes out', async () => {
+    await register('2026-11-02 10:00');
+    await tap('Couldn’t attend', '2026-11-03 10:00');
+    const before = sent.length;
+    await tap('Ready to Join');
+    expect(sent.slice(before).some((m) => m.text?.includes('Great decision'))).toBe(true);
+  });
+
+  it('a late tap never revives a paid / closed lead', async () => {
+    await register('2026-11-02 10:00');
+    await tap('Request a callback', '2026-11-03 10:00');
+    addTag('c1', TAG_IDS.paid);
+    const before = sent.length;
+    await tap('Ready to Join');
+    expect(sent.length).toBe(before);
   });
 });

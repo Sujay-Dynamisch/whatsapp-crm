@@ -188,7 +188,9 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     tpl('sg_webinar_session_reminder', [NAME, 'starting in 1 hour', S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'wait_checkin' });
   add('wait_checkin', 'wait', 'Wait until 7 AM next day', { amount: 12, unit: 'hours', until: S('checkin_iso') }, { next: 't3_checkin' });
   add('t3_checkin', 'send_template', 'Post-webinar check-in (menu)', tpl('sg_post_webinar_checkin', [NAME]), { next: 'reply_menu' });
-  add('reply_menu', 'wait_for_reply', 'Wait for menu reply', { amount: 24, unit: 'hours' }, { replied: 'mark_menu', timeout: 'auto_reinvited' });
+  // late_taps: a check-in button tapped after the run moved on (e.g. two
+  // buttons back to back) resumes here, so every tap gets its reply.
+  add('reply_menu', 'wait_for_reply', 'Wait for menu reply', { amount: 24, unit: 'hours', late_taps: true }, { replied: 'mark_menu', timeout: 'auto_reinvited' });
 
   // No response → send the next webinar link once and re-enter the
   // reminder loop; still nothing after that → nurture, by where they
@@ -264,8 +266,12 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
       { op: 'contains', value: 'not proceed', label: 'Not proceeding' },
       { op: 'contains', value: 'complete payment', label: 'Complete payment' },
       { op: 'contains', value: 'join', label: 'Join' },
+      // Another check-in button tapped right after "Ready to Join".
+      { op: 'contains', value: 'testimon', label: 'Testimonials' },
+      { op: 'contains', value: 'attend', label: "Couldn't attend" },
+      { op: 'contains', value: 'call', label: 'Request a callback' },
     ],
-  }, { case_0: 'tag_closed', case_1: 'pay_link', case_2: 'pay_link', default: 'faq' });
+  }, { case_0: 'tag_closed', case_1: 'pay_link', case_2: 'pay_link', case_3: 'testimonials', case_4: 'set_reschedule', case_5: 'callback_on', default: 'faq' });
   add('faq', 'send_text', 'FAQ + handoff', { text: '{{ vars.faq_text }}\n\nMy team will also reach out to you personally.' }, { next: 'callback_on' });
   add('tag_closed', 'add_tag', 'Tag: manually_closed (LOST)', { tag_id: tag.manually_closed }, { next: 'closed_msg' });
   add('closed_msg', 'send_text', 'Confirm stop', { text: `Understood, ${NAME}. I won't send further messages. Wishing you the best!\n\n— Swapnil Gautam` }, { next: 'end' });
@@ -286,8 +292,10 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
       { op: 'starts_with', value: '2', label: '2 Callback' },
       { op: 'contains', value: 'call', label: 'Request Callback' },
       { op: 'contains', value: 'talk', label: 'Talk to team' },
+      // Another check-in button tapped right after "Want to see testimonials".
+      { op: 'contains', value: 'attend', label: "Couldn't attend" },
     ],
-  }, { case_0: 'pay_link', case_1: 'pay_link', case_2: 'callback_on', case_3: 'callback_on', case_4: 'callback_on', default: 't5_retry' });
+  }, { case_0: 'pay_link', case_1: 'pay_link', case_2: 'callback_on', case_3: 'callback_on', case_4: 'callback_on', case_5: 'set_reschedule', default: 't5_retry' });
   add('t5_retry', 'send_text', 'Ask for 1–2', { text: 'Please reply 1 to join Revibe or 2 to request a callback from my team. 🙏' }, { next: 'reply_t5' });
 
   // Attend again → next webinar link → reminder loop.
@@ -343,8 +351,10 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
       { op: 'starts_with', value: '1', label: '1 Join' },
       { op: 'contains', value: 'call', label: 'Request Callback' },
       { op: 'starts_with', value: '2', label: '2 Callback' },
+      { op: 'contains', value: 'testimon', label: 'Testimonials' },
+      { op: 'contains', value: 'attend', label: "Couldn't attend" },
     ],
-  }, { case_0: 'tag_closed', case_1: 'pay_link', case_2: 'pay_link', case_3: 'pay_link', case_4: 'callback_on', case_5: 'callback_on', default: 'faq' });
+  }, { case_0: 'tag_closed', case_1: 'pay_link', case_2: 'pay_link', case_3: 'pay_link', case_4: 'callback_on', case_5: 'callback_on', case_6: 'testimonials', case_7: 'set_reschedule', default: 'faq' });
   add('tag_lost', 'add_tag', 'Tag: closed_lost (15 days, no response)', { tag_id: tag.closed_lost }, { next: 'end' });
 
   add('end', 'end', 'End', {} as NodeConfigs['end']);
