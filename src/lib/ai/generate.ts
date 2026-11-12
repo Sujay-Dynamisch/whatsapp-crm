@@ -10,6 +10,7 @@ import { generateOpenAi } from './providers/openai'
 import { generateAnthropic } from './providers/anthropic'
 import { generateOpenAiCompatible } from './providers/openai-compatible'
 import { AI_PROVIDER_INFO, isAiProvider } from './providers/registry'
+import { toWhatsAppFormat } from './whatsapp-format'
 
 export interface GenerateArgs {
   config: AiConfig
@@ -85,7 +86,8 @@ export function parseGeneration(
     text = structured.reply
     handoff = handoff || structured.requiresHuman
   }
-  return { text, handoff, usage }
+  // Models write Markdown (**bold**); WhatsApp uses *bold*.
+  return { text: toWhatsAppFormat(text), handoff, usage }
 }
 
 function parseStructuredReply(
