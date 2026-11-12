@@ -234,7 +234,19 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems
+            {/* Until the account's features + the member's permissions are
+                known, show placeholders — not items that then vanish. */}
+            {profileLoading &&
+              Array.from({ length: 8 }, (_, i) => (
+                <li key={`sk-${i}`} aria-hidden className="flex h-9 items-center gap-3 rounded-md px-3">
+                  <span className="size-4 shrink-0 animate-pulse rounded bg-muted" />
+                  <span
+                    className="h-3 animate-pulse rounded bg-muted"
+                    style={{ width: `${[64, 48, 72, 56, 60, 44, 68, 52][i]}%` }}
+                  />
+                </li>
+              ))}
+            {!profileLoading && navItems
               .filter((item) => !item.feature || hasFeature(item.feature))
               // Custom roles (062): areas the role can't see are hidden.
               .filter((item) => {
