@@ -149,7 +149,10 @@ export interface NodeConfigs {
   /** `until`: optional expression → date/time to resume at; amount/unit is the fallback. */
   wait: { amount: number; unit: DurationUnit; until?: string };
   /** `until` as for wait: the reply timeout becomes that date/time (amount/unit is the fallback). */
-  wait_for_reply: { amount: number; unit: DurationUnit; until?: string };
+  /** late_taps: a menu button tapped after the run moved on (busy with an
+   *  earlier tap, parked on a timer, or finished) resumes the run here, as
+   *  if the tap answered this step — so every tap gets the journey's reply. */
+  wait_for_reply: { amount: number; unit: DurationUnit; until?: string; late_taps?: boolean };
   condition: {
     kind: ConditionKind;
     /** kind 'replied': count replies since the last wait started (default) or since the run started. */

@@ -19,6 +19,7 @@ import { sendJourneyFallbacks } from './messages';
 import {
   enrollContact,
   ensureConversation,
+  resumeLateMenuTap,
   resumeOnReply,
   startContext,
   type JourneyDeps,
@@ -303,6 +304,25 @@ export async function dispatchJourneyInbound(
     handled =
       (await resumeOnReply(db, args.accountId, args.contactId, deps, { text, button: args.buttonText ?? null }, fellBack)) > 0 ||
       handled;
+    // A button tapped right after another (e.g. two check-in buttons back
+    // to back): the run is still busy with the first tap. Wait for it to
+    // park, then hand it this tap; if it has moved past the menu, resume
+    // it at the menu so this tap gets the journey's reply too.
+    if (!handled && args.buttonText) {
+      for (let i = 0; i < 16; i++) {
+        const { count: busy } = await db
+          .from('journey_enrollments')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', args.accountId)
+          .eq('contact_id', args.contactId)
+          .eq('status', 'active');
+        if (!busy) break;
+        await new Promise((r) => setTimeout(r, 750));
+      }
+      const tap = { text, button: args.buttonText };
+      handled = (await resumeOnReply(db, args.accountId, args.contactId, deps, tap, fellBack)) > 0;
+      if (!handled) handled = (await resumeLateMenuTap(db, args.accountId, args.contactId, deps, tap)) > 0;
+    }
     // A lost lead writing back: tell the team and restart the menu (no live run took the message).
     if (!handled) {
       const { reviveLostLead } = await import('./revive');
