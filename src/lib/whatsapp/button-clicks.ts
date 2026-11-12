@@ -128,6 +128,44 @@ async function attribute(
   return none;
 }
 
+const CALLBACK_BUTTON_RE = /call[\s_-]*back|call\s*me/i;
+
+/**
+ * A tap on a "callback" button (any template/broadcast/journey) tags the
+ * contact `callback_requested`, which opens a Callback request via the DB
+ * trigger (migration 073). Never throws.
+ */
+export async function requestCallbackFromTap(
+  db: SupabaseClient,
+  args: { accountId: string; contactId: string; message: InboundForClick }
+): Promise<boolean> {
+  const tap = extractButtonTap(args.message);
+  if (!tap || !CALLBACK_BUTTON_RE.test(`${tap.text ?? ''} ${tap.payload ?? ''}`)) return false;
+  try {
+    const { data: tag } = await db
+      .from('tags')
+      .select('id')
+      .eq('account_id', args.accountId)
+      .ilike('name', 'callback_requested')
+      .limit(1)
+      .maybeSingle();
+    if (!tag) return false;
+    // Tag left behind on a closed request (no open one) → drop it so the
+    // re-insert fires the trigger and opens a fresh request.
+    const { count: open } = await db
+      .from('callback_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('contact_id', args.contactId)
+      .neq('status', 'done');
+    if (!open) await db.from('contact_tags').delete().eq('contact_id', args.contactId).eq('tag_id', tag.id);
+    const { addContactTagIfAbsent } = await import('@/lib/contacts/tag-write');
+    return await addContactTagIfAbsent(db, { accountId: args.accountId, contactId: args.contactId, tagId: tag.id as string });
+  } catch (err) {
+    console.error('[button-clicks] callback request failed:', err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
 export async function recordButtonClick(
   db: SupabaseClient,
   args: {
