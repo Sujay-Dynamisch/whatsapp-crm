@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { getNotificationPermission, readBrowserNotifyPref } from "@/lib/notifications/browser-notify";
+import { playAlertSound } from "@/lib/notifications/sound";
 
 export function LeadAlertsListener() {
   const { user } = useAuth();
@@ -38,13 +39,21 @@ export function LeadAlertsListener() {
           duration: 20_000,
           action: { label: tRef.current("openChat"), onClick: open },
         });
+        // One sound per alert: desktop notification (OS sound) or the in-app chime.
+        let desktopShown = false;
         if (readBrowserNotifyPref() && getNotificationPermission() === "granted" && document.visibilityState !== "visible") {
-          const d = new window.Notification(n.title ?? "", { body: n.body ?? undefined, tag: `lead-returned-${n.conversation_id ?? ""}` });
-          d.onclick = () => {
-            window.focus();
-            open();
-          };
+          try {
+            const d = new window.Notification(n.title ?? "", { body: n.body ?? undefined, tag: `lead-returned-${n.conversation_id ?? ""}` });
+            d.onclick = () => {
+              window.focus();
+              open();
+            };
+            desktopShown = true;
+          } catch {
+            // needs a service worker on some browsers
+          }
         }
+        if (!desktopShown) playAlertSound({ urgent: true });
       })
       .subscribe();
     return () => {

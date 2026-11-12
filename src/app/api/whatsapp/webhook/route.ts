@@ -23,6 +23,7 @@ import { resumeAwaitingReply, runAutomationsForTrigger } from '@/lib/automations
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { recordButtonClick, requestCallbackFromTap } from '@/lib/whatsapp/button-clicks'
+import { detectCallbackIntent } from '@/lib/callbacks/intent'
 import { refreshQuality } from '@/lib/smart-sending/quality'
 import { startInboundLanguage } from '@/lib/language/inbound'
 import { dispatchJourneyInbound } from '@/lib/journeys/dispatch'
@@ -1057,6 +1058,21 @@ async function processMessage(
     }).catch((err) => console.error('[automations] dispatch failed:', err))
   }
   timings.automations = Date.now() - automationsStarted
+
+  // Typed callback requests (caller management, 087): only customer-typed
+  // text; a keyword pre-check keeps the AI call off ordinary messages.
+  // Gated per account, idempotent by message id, never throws.
+  if (message.type === 'text' && inboundText.trim()) {
+    await timed('callback_intent', () =>
+      detectCallbackIntent(supabaseAdmin(), {
+        accountId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        waMessageId: message.id,
+        text: inboundText,
+      })
+    )
+  }
 
   // AI auto-reply. Runs for text / interactive button replies that the
   // deterministic flow runner or a journey did NOT consume (flows and

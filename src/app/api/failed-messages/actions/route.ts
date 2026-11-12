@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { isScopedCaller, visibleContactIds } from '@/lib/callers/scope';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { actOnFailed, type FailedAction } from '@/lib/failed-messages/service';
 import { liveJourneyDeps } from '@/lib/journeys/dispatch';
@@ -19,7 +20,7 @@ const KEY_RE = /^(journey|inbox):[0-9a-f-]{36}$/i;
 
 export async function POST(request: Request) {
   try {
-    const { accountId, userId } = await requireRole('agent');
+    const { supabase, accountId, userId } = await requireRole('agent');
     const body = (await request.json().catch(() => ({}))) as { keys?: unknown; action?: unknown; at?: unknown; text?: unknown };
     const keys = Array.isArray(body.keys) ? body.keys.filter((k): k is string => typeof k === 'string' && KEY_RE.test(k)) : [];
     if (!keys.length) return NextResponse.json({ error: 'Choose at least one message' }, { status: 400 });
@@ -28,6 +29,29 @@ export async function POST(request: Request) {
     if (!action) return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     if (action === 'send_text' && (typeof body.text !== 'string' || !body.text.trim())) {
       return NextResponse.json({ error: 'Write the message to send' }, { status: 400 });
+    }
+    // Scoped caller (086): only messages to their own customers.
+    if (await isScopedCaller(supabase)) {
+      const admin = supabaseAdmin();
+      const ids = (prefix: string) => keys.filter((k) => k.startsWith(`${prefix}:`)).map((k) => k.slice(prefix.length + 1));
+      const [{ data: jm }, { data: im }] = await Promise.all([
+        ids('journey').length
+          ? admin.from('journey_messages').select('id, contact_id').eq('account_id', accountId).in('id', ids('journey'))
+          : Promise.resolve({ data: [] as { id: string; contact_id: string }[] }),
+        ids('inbox').length
+          ? admin.from('messages').select('id, conversations!inner(contact_id, account_id)').eq('conversations.account_id', accountId).in('id', ids('inbox'))
+          : Promise.resolve({ data: [] as { id: string; conversations: unknown }[] }),
+      ]);
+      const owner = new Map<string, string | null>();
+      for (const r of jm ?? []) owner.set(`journey:${r.id}`, (r.contact_id as string) ?? null);
+      for (const r of (im ?? []) as { id: string; conversations: { contact_id?: string } | { contact_id?: string }[] | null }[]) {
+        const c = Array.isArray(r.conversations) ? r.conversations[0] : r.conversations;
+        owner.set(`inbox:${r.id}`, c?.contact_id ?? null);
+      }
+      const mine = await visibleContactIds(supabase, [...owner.values()]);
+      if (keys.some((k) => !mine.has(owner.get(k) ?? ''))) {
+        return NextResponse.json({ error: 'You can only act on messages to your own leads' }, { status: 403 });
+      }
     }
     const results = await actOnFailed(
       supabaseAdmin(),

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { LogOut, Menu, PhoneCall, Settings as SettingsIcon, User } from "lucide-react";
+import { useOpenCallbacks } from "@/hooks/use-open-callbacks";
 import {
   Avatar,
   AvatarFallback,
@@ -51,8 +52,12 @@ import { useTranslations } from "next-intl";
 export function Header({ onOpenSidebar }: HeaderProps) {
   const t = useTranslations("Header");
   const pathname = usePathname();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, hasFeature, can } = useAuth();
   const titleKey = getPageTitleKey(pathname);
+  // Caller management (086): customer-requested callbacks waiting —
+  // the caller's own (RLS), or the whole account for owners/admins.
+  const showPriority = hasFeature("caller_management") && hasFeature("callbacks") && can("callbacks");
+  const priority = useOpenCallbacks(showPriority, { priorityOnly: true });
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??
@@ -74,6 +79,24 @@ export function Header({ onOpenSidebar }: HeaderProps) {
         <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
           {t(titleKey as string)}
         </h1>
+        {showPriority && (
+          <Link
+            href="/callbacks"
+            title="Customers who asked for a call"
+            className={
+              priority > 0
+                ? "ml-2 flex shrink-0 items-center gap-1.5 rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-amber-500/90"
+                : "ml-2 hidden shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted sm:flex"
+            }
+          >
+            <span className="relative flex size-2">
+              {priority > 0 && <span className="absolute inline-flex size-full animate-ping rounded-full bg-white/80" />}
+              <span className={priority > 0 ? "relative inline-flex size-2 rounded-full bg-white" : "relative inline-flex size-2 rounded-full bg-emerald-500"} />
+            </span>
+            <PhoneCall className="size-3.5" />
+            {priority > 0 ? `${priority} priority callback${priority === 1 ? "" : "s"}` : "No priority callbacks"}
+          </Link>
+        )}
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">

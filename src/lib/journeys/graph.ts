@@ -179,7 +179,9 @@ export interface NodeConfigs {
   code: { code: string };
   /** `retry_until`: optional expression → last moment an undelivered template may be retried / re-sent as text (default 24 h). */
   send_template: { template_name: string; language?: string; params?: string[]; retry_until?: string };
-  send_text: { text: string };
+  /** on_request: sent because the customer asked (e.g. "Join") — never
+   *  blocked by the once-per-engagement payment-link rule (087). */
+  send_text: { text: string; on_request?: boolean };
   send_media: { media_type: 'image' | 'video' | 'document'; url: string; caption?: string; filename?: string };
   send_buttons: { text: string; header?: string; footer?: string; buttons: { title: string }[] };
   add_tag: { tag_id: string };

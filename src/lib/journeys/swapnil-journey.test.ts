@@ -255,12 +255,14 @@ async function reply(text: string, when?: string, contactId = 'c1') {
 
 const run = (contactId = 'c1') =>
   tables.journey_enrollments.filter((e) => e.contact_id === contactId).at(-1) as Row & { status: string; current_node_id: string };
-/** "Mon 02 14:00 sg_webinar_reminder" lines. */
+/** "Mon 02 14:00 sg_webinar_session_reminder" lines. */
 const log = (from = 0) => sent.slice(from).map((s) => `${label(s.at)} ${s.kind === 'text' ? `text:${s.text!.split('\n')[0]}` : s.name}`);
 const templates = (name: string) => sent.filter((s) => s.name === name);
 
 beforeEach(() => {
   features.off.clear();
+  // Legacy callback behaviour; caller management (086/087) has its own tests.
+  features.off.add('caller_management');
   seq = 0;
   sent = [];
   metaRule = () => null;
@@ -303,15 +305,15 @@ describe('graph', () => {
     expect(g.nodes.length).toBeLessThanOrEqual(100);
     // {{n}} count per template in SG_WhatsApp_Templates.pdf.
     const expected: Record<string, number> = {
-      sg_webinar_confirmation: 4,
-      sg_webinar_reminder: 5,
+      sg_registration_confirmed: 4,
+      sg_webinar_session_reminder: 5,
       sg_post_webinar_checkin: 1,
-      sg_webinar_reinvite: 4,
+      sg_webinar_session_rebooked: 4,
+      // Also the Stage D (Testimonial Nurture) template since 087.
       sg_testimonial_reprompt: 1,
       sg_nurture_prewebinar: 4,
       sg_nurture_postwebinar: 1,
       sg_nurture_coldlead: 1,
-      sg_nurture_payment: 2,
       // Not in the PDF: the "we tried calling you" follow-up (migration 059).
       sg_callback_missed: 1,
     };
@@ -342,9 +344,9 @@ describe('registration schedule (cutoffs: weekdays 2 PM, weekends 10 AM)', () =>
 
   it('weekday before 2 PM → same-day 8 PM webinar; Msg 1 at once, Msg 2 2 PM, Msg 3 7 PM, check-in 7 AM', async () => {
     expect(await firstFour('2026-11-02 10:00', '2026-11-03 08:00')).toEqual([
-      'Mon 02 10:00 sg_webinar_confirmation',
-      'Mon 02 14:00 sg_webinar_reminder',
-      'Mon 02 19:00 sg_webinar_reminder',
+      'Mon 02 10:00 sg_registration_confirmed',
+      'Mon 02 14:00 sg_webinar_session_reminder',
+      'Mon 02 19:00 sg_webinar_session_reminder',
       'Tue 03 07:00 sg_post_webinar_checkin',
     ]);
     const [msg1, msg2, msg3] = sent;
@@ -355,18 +357,18 @@ describe('registration schedule (cutoffs: weekdays 2 PM, weekends 10 AM)', () =>
 
   it('registers at 12 AM → Msg 1 goes out at 12 AM (not held for daytime)', async () => {
     expect(await firstFour('2026-11-03 00:00', '2026-11-04 08:00')).toEqual([
-      'Tue 03 00:00 sg_webinar_confirmation',
-      'Tue 03 14:00 sg_webinar_reminder',
-      'Tue 03 19:00 sg_webinar_reminder',
+      'Tue 03 00:00 sg_registration_confirmed',
+      'Tue 03 14:00 sg_webinar_session_reminder',
+      'Tue 03 19:00 sg_webinar_session_reminder',
       'Wed 04 07:00 sg_post_webinar_checkin',
     ]);
   });
 
   it('weekday after 2 PM → next day’s 8 PM webinar', async () => {
     expect(await firstFour('2026-11-03 15:30', '2026-11-05 08:00')).toEqual([
-      'Tue 03 15:30 sg_webinar_confirmation',
-      'Wed 04 14:00 sg_webinar_reminder',
-      'Wed 04 19:00 sg_webinar_reminder',
+      'Tue 03 15:30 sg_registration_confirmed',
+      'Wed 04 14:00 sg_webinar_session_reminder',
+      'Wed 04 19:00 sg_webinar_session_reminder',
       'Thu 05 07:00 sg_post_webinar_checkin',
     ]);
     expect(sent[0].params?.[1]).toBe('Wed, 4 Nov 2026');
@@ -374,9 +376,9 @@ describe('registration schedule (cutoffs: weekdays 2 PM, weekends 10 AM)', () =>
 
   it('Friday after 2 PM → Saturday’s 3 PM webinar with weekend timings', async () => {
     expect(await firstFour('2026-11-06 16:00', '2026-11-08 08:00')).toEqual([
-      'Fri 06 16:00 sg_webinar_confirmation',
-      'Sat 07 11:00 sg_webinar_reminder',
-      'Sat 07 14:00 sg_webinar_reminder',
+      'Fri 06 16:00 sg_registration_confirmed',
+      'Sat 07 11:00 sg_webinar_session_reminder',
+      'Sat 07 14:00 sg_webinar_session_reminder',
       'Sun 08 07:00 sg_post_webinar_checkin',
     ]);
     expect(sent[0].params?.slice(1, 3)).toEqual(['Sat, 7 Nov 2026', '3:00 PM IST']);
@@ -385,18 +387,18 @@ describe('registration schedule (cutoffs: weekdays 2 PM, weekends 10 AM)', () =>
 
   it('weekend before 10 AM → same-day 3 PM webinar', async () => {
     expect(await firstFour('2026-11-07 09:00', '2026-11-08 08:00')).toEqual([
-      'Sat 07 09:00 sg_webinar_confirmation',
-      'Sat 07 11:00 sg_webinar_reminder',
-      'Sat 07 14:00 sg_webinar_reminder',
+      'Sat 07 09:00 sg_registration_confirmed',
+      'Sat 07 11:00 sg_webinar_session_reminder',
+      'Sat 07 14:00 sg_webinar_session_reminder',
       'Sun 08 07:00 sg_post_webinar_checkin',
     ]);
   });
 
   it('Sunday after 10 AM → Monday’s 8 PM webinar with weekday timings', async () => {
     expect(await firstFour('2026-11-08 12:00', '2026-11-10 08:00')).toEqual([
-      'Sun 08 12:00 sg_webinar_confirmation',
-      'Mon 09 14:00 sg_webinar_reminder',
-      'Mon 09 19:00 sg_webinar_reminder',
+      'Sun 08 12:00 sg_registration_confirmed',
+      'Mon 09 14:00 sg_webinar_session_reminder',
+      'Mon 09 19:00 sg_webinar_session_reminder',
       'Tue 10 07:00 sg_post_webinar_checkin',
     ]);
     expect(sent[0].params?.slice(1, 3)).toEqual(['Mon, 9 Nov 2026', '8:00 PM IST']);
@@ -418,18 +420,18 @@ describe('no response → re-invite → Stage A/B/C at 11 AM every 2nd day → C
     await register('2026-11-02 10:00');
     await runUntil('2026-11-25 00:00');
     expect(log()).toEqual([
-      'Mon 02 10:00 sg_webinar_confirmation',
-      'Mon 02 14:00 sg_webinar_reminder',
-      'Mon 02 19:00 sg_webinar_reminder',
+      'Mon 02 10:00 sg_registration_confirmed',
+      'Mon 02 14:00 sg_webinar_session_reminder',
+      'Mon 02 19:00 sg_webinar_session_reminder',
       'Tue 03 07:00 sg_post_webinar_checkin',
       // No reply in 24h → next webinar link, reminders, check-in again.
-      'Wed 04 07:00 sg_webinar_reinvite',
-      'Wed 04 14:00 sg_webinar_reminder',
-      'Wed 04 19:00 sg_webinar_reminder',
+      'Wed 04 07:00 sg_webinar_session_rebooked',
+      'Wed 04 14:00 sg_webinar_session_reminder',
+      'Wed 04 19:00 sg_webinar_session_reminder',
       'Thu 05 07:00 sg_post_webinar_checkin',
       ...NURTURE_DATES_FROM_FRI_06.map((d) => `${d} 11:00 sg_nurture_prewebinar`),
     ]);
-    expect(templates('sg_webinar_reinvite')[0].params?.[1]).toBe('Wed, 4 Nov 2026');
+    expect(templates('sg_webinar_session_rebooked')[0].params?.[1]).toBe('Wed, 4 Nov 2026');
     // Stage A re-invites to the next upcoming webinar (11 AM weekday → that night).
     expect(templates('sg_nurture_prewebinar')[0].params).toEqual(['Asha', 'Fri, 6 Nov 2026', '8:00 PM IST', LINKS.webinar]);
     expect(templates('sg_nurture_prewebinar')[1].params?.slice(1, 3)).toEqual(['Mon, 9 Nov 2026', '8:00 PM IST']); // Sun 11 AM → Mon
@@ -455,18 +457,18 @@ describe('no response → re-invite → Stage A/B/C at 11 AM every 2nd day → C
   it('chose 3 (attend again), then went quiet → next session, then Stage C (sg_nurture_coldlead)', async () => {
     await register('2026-11-02 10:00');
     await reply('3', '2026-11-03 09:00');
-    expect(log().at(-1)).toBe('Tue 03 09:00 sg_webinar_reinvite');
-    expect(templates('sg_webinar_reinvite')[0].params?.slice(1, 3)).toEqual(['Tue, 3 Nov 2026', '8:00 PM IST']);
+    expect(log().at(-1)).toBe('Tue 03 09:00 sg_webinar_session_rebooked');
+    expect(templates('sg_webinar_session_rebooked')[0].params?.slice(1, 3)).toEqual(['Tue, 3 Nov 2026', '8:00 PM IST']);
     await runUntil('2026-11-30 00:00');
     expect(log(4)).toEqual([
-      'Tue 03 09:00 sg_webinar_reinvite',
-      'Tue 03 14:00 sg_webinar_reminder',
-      'Tue 03 19:00 sg_webinar_reminder',
+      'Tue 03 09:00 sg_webinar_session_rebooked',
+      'Tue 03 14:00 sg_webinar_session_reminder',
+      'Tue 03 19:00 sg_webinar_session_reminder',
       'Wed 04 07:00 sg_post_webinar_checkin',
       // No answer → the automatic re-invite (once), then nurture.
-      'Thu 05 07:00 sg_webinar_reinvite',
-      'Thu 05 14:00 sg_webinar_reminder',
-      'Thu 05 19:00 sg_webinar_reminder',
+      'Thu 05 07:00 sg_webinar_session_rebooked',
+      'Thu 05 14:00 sg_webinar_session_reminder',
+      'Thu 05 19:00 sg_webinar_session_reminder',
       'Fri 06 07:00 sg_post_webinar_checkin',
       ...['Sat 07', 'Mon 09', 'Wed 11', 'Fri 13', 'Sun 15', 'Tue 17', 'Thu 19', 'Sat 21'].map((d) => `${d} 11:00 sg_nurture_coldlead`),
     ]);
@@ -476,7 +478,7 @@ describe('no response → re-invite → Stage A/B/C at 11 AM every 2nd day → C
   it('“Couldn’t attend” button works like 3', async () => {
     await register('2026-11-02 10:00');
     await reply('Couldn’t attend', '2026-11-03 09:00');
-    expect(log().at(-1)).toBe('Tue 03 09:00 sg_webinar_reinvite');
+    expect(log().at(-1)).toBe('Tue 03 09:00 sg_webinar_session_rebooked');
   });
 
   it('unrecognised answer → asked for 1–4; still quiet → Stage C', async () => {
@@ -557,9 +559,9 @@ describe('payment link → nudges → Stage D', () => {
     expect(log(5)).toEqual([
       'Wed 04 09:00 text:Hi Asha, just checking in 😊 Your spot in Revibe is still open.',
       'Wed 04 14:59 text:Hi Asha, your payment link is still active:',
-      ...D_DATES.map((d) => `${d} 11:00 sg_nurture_payment`),
+      ...D_DATES.map((d) => `${d} 11:00 sg_testimonial_reprompt`),
     ]);
-    expect(templates('sg_nurture_payment')[0].params).toEqual(['Asha', LINKS.pay]);
+    expect(templates('sg_testimonial_reprompt')[0].params).toEqual(['Asha']); // no link in the nurture
     expect(hasTag('closed_lost')).toBe(true);
   });
 
@@ -570,7 +572,7 @@ describe('payment link → nudges → Stage D', () => {
     expect(log(4)).toEqual([
       'Wed 04 03:00 text:Great decision, Asha! 🎉',
       'Wed 04 09:00 text:Hi Asha, just checking in 😊 Your spot in Revibe is still open.',
-      'Thu 05 11:00 sg_nurture_payment',
+      'Thu 05 11:00 sg_testimonial_reprompt',
     ]);
     expect(run().status).toBe('waiting');
   });
@@ -582,7 +584,7 @@ describe('payment link → nudges → Stage D', () => {
     expect(log(5)).toEqual([
       'Tue 03 16:00 text:Hi Asha, just checking in 😊 Your spot in Revibe is still open.',
       'Wed 04 09:00 text:Hi Asha, your payment link is still active:',
-      'Wed 04 11:00 sg_nurture_payment',
+      'Wed 04 11:00 sg_testimonial_reprompt',
     ]);
   });
 
@@ -608,7 +610,7 @@ describe('payment link → nudges → Stage D', () => {
         expect(s.at.getTime() - linkAt, label(s.at)).toBeLessThan(24 * H);
       }
       expect(run().status).toBe('waiting'); // never failed; parked in Stage D
-      expect(templates('sg_nurture_payment').length).toBeGreaterThanOrEqual(1);
+      expect(templates('sg_testimonial_reprompt').length).toBeGreaterThanOrEqual(1);
     }
   }, 120_000);
 
@@ -619,7 +621,7 @@ describe('payment link → nudges → Stage D', () => {
     tables.conversations[0].last_customer_message_at = new Date(clock.getTime() - 23 * H).toISOString();
     await runUntil('2026-11-05 00:00');
     expect(sent.filter((s) => s.kind === 'text' && /checking in|still active/.test(s.text!))).toHaveLength(0);
-    expect(log().at(-1)).toBe('Wed 04 11:00 sg_nurture_payment');
+    expect(log().at(-1)).toBe('Wed 04 11:00 sg_testimonial_reprompt');
     expect(run().status).toBe('waiting');
   });
 
@@ -643,6 +645,16 @@ describe('payment link → nudges → Stage D', () => {
     const count = sent.length;
     await runUntil('2026-11-30 00:00');
     expect(sent.length).toBe(count);
+  });
+
+  it('Stage D testimonial “Ready to Join” → link; “Request Callback” → priority callback', async () => {
+    await register('2026-11-02 10:00');
+    await reply('1', '2026-11-03 10:00');
+    await runUntil('2026-11-04 12:00');
+    expect(log().at(-1)).toBe('Wed 04 11:00 sg_testimonial_reprompt');
+    await reply('Ready to Join', '2026-11-04 12:00');
+    expect(sent.at(-1)!.text).toContain('Great decision');
+    expect(sent.at(-1)!.text).toContain(LINKS.pay);
   });
 
   it('payment received (paid tag) during Stage D → run stops, no more messages (CLOSED-WON)', async () => {
@@ -675,7 +687,7 @@ describe('STOP / kill switch', () => {
     await register('2026-11-02 10:00');
     await reply('stop', '2026-11-02 11:00');
     await runUntil('2026-11-30 00:00');
-    expect(log()).toEqual(['Mon 02 10:00 sg_webinar_confirmation']);
+    expect(log()).toEqual(['Mon 02 10:00 sg_registration_confirmed']);
     expect(run().status).toBe('exited');
   });
 
@@ -754,7 +766,7 @@ describe('Meta delivery failures never stop the nurture', () => {
   });
 
   it('Meta refusing the check-in or reminders does not stop the run either', async () => {
-    metaRule = (name) => (name === 'sg_webinar_reminder' || name === 'sg_post_webinar_checkin' ? metaError(131026) : null);
+    metaRule = (name) => (name === 'sg_webinar_session_reminder' || name === 'sg_post_webinar_checkin' ? metaError(131026) : null);
     await register('2026-11-02 10:00');
     await runUntil('2026-11-25 00:00');
     expect(templates('sg_nurture_prewebinar')).toHaveLength(8);
@@ -785,7 +797,7 @@ describe('runs from before this version', () => {
     });
     expect(label(new Date(String(tables.journey_enrollments[0].next_run_at)))).toBe('Wed 11 11:00');
     await runUntil('2026-11-30 00:00');
-    expect(log()).toEqual(['Wed 11', 'Fri 13', 'Sun 15', 'Tue 17', 'Thu 19'].map((d) => `${d} 11:00 sg_nurture_payment`));
+    expect(log()).toEqual(['Wed 11', 'Fri 13', 'Sun 15', 'Tue 17', 'Thu 19'].map((d) => `${d} 11:00 sg_testimonial_reprompt`));
     expect(hasTag('closed_lost')).toBe(true);
     expect(run().status).toBe('completed');
   });
@@ -807,7 +819,7 @@ describe('runs from before this version', () => {
     expect(log()).toEqual([
       'Tue 10 16:00 text:Hi Asha, just checking in 😊 Your spot in Revibe is still open.',
       'Wed 11 09:00 text:Hi Asha, your payment link is still active:', // not 4 AM
-      'Wed 11 11:00 sg_nurture_payment',
+      'Wed 11 11:00 sg_testimonial_reprompt',
     ]);
     expect(run().status).toBe('waiting');
   });
@@ -819,7 +831,7 @@ describe('runs from before this version', () => {
     expect(log()).toEqual([
       'Wed 11 09:00 text:Hi Asha, just checking in 😊 Your spot in Revibe is still open.',
       'Wed 11 16:00 text:Hi Asha, your payment link is still active:',
-      'Thu 12 11:00 sg_nurture_payment',
+      'Thu 12 11:00 sg_testimonial_reprompt',
     ]);
   });
 
@@ -831,7 +843,7 @@ describe('runs from before this version', () => {
     await runUntil('2026-11-12 12:00');
     expect(log()).toEqual([
       'Wed 11 09:00 text:Hi Asha, your payment link is still active:',
-      'Thu 12 11:00 sg_nurture_payment',
+      'Thu 12 11:00 sg_testimonial_reprompt',
     ]);
   });
 
@@ -868,7 +880,7 @@ describe('registering again', () => {
     expect(run().status).toBe('completed');
     clock = ist('2026-11-26 09:30');
     expect(await again('reg-2', '2026-11-26 09:29')).toBe(1);
-    expect(log().at(-1)).toBe('Thu 26 09:30 sg_webinar_confirmation');
+    expect(log().at(-1)).toBe('Thu 26 09:30 sg_registration_confirmed');
     expect(sent.at(-1)!.params?.slice(1, 3)).toEqual(['Thu, 26 Nov 2026', '8:00 PM IST']);
     expect(run()).toMatchObject({ status: 'waiting', current_node_id: 'wait_msg2' });
     // Re-read by the next sync (it looks back 60 minutes) → not restarted again.
@@ -884,7 +896,7 @@ describe('registering again', () => {
     const [old, fresh] = tables.journey_enrollments;
     expect(old).toMatchObject({ status: 'exited', last_error: 'Registered again — restarted' });
     expect(fresh).toMatchObject({ status: 'waiting' });
-    expect(log().at(-1)).toBe('Sat 07 12:00 sg_webinar_confirmation');
+    expect(log().at(-1)).toBe('Sat 07 12:00 sg_registration_confirmed');
     expect(sent.at(-1)!.params?.slice(1, 3)).toEqual(['Sun, 8 Nov 2026', '3:00 PM IST']); // Sat after 10 AM → Sun 3 PM
   });
 
@@ -913,7 +925,7 @@ describe('registering again', () => {
   it('an existing contact who never ran the journey (e.g. messaged on WhatsApp first) gets it on registering', async () => {
     clock = ist('2026-11-03 09:00');
     expect(await again('reg-x', '2026-11-03 08:59')).toBe(1);
-    expect(log()).toEqual(['Tue 03 09:00 sg_webinar_confirmation']);
+    expect(log()).toEqual(['Tue 03 09:00 sg_registration_confirmed']);
   });
 });
 

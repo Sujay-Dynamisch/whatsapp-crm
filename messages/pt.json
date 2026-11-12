@@ -47,6 +47,7 @@
     "buttonClicks": "Cliques em botões",
     "callbacks": "Retornos de ligação",
     "payments": "Pagamentos",
+    "callers": "Atendentes",
     "openCallbacks": "{count} pedidos de ligação aguardando",
     "journeys": "Jornadas"
   },
@@ -55,6 +56,7 @@
     "dashboard": "Painel",
     "callbacks": "Retornos de ligação",
     "payments": "Pagamentos",
+    "callers": "Atendentes",
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
     "contacts": "Contatos",
@@ -2097,6 +2099,7 @@
       "api": "Chaves de API",
       "delivery": "Envio inteligente",
       "language": "Idiomas",
+      "callbacks": "Lembretes de retorno",
       "inbox": "Caixa de entrada"
     },
     "groups": {
@@ -3540,6 +3543,10 @@
       "callbacks": {
         "label": "Retornos",
         "desc": "Solicitações de retorno"
+      },
+      "callers": {
+        "label": "Atendentes",
+        "desc": "Atendentes, distribuição e reatribuição de leads"
       },
       "payments": {
         "label": "Pagamentos",

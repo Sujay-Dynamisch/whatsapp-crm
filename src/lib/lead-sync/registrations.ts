@@ -22,6 +22,7 @@ import {
 } from '@/lib/api/v1/contacts';
 import { dispatchJourneyTrigger, restartJourneysOnReregistration } from '@/lib/journeys/dispatch';
 import { leadFeedChanged } from '@/lib/health/health';
+import { accountHasFeature } from '@/lib/features-server';
 
 const LOOKBACK_MINUTES = 60;
 const PAGE_SIZE = 50;
@@ -44,6 +45,8 @@ export interface LeadSyncReport {
   /** Existing contacts who registered again and were restarted in their journey. */
   restarted: number;
   skipped: number;
+  /** Caller management: repeat registrations inside the 15-day window. */
+  suppressed?: number;
   errors: string[];
 }
 
@@ -136,6 +139,8 @@ async function syncSource(
   if (!regs.length) return report;
 
   const userId = await resolveAuditUserId(db, accountId);
+  // Caller management (086): 15-day rule + caller assignment per registration.
+  const managed = await accountHasFeature(db, accountId, 'caller_management').catch(() => false);
   let cityId: string | null | undefined;
 
   // Oldest first, so journeys start in registration order.
@@ -174,6 +179,25 @@ async function syncSource(
         name: r.fullName?.trim() || undefined,
         email: email && email.includes('@') ? email : undefined,
       });
+      if (managed) {
+        const { data: verdict, error: acceptErr } = await db.rpc('accept_registration', {
+          p_account_id: accountId,
+          p_contact_id: id,
+          p_registration_id: r._id,
+          p_registered_at: r.createdAt,
+          p_source: 'website',
+        });
+        if (acceptErr) throw new Error(acceptErr.message);
+        if (!(verdict as { accepted?: boolean } | null)?.accepted) {
+          // Inside the 15-day window (or already processed): no
+          // engagement, assignment, task or nurture restart.
+          if (!created) {
+            report.existing++;
+            if ((verdict as { reason?: string }).reason === 'within_15_days') report.suppressed = (report.suppressed ?? 0) + 1;
+            continue;
+          }
+        }
+      }
       if (!created) {
         report.existing++;
         // Registered again: restart their journey for the new webinar

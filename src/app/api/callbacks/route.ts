@@ -33,9 +33,11 @@ export async function GET(request: Request) {
     let q = supabase
       .from('callback_requests')
       .select(
-        `id, contact_id, conversation_id, status, source, note, requested_at, handled_at, handled_by, no_answer_count, contacts${search ? '!inner' : ''}(name, phone)`
+        `id, contact_id, conversation_id, status, source, note, requested_at, handled_at, handled_by, no_answer_count, priority, source_kind, assigned_caller_id, ai_meta, note_by, note_at, contacts${search ? '!inner' : ''}(name, phone)`
       )
       .eq('account_id', accountId)
+      // Priority (customer-requested, 086) first; 'high' < 'normal'.
+      .order('priority', { ascending: true })
       .order('requested_at', { ascending: false })
       .limit(300);
     if (status === 'open') q = q.neq('status', 'done');
@@ -81,10 +83,27 @@ export async function GET(request: Request) {
       .in('status', ['called', 'done'])
       .gte('handled_at', new Date(todayStart).toISOString());
 
+    // Caller names for assigned requests (caller management, 086).
+    const callerIds = [
+      ...new Set((data ?? []).flatMap((r) => [r.assigned_caller_id as string | null, r.note_by as string | null]).filter(Boolean)),
+    ] as string[];
+    const callerNames = new Map<string, string>();
+    if (callerIds.length) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, full_name').in('user_id', callerIds);
+      for (const p of profs ?? []) callerNames.set(p.user_id as string, (p.full_name as string) || '');
+    }
+
     return NextResponse.json({
       requests: (data ?? []).map((r) => {
         const c = (Array.isArray(r.contacts) ? r.contacts[0] : r.contacts) as { name?: string; phone?: string } | null;
-        return { ...r, contacts: undefined, contact_name: c?.name ?? null, contact_phone: c?.phone ?? null };
+        return {
+          ...r,
+          contacts: undefined,
+          contact_name: c?.name ?? null,
+          contact_phone: c?.phone ?? null,
+          caller_name: r.assigned_caller_id ? callerNames.get(r.assigned_caller_id as string) ?? null : null,
+          note_by_name: r.note_by ? callerNames.get(r.note_by as string) ?? null : null,
+        };
       }),
       stats: { open: open ?? 0, today, handled_today: handledToday ?? 0 },
       daily,

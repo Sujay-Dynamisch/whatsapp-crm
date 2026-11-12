@@ -175,17 +175,17 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
   add('schedule', 'code', 'Webinar schedule (IST)', { code: scheduleCode(false) }, { success: 'is_reinvite' });
   add('is_reinvite', 'condition', 'Re-invite?', isYes('{{ vars.reschedule }}'), { yes: 't4_reinvite', no: 't1_confirm' });
   add('t1_confirm', 'send_template', 'Msg 1 Confirmation + webinar link',
-    tpl('sg_webinar_confirmation', [NAME, S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'tag_registered' });
+    tpl('sg_registration_confirmed', [NAME, S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'tag_registered' });
   add('tag_registered', 'add_tag', 'Tag: webinar_registered', { tag_id: tag.webinar_registered }, { next: 'msg2_due' });
   add('t4_reinvite', 'send_template', 'Send next webinar link',
-    tpl('sg_webinar_reinvite', [NAME, S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'msg2_due' });
+    tpl('sg_webinar_session_rebooked', [NAME, S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'msg2_due' });
   add('msg2_due', 'condition', 'Msg 2 still ahead?', isYes(S('msg2_due')), { yes: 'wait_msg2', no: 'wait_msg3' });
   add('wait_msg2', 'wait', 'Wait until Msg 2 (2 PM / 11 AM)', { amount: 1, unit: 'hours', until: S('msg2_iso') }, { next: 't2_msg2' });
   add('t2_msg2', 'send_template', 'Msg 2 Reminder',
-    tpl('sg_webinar_reminder', [NAME, S('phrase'), S('date_text'), S('time_text'), LINK], S('msg3_iso')), { next: 'wait_msg3' });
+    tpl('sg_webinar_session_reminder', [NAME, S('phrase'), S('date_text'), S('time_text'), LINK], S('msg3_iso')), { next: 'wait_msg3' });
   add('wait_msg3', 'wait', 'Wait until Msg 3 (7 PM / 2 PM)', { amount: 1, unit: 'hours', until: S('msg3_iso') }, { next: 't2_msg3' });
   add('t2_msg3', 'send_template', 'Msg 3 Starting in 1 hour',
-    tpl('sg_webinar_reminder', [NAME, 'starting in 1 hour', S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'wait_checkin' });
+    tpl('sg_webinar_session_reminder', [NAME, 'starting in 1 hour', S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'wait_checkin' });
   add('wait_checkin', 'wait', 'Wait until 7 AM next day', { amount: 12, unit: 'hours', until: S('checkin_iso') }, { next: 't3_checkin' });
   add('t3_checkin', 'send_template', 'Post-webinar check-in (menu)', tpl('sg_post_webinar_checkin', [NAME]), { next: 'reply_menu' });
   add('reply_menu', 'wait_for_reply', 'Wait for menu reply', { amount: 24, unit: 'hours' }, { replied: 'mark_menu', timeout: 'auto_reinvited' });
@@ -233,8 +233,11 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
 
   // Payment link → up to 2 daytime nudges inside the 24-hour window →
   // Stage D nurture. Payment received = tag "paid" → the run stops (WON).
+  // Only reached when the customer chose to join → always sent (on_request),
+  // even after an earlier link for this engagement.
   add('pay_link', 'send_text', 'Send payment link', {
     text: `Great decision, ${NAME}! 🎉\n\nHere's your link to join Revibe:\n{{ vars.payment_link }}\n\nReply here if you have any questions.\n\n— Swapnil Gautam`,
+    on_request: true,
   }, { next: 'tag_paylink' });
   add('tag_paylink', 'add_tag', 'Tag: payment_link_sent', { tag_id: tag.payment_link_sent }, { next: 'pay_plan' });
   // A plan error falls back to the plain checks below (window guard still applies).
@@ -327,7 +330,21 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     [NAME, '{{ nodes.a_next.date_text }}', '{{ nodes.a_next.time_text }}', LINK], 'mark_menu', 'a_next');
   stage('b', 'post check-in cold', 'sg_nurture_postwebinar', [NAME], 'mark_menu');
   stage('c', 'conversion menu cold', 'sg_nurture_coldlead', [NAME], 'mark_menu');
-  stage('d', 'payment abandoned', 'sg_nurture_payment', [NAME, '{{ vars.payment_link }}'], 'pay_reply');
+  // Testimonial Nurture (was Payment Nurture): no link in the nurture
+  // itself — the template's buttons go through "Payment or callback", so
+  // the link is sent only when the customer taps Join.
+  stage('d', 'payment abandoned → testimonials', 'sg_testimonial_reprompt', [NAME], 'd_reply');
+  add('d_reply', 'switch', 'Stage D reply (testimonial buttons / payment)', {
+    value: lc,
+    cases: [
+      { op: 'contains', value: 'not proceed', label: 'Not proceeding' },
+      { op: 'contains', value: 'join', label: 'Ready to Join' },
+      { op: 'contains', value: 'complete payment', label: 'Complete payment' },
+      { op: 'starts_with', value: '1', label: '1 Join' },
+      { op: 'contains', value: 'call', label: 'Request Callback' },
+      { op: 'starts_with', value: '2', label: '2 Callback' },
+    ],
+  }, { case_0: 'tag_closed', case_1: 'pay_link', case_2: 'pay_link', case_3: 'pay_link', case_4: 'callback_on', case_5: 'callback_on', default: 'faq' });
   add('tag_lost', 'add_tag', 'Tag: closed_lost (15 days, no response)', { tag_id: tag.closed_lost }, { next: 'end' });
 
   add('end', 'end', 'End', {} as NodeConfigs['end']);

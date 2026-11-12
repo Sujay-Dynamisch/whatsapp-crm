@@ -27,6 +27,7 @@ import { KpiRow } from '@/components/dashboard/kpi-row'
 import { MessageVolumeCard } from '@/components/dashboard/message-volume-card'
 import { OverviewHeader } from '@/components/dashboard/overview-header'
 import { PipelineCard } from '@/components/dashboard/pipeline-card'
+import { CallerDashboard } from '@/components/dashboard/caller-dashboard'
 import { ReplyQueueCard } from '@/components/dashboard/reply-queue-card'
 import { SetupChecklist } from '@/components/dashboard/setup-checklist'
 import { TeamCard } from '@/components/dashboard/team-card'
@@ -37,9 +38,35 @@ const REALTIME_DEBOUNCE_MS = 2_000
 export default function DashboardPage() {
   return (
     <Suspense fallback={null}>
-      <DashboardPageInner />
+      <DashboardSwitch />
     </Suspense>
   )
+}
+
+/**
+ * Callers (caller management, 086) get their own dashboard — their leads,
+ * calls and chats only. Everyone else keeps the account overview, which
+ * never loads for a caller.
+ */
+function DashboardSwitch() {
+  const { user, profile, hasFeature } = useAuth()
+  const managed = hasFeature('caller_management')
+  const [scoped, setScoped] = useState<boolean | null>(managed ? null : false)
+
+  useEffect(() => {
+    if (!managed || !user) return
+    let alive = true
+    void createClient()
+      .rpc('my_caller_restricted')
+      .then(({ data, error }) => alive && setScoped(!error && data === true))
+    return () => {
+      alive = false
+    }
+  }, [managed, user])
+
+  if (managed && scoped === null) return null
+  if (scoped && user) return <CallerDashboard userId={user.id} name={profile?.full_name ?? null} />
+  return <DashboardPageInner />
 }
 
 function DashboardPageInner() {

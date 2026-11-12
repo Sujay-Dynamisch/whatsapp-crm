@@ -47,6 +47,7 @@
     "buttonClicks": "버튼 클릭",
     "callbacks": "콜백 요청",
     "payments": "결제",
+    "callers": "콜러",
     "openCallbacks": "대기 중인 콜백 요청 {count}건",
     "journeys": "여정"
   },
@@ -55,6 +56,7 @@
     "dashboard": "대시보드",
     "callbacks": "콜백 요청",
     "payments": "결제",
+    "callers": "콜러",
     "inbox": "인박스",
     "notifications": "알림",
     "contacts": "연락처",
@@ -2097,6 +2099,7 @@
       "api": "API 키",
       "delivery": "스마트 발송",
       "language": "언어",
+      "callbacks": "콜백 알림",
       "inbox": "인박스"
     },
     "groups": {
@@ -3540,6 +3543,10 @@
       "callbacks": {
         "label": "콜백",
         "desc": "콜백 요청"
+      },
+      "callers": {
+        "label": "콜러",
+        "desc": "콜러, 리드 배정 및 재배정"
       },
       "payments": {
         "label": "결제",

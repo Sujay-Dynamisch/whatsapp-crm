@@ -9,6 +9,7 @@ import { getNotificationPermission } from "@/lib/notifications/browser-notify";
 import { notificationHref } from "@/lib/notifications/route";
 import { useBrowserNotifyPref } from "@/hooks/use-browser-notifications";
 import type { Notification } from "@/types";
+import { playAlertSound } from "@/lib/notifications/sound";
 
 /** Alerts the team must act on now stay on screen longer. */
 const URGENT = new Set<Notification["type"]>([
@@ -28,6 +29,7 @@ const EMOJI: Partial<Record<Notification["type"], string>> = {
   health_alert: "🚨",
   lead_returned: "💬",
   conversation_assigned: "👤",
+  callback_assigned: "🧑‍💼",
 };
 
 /**
@@ -54,6 +56,8 @@ export function useNotificationPopups(): void {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (payload) => {
         const n = payload.new as Notification;
         if (seen.has(n.id)) return;
+        // Shown by LeadAlertsListener (with its own "Open chat" action).
+        if (n.type === "lead_returned") return;
         seen.add(n.id);
         const { router: r, t: tr, desktopEnabled: desktop } = ref.current;
         const href = notificationHref(n);
@@ -70,6 +74,9 @@ export function useNotificationPopups(): void {
           action: href ? { label: tr("open"), onClick: open } : undefined,
         });
 
+        // One sound per alert: the desktop notification brings the OS
+        // sound; without one, the in-app chime plays instead.
+        let desktopShown = false;
         if (desktop && getNotificationPermission() === "granted" && document.visibilityState !== "visible") {
           try {
             const d = new window.Notification(title, { body: n.body ?? "", tag: `notification-${n.id}`, icon: "/icon" });
@@ -78,10 +85,12 @@ export function useNotificationPopups(): void {
               open();
               d.close();
             };
+            desktopShown = true;
           } catch {
             // Some browsers (e.g. Android Chrome) need a service worker.
           }
         }
+        if (!desktopShown) playAlertSound({ urgent: URGENT.has(n.type) });
       })
       .subscribe();
     return () => {

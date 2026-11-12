@@ -51,7 +51,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         update.no_answer_count = (Number(current.no_answer_count) || 0) + 1;
       }
     }
-    if (body.note !== undefined) update.note = String(body.note).slice(0, 500) || null;
+    if (body.note !== undefined) {
+      update.note = String(body.note).trim().slice(0, 500) || null;
+      // Author + time shown to owners/admins on the Callbacks page (089).
+      update.note_by = update.note ? userId : null;
+      update.note_at = update.note ? new Date().toISOString() : null;
+    }
 
     const { data: row, error } = await supabase
       .from('callback_requests')

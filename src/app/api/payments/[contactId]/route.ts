@@ -21,7 +21,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ cont
     if (!tracking) return NextResponse.json({ error: 'not_enabled' }, { status: 404 });
 
     const db = supabaseAdmin();
-    const { data: contact } = await db.from('contacts').select('id').eq('id', contactId).eq('account_id', accountId).maybeSingle();
+    // RLS client: a scoped caller (086) can only change their own leads.
+    const { data: contact } = await supabase.from('contacts').select('id').eq('id', contactId).eq('account_id', accountId).maybeSingle();
     if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
 
     await db.from('payment_records').delete().eq('account_id', accountId).eq('contact_id', contactId);

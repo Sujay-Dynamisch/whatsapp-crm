@@ -39,13 +39,14 @@ describe('feature registry', () => {
       'callbacks',
       'failed_messages',
       'payments',
+      'caller_management',
     ]);
   });
 
   it('failed_messages is opt-in (off by default via migration 060) and gates its page and APIs', () => {
     expect(FEATURE_INFO.failed_messages.defaultOff).toBe(true);
     // Each opt-in key is also added by a migration's default-off trigger (060, 064).
-    expect(FEATURES.filter((f) => FEATURE_INFO[f].defaultOff)).toEqual(['failed_messages', 'payments']);
+    expect(FEATURES.filter((f) => FEATURE_INFO[f].defaultOff)).toEqual(['failed_messages', 'payments', 'caller_management']);
     for (const path of ['/failed-messages', '/api/failed-messages', '/api/failed-messages/actions', '/api/health']) {
       expect(featureForPath(path), path).toBe('failed_messages');
     }
@@ -55,6 +56,15 @@ describe('feature registry', () => {
     expect(FEATURE_INFO.payments.defaultOff).toBe(true);
     for (const path of ['/payments', '/api/payments', '/api/payments/abc']) {
       expect(featureForPath(path), path).toBe('payments');
+    }
+  });
+});
+
+describe('caller_management', () => {
+  it('is opt-in (off by default via migration 086) and gates its page and APIs', () => {
+    expect(FEATURE_INFO.caller_management.defaultOff).toBe(true);
+    for (const path of ['/callers', '/api/callers', '/api/callers/reassign']) {
+      expect(featureForPath(path), path).toBe('caller_management');
     }
   });
 });

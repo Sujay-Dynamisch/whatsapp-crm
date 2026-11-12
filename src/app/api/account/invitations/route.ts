@@ -97,7 +97,8 @@ function isHostAllowed(
 
 function getBaseUrl(request: Request): string {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (explicit) return explicit.replace(/\/+$/, "");
+  // The .env example placeholder is never a real origin (see src/lib/site.ts).
+  if (explicit && !/crm\.example\.com/.test(explicit)) return explicit.replace(/\/+$/, "");
 
   const allowList = parseAllowedHosts();
   const forwardedHost = request.headers

@@ -19,6 +19,7 @@ import {
   viewedConversationFromLocation,
   type NotificationLabels,
 } from "@/lib/notifications/browser-notify";
+import { playAlertSound } from "@/lib/notifications/sound";
 
 const serverSnapshot = () => false;
 
@@ -92,13 +93,13 @@ export function useBrowserNotifications(): void {
       // failure here just means the generic fallback title.
       const { data } = await supabase
         .from("conversations")
-        .select("assigned_agent_id, contact:contacts(name, wa_username, phone)")
+        .select("assigned_agent_id, contact:contacts(name, wa_username, phone, assigned_caller_id)")
         .eq("id", msg.conversation_id)
         .maybeSingle();
       if (cancelled) return;
 
       const contact = (data as {
-        contact?: { name?: string | null; wa_username?: string | null; phone?: string | null } | null;
+        contact?: { name?: string | null; wa_username?: string | null; phone?: string | null; assigned_caller_id?: string | null } | null;
       } | null)?.contact;
       const { title, body } = buildNotificationContent(
         msg,
@@ -109,7 +110,10 @@ export function useBrowserNotifications(): void {
       // On-screen pop-up for the people who should act on it.
       const who = whoRef.current;
       const assignee = (data as { assigned_agent_id?: string | null } | null)?.assigned_agent_id ?? null;
-      if (document.visibilityState === "visible" && (who.isAdmin || (assignee && assignee === who.userId))) {
+      // A caller's own lead (caller management, 086) counts as theirs too.
+      const mine = (assignee && assignee === who.userId) || (!!contact?.assigned_caller_id && contact.assigned_caller_id === who.userId);
+      const popup = document.visibilityState === "visible" && (who.isAdmin || mine);
+      if (popup) {
         toast(`💬 ${title}`, {
           id: `message-${msg.conversation_id}`,
           description: body,
@@ -118,8 +122,12 @@ export function useBrowserNotifications(): void {
         });
       }
 
-      // Desktop alert only when the user turned browser notifications on.
-      if (!enabled || getNotificationPermission() !== "granted") return;
+      // Desktop alert only when the user turned browser notifications on
+      // (it brings the OS sound). Otherwise one in-app chime for the pop-up.
+      if (!enabled || getNotificationPermission() !== "granted") {
+        if (popup) playAlertSound();
+        return;
+      }
 
       try {
         const notification = new Notification(title, {
@@ -136,7 +144,8 @@ export function useBrowserNotifications(): void {
         };
       } catch (err) {
         // Some browsers throw from the constructor (e.g. Android Chrome
-        // requires a service worker). Non-fatal.
+        // requires a service worker). Non-fatal — chime instead.
+        if (popup) playAlertSound();
         console.error("[useBrowserNotifications] failed to show:", err);
       }
     };

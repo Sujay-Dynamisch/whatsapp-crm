@@ -11,6 +11,7 @@ import { HealthBanner } from "@/components/layout/health-banner";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { BrowserNotificationsListener } from "@/components/notifications/browser-notifications-listener";
 import { LeadAlertsListener } from "@/components/notifications/lead-alerts-listener";
+import { EnableNotificationsPrompt } from "@/components/notifications/enable-notifications-prompt";
 import { FeatureGate } from "@/components/layout/feature-gate";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
@@ -66,6 +67,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           <AccountAccessAlert />
           {/* Owners/admins: scheduler stopped / lead feed failing (060). */}
           <HealthBanner />
+          {/* Ask once to turn on browser notifications (snoozable). */}
+          <EnableNotificationsPrompt />
           <FeatureGate>{children}</FeatureGate>
         </main>
       </div>

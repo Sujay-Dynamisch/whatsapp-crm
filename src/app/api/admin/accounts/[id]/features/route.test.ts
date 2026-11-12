@@ -104,6 +104,7 @@ describe('GET', () => {
       'callbacks',
       'failed_messages',
       'payments',
+      'caller_management',
     ]);
   });
 

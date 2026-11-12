@@ -47,6 +47,7 @@
     "buttonClicks": "Button Clicks",
     "callbacks": "Callbacks",
     "payments": "Payments",
+    "callers": "Callers",
     "openCallbacks": "{count} callback requests waiting",
     "journeys": "Journeys"
   },
@@ -55,6 +56,7 @@
     "dashboard": "Dashboard",
     "callbacks": "Callbacks",
     "payments": "Payments",
+    "callers": "Callers",
     "inbox": "Inbox",
     "notifications": "Notifications",
     "contacts": "Contacts",
@@ -2097,6 +2099,7 @@
       "api": "API keys",
       "delivery": "Smart sending",
       "language": "Languages",
+      "callbacks": "Callback reminders",
       "inbox": "Inbox"
     },
     "groups": {
@@ -3540,6 +3543,10 @@
       "callbacks": {
         "label": "Callbacks",
         "desc": "Callback requests"
+      },
+      "callers": {
+        "label": "Callers",
+        "desc": "Callers, lead assignment and reassignment"
       },
       "payments": {
         "label": "Payments",

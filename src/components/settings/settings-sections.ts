@@ -1,4 +1,5 @@
 import {
+  BellRing,
   Coins,
   Gauge,
   Languages,
@@ -38,6 +39,7 @@ export const SETTINGS_SECTIONS = [
   'deals',
   'delivery',
   'language',
+  'callbacks',
   'members',
   'api',
 ] as const;
@@ -67,6 +69,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
   delivery: { id: 'delivery', label: 'Smart sending', icon: Gauge, group: 'workspace' },
   language: { id: 'language', label: 'Languages', icon: Languages, group: 'workspace' },
+  callbacks: { id: 'callbacks', label: 'Callback reminders', icon: BellRing, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
 };
@@ -102,5 +105,6 @@ export const SECTION_FEATURE: Partial<Record<SettingsSection, Feature>> = {
   deals: 'pipelines',
   delivery: 'smart_sending',
   language: 'ai_agents',
+  callbacks: 'caller_management',
   api: 'api_access',
 };

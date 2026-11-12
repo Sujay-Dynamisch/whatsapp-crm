@@ -32,6 +32,7 @@ export const AREAS = [
   'ai_agents',
   'callbacks',
   'payments',
+  'callers',
   'button_clicks',
   'failed_messages',
   'settings',
@@ -80,6 +81,7 @@ export const AREA_FEATURE: Partial<Record<Area, Feature>> = {
   ai_agents: 'ai_agents',
   callbacks: 'callbacks',
   payments: 'payments',
+  callers: 'caller_management',
   button_clicks: 'button_analytics',
   failed_messages: 'failed_messages',
   api_access: 'api_access',
@@ -143,6 +145,7 @@ const PATH_RULES: { prefix: string; area: Area; exact?: boolean }[] = [
   { prefix: '/agents', area: 'ai_agents' },
   { prefix: '/callbacks', area: 'callbacks' },
   { prefix: '/payments', area: 'payments' },
+  { prefix: '/callers', area: 'callers' },
   { prefix: '/button-clicks', area: 'button_clicks' },
   { prefix: '/failed-messages', area: 'failed_messages' },
   // APIs
@@ -163,6 +166,7 @@ const PATH_RULES: { prefix: string; area: Area; exact?: boolean }[] = [
   { prefix: '/api/language-settings', area: 'settings' },
   { prefix: '/api/callbacks', area: 'callbacks' },
   { prefix: '/api/payments', area: 'payments' },
+  { prefix: '/api/callers', area: 'callers' },
   { prefix: '/api/button-clicks', area: 'button_clicks' },
   { prefix: '/api/failed-messages', area: 'failed_messages' },
   { prefix: '/api/health', area: 'failed_messages' },
@@ -199,6 +203,16 @@ export function isWriteRequest(method: string, pathname: string): boolean {
   return !READ_POSTS.some((p) => matches(pathname, p));
 }
 
+/**
+ * Callers module level. Unlike other areas it is NOT open to every member
+ * without a custom role: owners/admins manage it, everyone else only when
+ * a custom role grants the 'callers' area.
+ */
+export function callersLevel(access: MyAccess | null | undefined, role: AccountRole | null | undefined): AccessLevel {
+  if (access) return levelFor(access, 'callers');
+  return role === 'owner' || role === 'admin' ? 'edit' : 'none';
+}
+
 /** Middleware verdict for a member with `access` on this request. */
 export function accessVerdict(
   access: MyAccess | null | undefined,
@@ -224,6 +238,7 @@ export const SETTINGS_SECTION_AREA: Record<string, Area | undefined> = {
   deals: 'settings',
   delivery: 'settings',
   language: 'settings',
+  callbacks: 'callers',
   members: 'members',
   api: 'api_access',
 };

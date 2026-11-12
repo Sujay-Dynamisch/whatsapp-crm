@@ -111,6 +111,7 @@ const navItems: NavItem[] = [
   { href: "/button-clicks", labelKey: "buttonClicks", icon: MousePointerClick, feature: "button_analytics" },
   { href: "/callbacks", labelKey: "callbacks", icon: PhoneCall, feature: "callbacks" },
   { href: "/payments", labelKey: "payments", icon: Wallet, feature: "payments" },
+  { href: "/callers", labelKey: "callers", icon: UserCog, feature: "caller_management" },
   { href: "/failed-messages", labelKey: "failedMessages", icon: MessageSquareWarning, feature: "failed_messages" },
   { href: "/automations", labelKey: "automations", icon: Zap, feature: "automations" },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, feature: "flows" },

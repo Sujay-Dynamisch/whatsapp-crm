@@ -21,6 +21,7 @@ import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { SmartSendingPanel } from '@/components/settings/smart-sending-panel';
 import { LanguagePanel } from '@/components/settings/language-panel';
+import { ReminderPolicyCard } from '@/components/callers/reminder-policy-card';
 import { FeatureUnavailable, NoAccess, ViewOnlyNotice } from '@/components/layout/feature-gate';
 import { SETTINGS_SECTION_AREA } from '@/lib/auth/permissions';
 import {
@@ -89,6 +90,7 @@ function SettingsPageInner() {
     deals: <DealsSettings />,
     delivery: <SmartSendingPanel />,
     language: <LanguagePanel />,
+    callbacks: <ReminderPolicyCard canEdit={can('callers', 'edit')} />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,
   };
