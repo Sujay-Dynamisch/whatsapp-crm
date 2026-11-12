@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,7 @@ function SignupPageInner() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const supabase = createClient();
+  const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +63,30 @@ function SignupPageInner() {
     }
 
     setLoading(true);
+
+    // Joining through an invite link: no email confirmation — the account
+    // is created already confirmed, signed in, and sent back to accept.
+    if (inviteToken) {
+      const res = await fetch(`/api/invitations/${encodeURIComponent(inviteToken)}/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullName, email, password }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(json.error || "Could not create your account. Please try again.");
+        setLoading(false);
+        return;
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        setError(signInError.message);
+        setLoading(false);
+        return;
+      }
+      router.replace(`/join/${encodeURIComponent(inviteToken)}`);
+      return;
+    }
 
     // Always name our own origin as the place the confirmation link
     // returns to. Previously this was left unset unless an invite was
