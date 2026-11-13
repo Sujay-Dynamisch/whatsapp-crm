@@ -3,6 +3,7 @@
 // Caller management (migration 086): who takes leads, their workload,
 // the Admin Unassigned queue and manual reassignment.
 
+import { BulkMoveDialog } from '@/components/callers/bulk-move-dialog';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
@@ -270,6 +271,13 @@ export default function CallersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {canEdit && (
+            <BulkMoveDialog
+              callers={callers.map((m) => ({ id: m.user_id, name: nameOf(m), leads: m.open_leads, active: m.caller!.status === 'active' }))}
+              unassigned={unassigned.length}
+              onDone={() => void load(true)}
+            />
+          )}
           <Link href="/settings?tab=callbacks" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
             Reminder settings
           </Link>
