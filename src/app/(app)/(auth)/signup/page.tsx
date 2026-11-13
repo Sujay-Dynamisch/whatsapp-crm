@@ -45,6 +45,8 @@ function SignupPageInner() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  // Invite sign-up done (no email confirmation): ask them to log in.
+  const [created, setCreated] = useState(false);
   const supabase = createClient();
   const router = useRouter();
 
@@ -78,13 +80,8 @@ function SignupPageInner() {
         setLoading(false);
         return;
       }
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) {
-        setError(signInError.message);
-        setLoading(false);
-        return;
-      }
-      router.replace(`/join/${encodeURIComponent(inviteToken)}`);
+      setCreated(true);
+      setLoading(false);
       return;
     }
 
@@ -123,6 +120,29 @@ function SignupPageInner() {
     setSuccess(true);
     setLoading(false);
   };
+
+  if (created && inviteToken) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md border-border bg-card">
+          <CardHeader className="items-center text-center">
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10">
+              <CheckCircle className="h-6 w-6 text-emerald-500" />
+            </div>
+            <CardTitle className="text-xl text-foreground">Your account is created</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              No email confirmation needed. Log in with <span className="text-foreground">{email}</span> to join your workspace.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full" onClick={() => router.push(`/login?invite=${encodeURIComponent(inviteToken)}`)}>
+              Go to login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (success) {
     return (
