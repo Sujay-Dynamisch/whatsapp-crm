@@ -1,5 +1,6 @@
 "use client";
 
+import { MoveWorkspaceCard } from "@/components/admin/move-workspace-card";
 import { useEffect, useState, useCallback } from "react";
 import {
   Sheet,
@@ -686,6 +687,17 @@ export function UserProfileSheet({
                       </div>
                     </div>
                   </div>
+
+                  {userId && !isSystemAdminUser && (
+                    <MoveWorkspaceCard
+                      userId={userId}
+                      currentAccountId={profileData?.account?.id ?? null}
+                      onMoved={() => {
+                        void fetchFullProfile();
+                        onUserUpdated?.();
+                      }}
+                    />
+                  )}
 
                   {/* Metadata & Identification Grid */}
                   <div className="rounded-2xl border border-border/60 bg-card/50 p-5 space-y-3">
