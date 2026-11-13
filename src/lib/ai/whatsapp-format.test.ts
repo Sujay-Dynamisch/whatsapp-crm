@@ -13,6 +13,9 @@ describe('toWhatsAppFormat', () => {
     expect(toWhatsAppFormat('* one\n+ two\n- three')).toBe('• one\n• two\n- three');
     expect(toWhatsAppFormat('Hi *Asha*, _thanks_')).toBe('Hi *Asha*, _thanks_');
   });
+  it('fixes "- **Label:** value" lists the AI agent writes', () => {
+    expect(toWhatsAppFormat('- **Duration:** 8 weeks\n- **Format:** Live online')).toBe('- *Duration:* 8 weeks\n- *Format:* Live online');
+  });
   it('leaves code blocks alone', () => {
     expect(toWhatsAppFormat('```**x**```')).toBe('```**x**```');
   });
