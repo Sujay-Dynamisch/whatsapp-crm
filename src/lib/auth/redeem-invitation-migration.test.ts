@@ -28,6 +28,9 @@ const tablesWithoutDomainData = new Set([
   // 087: reminder policy (settings) and per-engagement link state (alongside contacts).
   "callback_settings",
   "payment_link_state",
+  // 095: payment ledger rows exist only alongside contacts (guarded).
+  "payment_plans",
+  "payment_installments",
 ]);
 
 function accountScopedTables(): Set<string> {

@@ -18,7 +18,9 @@ import {
   Undo2,
   Wallet,
   X,
+  Download,
 } from 'lucide-react';
+import { PaymentLedgerSheet } from '@/components/payments/payment-ledger-sheet';
 
 import { useAuth } from '@/hooks/use-auth';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -50,11 +52,16 @@ interface Lead {
   contact_phone: string | null;
   in_journey: boolean;
   next_message_at: string | null;
+  /** Payment ledger (095). */
+  total_price?: number | null;
+  plan?: 'full' | 'advance' | null;
+  received?: number;
+  balance?: number | null;
 }
 
 interface Data {
   leads: Lead[];
-  stats: { pending: number; paid: number; closed: number; paid_today: number; amount_total: number; currency: string };
+  stats: { pending: number; paid: number; closed: number; paid_today: number; amount_total: number; balance_due?: number; currency: string };
 }
 
 const FILTERS: Filter[] = ['pending', 'paid', 'closed', 'all'];
@@ -76,7 +83,7 @@ function money(amount: number, currency: string): string {
 
 export default function PaymentsPage() {
   const t = useTranslations('Payments');
-  const { canSendMessages } = useAuth();
+  const { canSendMessages, canManageMembers } = useAuth();
   const [data, setData] = useState<Data | null>(null);
   const [notEnabled, setNotEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -85,6 +92,7 @@ export default function PaymentsPage() {
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [marking, setMarking] = useState<Lead | null>(null);
+  const [ledgerFor, setLedgerFor] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<(typeof METHODS)[number]>('upi');
   const [note, setNote] = useState('');
@@ -203,19 +211,28 @@ export default function PaymentsPage() {
           <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-          {t('refresh')}
-        </Button>
+        <div className="flex items-center gap-2">
+          {canManageMembers && (
+            <a href="/api/payments/export" download className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </a>
+          )}
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+            {t('refresh')}
+          </Button>
+        </div>
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-card sm:grid-cols-4">
+      <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-card sm:grid-cols-5">
         {[
           { label: t('statPending'), value: stats?.pending, icon: Clock, tone: 'text-amber-500 bg-amber-500/10' },
           { label: t('statPaid'), value: stats?.paid, icon: BadgeCheck, tone: 'text-emerald-500 bg-emerald-500/10', sub: stats ? t('paidToday', { count: stats.paid_today }) : '' },
           { label: t('statCollected'), value: stats ? money(stats.amount_total, stats.currency) : undefined, icon: CircleDollarSign, tone: 'text-primary bg-primary/10' },
           { label: t('statConversion'), value: conversion === null ? undefined : `${conversion}%`, icon: Send, tone: 'text-sky-500 bg-sky-500/10' },
+          { label: 'Balance due', value: stats ? money(stats.balance_due ?? 0, stats.currency) : undefined, icon: Wallet, tone: 'text-amber-500 bg-amber-500/10' },
         ].map((s, i) => (
           <div
             key={s.label}
@@ -295,7 +312,14 @@ export default function PaymentsPage() {
             const name = nameOf(l);
             const busy = busyId === l.contact_id;
             return (
-              <li key={l.contact_id} className={cn('rounded-2xl border border-border bg-card p-4 transition-shadow hover:shadow-md', busy && 'opacity-60')}>
+              <li
+                key={l.contact_id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setLedgerFor(l.contact_id)}
+                onKeyDown={(e) => e.key === 'Enter' && setLedgerFor(l.contact_id)}
+                className={cn('cursor-pointer rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-md', busy && 'opacity-60')}
+              >
                 <div className="flex items-start gap-3">
                   <div
                     className={cn(
@@ -353,10 +377,30 @@ export default function PaymentsPage() {
                       )}
                       {l.note && <p className="italic">“{l.note}”</p>}
                     </div>
+                    {l.total_price ? (
+                      <div className="mt-3 rounded-xl bg-muted/50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="text-muted-foreground">
+                            {l.plan === 'advance' ? 'Advance' : 'Full'} · {money(Number(l.received ?? 0), stats?.currency ?? 'INR')} of {money(Number(l.total_price), stats?.currency ?? 'INR')}
+                          </span>
+                          <span className={cn('font-semibold', l.balance ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                            {l.balance ? `Balance ${money(Number(l.balance), stats?.currency ?? 'INR')}` : 'Fully paid'}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn('h-full rounded-full', l.balance ? 'bg-amber-500' : 'bg-emerald-500')}
+                            style={{ width: `${Math.min(100, Math.round((Number(l.received ?? 0) / Number(l.total_price)) * 100))}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-primary">Tap to add price & payments →</p>
+                    )}
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                   {canSendMessages && l.status !== 'paid' && (
                     <Button
                       size="sm"
@@ -392,6 +436,13 @@ export default function PaymentsPage() {
           })}
         </ul>
       )}
+
+      <PaymentLedgerSheet
+        contactId={ledgerFor}
+        canEdit={canSendMessages}
+        onClose={() => setLedgerFor(null)}
+        onChanged={() => void load()}
+      />
 
       {/* Mark as paid */}
       <Dialog open={!!marking} onOpenChange={(o) => !o && setMarking(null)}>
