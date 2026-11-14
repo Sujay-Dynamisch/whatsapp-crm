@@ -106,15 +106,36 @@ export async function GET(request: Request) {
       for (const e of (runs.data ?? []) as { contact_id: string; next_run_at: string | null }[]) running.set(e.contact_id, e.next_run_at);
     }
 
+    // Payment ledger (095): price, type, amount received, balance.
+    const plans = new Map<string, { total: number; plan: string }>();
+    const received = new Map<string, number>();
+    for (let i = 0; i < contactIds.length; i += 500) {
+      const chunk = contactIds.slice(i, i + 500);
+      const [pl, inst] = await Promise.all([
+        supabase.from('payment_plans').select('contact_id, total_price, plan').in('contact_id', chunk),
+        supabase.from('payment_installments').select('contact_id, amount').in('contact_id', chunk),
+      ]);
+      for (const p of (pl.data ?? []) as { contact_id: string; total_price: number; plan: string }[]) plans.set(p.contact_id, { total: Number(p.total_price), plan: p.plan });
+      for (const x of (inst.data ?? []) as { contact_id: string; amount: number }[]) received.set(x.contact_id, (received.get(x.contact_id) ?? 0) + Number(x.amount));
+    }
+
     const all = [...leads.values()]
       .filter((r) => contacts.has(r.contact_id))
-      .map((r) => ({
-        ...r,
-        contact_name: contacts.get(r.contact_id)?.name ?? null,
-        contact_phone: contacts.get(r.contact_id)?.phone ?? null,
-        in_journey: running.has(r.contact_id),
-        next_message_at: running.get(r.contact_id) ?? null,
-      }));
+      .map((r) => {
+        const plan = plans.get(r.contact_id);
+        const got = Math.round((received.get(r.contact_id) ?? 0) * 100) / 100;
+        return {
+          ...r,
+          contact_name: contacts.get(r.contact_id)?.name ?? null,
+          contact_phone: contacts.get(r.contact_id)?.phone ?? null,
+          in_journey: running.has(r.contact_id),
+          next_message_at: running.get(r.contact_id) ?? null,
+          total_price: plan?.total ?? null,
+          plan: plan?.plan ?? null,
+          received: got,
+          balance: plan ? Math.max(0, Math.round((plan.total - got) * 100) / 100) : null,
+        };
+      });
 
     const local = Date.now() - tz * 60_000;
     const todayStart = local - (((local % DAY_MS) + DAY_MS) % DAY_MS) + tz * 60_000;
@@ -124,7 +145,9 @@ export async function GET(request: Request) {
       paid: paid.length,
       closed: all.filter((r) => r.status === 'closed').length,
       paid_today: paid.filter((r) => r.paid_at && Date.parse(r.paid_at) >= todayStart).length,
-      amount_total: paid.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+      // Money in: every recorded payment (advances too); else the old one-click amount.
+      amount_total: all.reduce((s, r) => s + (r.received > 0 ? r.received : r.status === 'paid' ? Number(r.amount) || 0 : 0), 0),
+      balance_due: all.reduce((s, r) => s + (r.status !== 'closed' && r.balance ? r.balance : 0), 0),
       currency: tracking.currency,
     };
 
