@@ -634,13 +634,16 @@ describe('payment link → nudges → Stage D', () => {
     expect(run().status).toBe('waiting');
   });
 
-  it('Stage D “Complete Payment” → link again; “I Have a Question” → FAQ + handoff', async () => {
+  it('Stage D “Complete Payment” → link again; “I Have a Question” → top-5 FAQ, a number → its answer, 6 → callback', async () => {
     await register('2026-11-02 10:00');
     await reply('1', '2026-11-03 10:00');
     await reply('Complete Payment', '2026-11-04 12:00');
     expect(sent.at(-1)!.text).toContain('Great decision');
     await reply('I Have a Question', '2026-11-04 13:00');
-    expect(sent.at(-2)!.text).toBe('FAQ: instalments are available.\n\nMy team will also reach out to you personally.');
+    expect(sent.at(-1)!.text).toContain('Here are the questions people ask us most');
+    await reply('3');
+    expect(sent.at(-1)!.text).toContain('15–30 kg');
+    await reply('6');
     expect(hasTag('callback_requested')).toBe(true);
     expect(run().status).toBe('completed');
   });
