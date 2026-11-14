@@ -18,6 +18,7 @@ import {
   Undo2,
   Wallet,
   X,
+  Download,
 } from 'lucide-react';
 import { PaymentLedgerSheet } from '@/components/payments/payment-ledger-sheet';
 
@@ -82,7 +83,7 @@ function money(amount: number, currency: string): string {
 
 export default function PaymentsPage() {
   const t = useTranslations('Payments');
-  const { canSendMessages } = useAuth();
+  const { canSendMessages, canManageMembers } = useAuth();
   const [data, setData] = useState<Data | null>(null);
   const [notEnabled, setNotEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -210,10 +211,18 @@ export default function PaymentsPage() {
           <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-          {t('refresh')}
-        </Button>
+        <div className="flex items-center gap-2">
+          {canManageMembers && (
+            <a href="/api/payments/export" download className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </a>
+          )}
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+            {t('refresh')}
+          </Button>
+        </div>
       </div>
 
       {/* Stats strip */}
