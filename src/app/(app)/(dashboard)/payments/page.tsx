@@ -236,7 +236,14 @@ export default function PaymentsPage() {
         ].map((s, i) => (
           <div
             key={s.label}
-            className={cn('flex items-center gap-3 px-4 py-3', i % 2 === 1 && 'border-l border-border', i >= 2 && 'border-t border-border sm:border-t-0', i === 2 && 'sm:border-l')}
+            className={cn(
+              'flex items-center gap-3 border-border px-4 py-3',
+              // Phones: 2 per row (the 5th spans the row); sm+: 5 in one row.
+              i % 2 === 1 && 'border-l',
+              i >= 2 && 'border-t sm:border-t-0',
+              i > 0 && 'sm:border-l',
+              i === 4 && 'col-span-2 sm:col-span-1'
+            )}
           >
             <span className={cn('hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex', s.tone)}>
               <s.icon className="h-4 w-4" />
