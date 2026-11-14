@@ -219,7 +219,7 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     case_0: 'pay_link', case_1: 'pay_link',
     case_2: 'testimonials', case_3: 'testimonials',
     case_4: 'set_reschedule', case_5: 'set_reschedule',
-    case_6: 'callback_on', case_7: 'callback_on', case_8: 'callback_on',
+    case_6: 'callback_on', case_7: 'callback_on', case_8: 'faq',
     default: fallback,
   });
   add('menu', 'switch', 'Menu choice', { value: lc, cases: MENU_CASES }, menuNext('menu_retry'));
@@ -272,7 +272,47 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
       { op: 'contains', value: 'call', label: 'Request a callback' },
     ],
   }, { case_0: 'tag_closed', case_1: 'pay_link', case_2: 'pay_link', case_3: 'testimonials', case_4: 'set_reschedule', case_5: 'callback_on', default: 'faq' });
-  add('faq', 'send_text', 'FAQ + handoff', { text: '{{ vars.faq_text }}\n\nMy team will also reach out to you personally.' }, { next: 'callback_on' });
+  // FAQ ("I Have a Question" / "I Have Some Questions" buttons, or any
+  // unrecognised reply in the payment stages): the top 5 questions from
+  // "Revibe WhatsApp Bot FAQs"; the lead replies 1–5 and gets the answer,
+  // 6 = talk to the team. Quiet for 24h → back to their nurture.
+  add('faq', 'send_text', 'FAQ menu (top 5)', {
+    text: `Happy to help, ${NAME}! 😊 Here are the questions people ask us most:\n\n1️⃣ How does the Revibe program work?\n2️⃣ What is the program fee?\n3️⃣ How much weight can I lose?\n4️⃣ Will I have to follow a strict diet?\n5️⃣ Are the workouts live or recorded?\n6️⃣ Talk to our team\n\nJust reply with the number (1–6).`,
+  }, { next: 'reply_faq' });
+  add('reply_faq', 'wait_for_reply', 'Wait for FAQ number', { amount: 24, unit: 'hours' }, { replied: 'faq_pick', timeout: 'faq_back' });
+  add('faq_pick', 'switch', 'FAQ choice', {
+    value: lc,
+    cases: [
+      { op: 'starts_with', value: '1', label: '1 How it works' },
+      { op: 'starts_with', value: '2', label: '2 Fee' },
+      { op: 'starts_with', value: '3', label: '3 Weight loss' },
+      { op: 'starts_with', value: '4', label: '4 Diet' },
+      { op: 'starts_with', value: '5', label: '5 Workouts' },
+      { op: 'starts_with', value: '6', label: '6 Team' },
+      { op: 'contains', value: 'join', label: 'Join' },
+      { op: 'contains', value: 'call', label: 'Callback' },
+      { op: 'contains', value: 'not proceed', label: 'Not proceeding' },
+    ],
+  }, { case_0: 'faq_a1', case_1: 'faq_a2', case_2: 'faq_a3', case_3: 'faq_a4', case_4: 'faq_a5', case_5: 'callback_on', case_6: 'pay_link', case_7: 'callback_on', case_8: 'tag_closed', default: 'faq_retry' });
+  const MORE = `\n\nReply another number (1–5) for more answers, or *6* to talk to our team. 🙏`;
+  add('faq_a1', 'send_text', 'FAQ 1: how it works', {
+    text: `*How does Revibe work?*\n\nWe first understand the root causes of your weight gain and go through your blood reports. Then, with the help of Ayurveda and lifestyle changes, we help you reach your target weight with daily hand-holding.${MORE}`,
+  }, { next: 'reply_faq' });
+  add('faq_a2', 'send_text', 'FAQ 2: fee', {
+    text: `*What is the program fee?*\n\nWe have different options and fee structures based on your requirement — and *no hidden or recurring charges*, assured. Reply *6* and our team will call you to suggest the right plan and share any ongoing offers.${MORE}`,
+  }, { next: 'reply_faq' });
+  add('faq_a3', 'send_text', 'FAQ 3: weight loss', {
+    text: `*How much weight can I lose?*\n\nWe give a money-back assurance of *15–30 kg* weight loss in 5 to 7 months, based on our previous client results. Our male clients generally lose 3–5 kg and female clients 2–4 kg a month — it depends on your starting weight, health conditions, consistency and gender.${MORE}`,
+  }, { next: 'reply_faq' });
+  add('faq_a4', 'send_text', 'FAQ 4: diet', {
+    text: `*Will I have to follow a strict diet?*\n\nNever! After a full clinical assessment we make only minor changes to your simple, home-cooked meals — no fancy recipes or complicated diet plans. Your meal plan is customised to fix your health issues and your protein, fibre and carb needs.${MORE}`,
+  }, { next: 'reply_faq' });
+  add('faq_a5', 'send_text', 'FAQ 5: workouts', {
+    text: `*Are the workouts live or recorded?*\n\nMonday to Friday we run *LIVE* Strength Training & Power Yoga sessions, which then stay in the LIVE section of our app for the next 5 days. So you can work out 24×7, at your own time, from home — no gym and no equipment needed.${MORE}`,
+  }, { next: 'reply_faq' });
+  add('faq_retry', 'send_text', 'Ask for 1–6', { text: 'Please reply with a number from 1 to 6 so I can help you. 🙏' }, { next: 'reply_faq' });
+  // No reply: back to their nurture (Stage D if they had the payment link).
+  add('faq_back', 'condition', 'Payment link sent?', { kind: 'has_tag', tag_id: tag.payment_link_sent }, { yes: 'd_slot', no: 'c_slot' });
   add('tag_closed', 'add_tag', 'Tag: manually_closed (LOST)', { tag_id: tag.manually_closed }, { next: 'closed_msg' });
   add('closed_msg', 'send_text', 'Confirm stop', { text: `Understood, ${NAME}. I won't send further messages. Wishing you the best!\n\n— Swapnil Gautam` }, { next: 'end' });
 
