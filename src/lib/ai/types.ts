@@ -32,6 +32,8 @@ export interface AiConfig {
    *  knowledge base is embedded and semantic retrieval turns on; when
    *  null, retrieval falls back to lexical full-text search. */
   embeddingsApiKey: string | null
+  /** Backup provider tried when the primary fails (migration 096). */
+  fallback?: { provider: AiProvider; model: string; baseUrl: string | null; apiKey: string } | null
 }
 
 /** A single conversation turn in the shape both providers accept. */
@@ -65,6 +67,10 @@ export interface GenerateResult {
   handoff: boolean
   /** Provider token usage for this call, or null when unavailable. */
   usage: AiUsage | null
+  /** Which provider/model actually answered (the backup when the primary failed). */
+  provider?: AiProvider
+  model?: string
+  usedFallback?: boolean
 }
 
 /**

@@ -172,7 +172,7 @@ export async function dispatchInboundToAiReply(
       knowledge,
     })
 
-    const { text, handoff, usage } = await generateReply({
+    const { text, handoff, usage, provider: usedProvider, model: usedModel } = await generateReply({
       config,
       systemPrompt,
       messages,
@@ -187,8 +187,9 @@ export async function dispatchInboundToAiReply(
       accountId,
       conversationId,
       mode: 'auto_reply',
-      provider: config.provider,
-      model: config.model,
+      // The backup when the primary failed (096).
+      provider: usedProvider ?? config.provider,
+      model: usedModel ?? config.model,
       usage,
     })
 

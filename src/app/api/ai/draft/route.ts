@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       knowledge,
     })
 
-    const { text, usage } = await generateReply({ config, systemPrompt, messages })
+    const { text, usage, provider: usedProvider, model: usedModel } = await generateReply({ config, systemPrompt, messages })
 
     // Record spend on the account's BYO key. Best-effort + via the
     // service role (the log has no `authenticated` INSERT policy). This
@@ -121,8 +121,8 @@ export async function POST(request: Request) {
         accountId,
         conversationId,
         mode: 'draft',
-        provider: config.provider,
-        model: config.model,
+        provider: usedProvider ?? config.provider,
+        model: usedModel ?? config.model,
         usage,
       })
     } catch (logErr) {

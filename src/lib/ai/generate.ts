@@ -26,6 +26,26 @@ export interface GenerateArgs {
  * of the raw text. Throws `AiError` on any provider/network failure.
  */
 export async function generateReply(args: GenerateArgs): Promise<GenerateResult> {
+  // Primary first; on any failure (quota / rate limit / bad key / timeout /
+  // provider error) retry once on the backup provider (migration 096).
+  try {
+    const out = await generateOnce(args)
+    return { ...out, provider: args.config.provider, model: args.config.model, usedFallback: false }
+  } catch (err) {
+    const fb = args.config.fallback
+    if (!fb) throw err
+    console.warn(
+      `[ai] primary ${args.config.provider}:${args.config.model} failed (${err instanceof AiError ? err.code : 'error'}) — using backup ${fb.provider}:${fb.model}`,
+    )
+    const out = await generateOnce({
+      ...args,
+      config: { ...args.config, provider: fb.provider, model: fb.model, baseUrl: fb.baseUrl, apiKey: fb.apiKey, fallback: null },
+    })
+    return { ...out, provider: fb.provider, model: fb.model, usedFallback: true }
+  }
+}
+
+async function generateOnce(args: GenerateArgs): Promise<GenerateResult> {
   const { config, systemPrompt, messages } = args
   const timeoutMs = aiRequestTimeoutMs()
   const providerArgs = {

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import type { AiConfig } from './types'
+import { isAiProvider } from './providers/registry'
 
 interface AiConfigRow {
   provider: AiConfig['provider']
@@ -13,10 +14,17 @@ interface AiConfigRow {
   auto_reply_max_per_conversation: number
   handoff_agent_id: string | null
   embeddings_api_key: string | null
+  fallback_enabled?: boolean | null
+  fallback_provider?: string | null
+  fallback_model?: string | null
+  fallback_base_url?: string | null
+  fallback_api_key?: string | null
 }
 
-const CONFIG_COLUMNS =
+const BASE_COLUMNS =
   'provider, model, base_url, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key'
+const CONFIG_COLUMNS =
+  'provider, model, base_url, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, fallback_enabled, fallback_provider, fallback_model, fallback_base_url, fallback_api_key'
 
 /**
  * Load and decrypt the account's AI config for *use* (draft or
@@ -35,16 +43,15 @@ export async function loadAiConfig(
   opts: { requireActive?: boolean } = {},
 ): Promise<AiConfig | null> {
   const { requireActive = true } = opts
-  const { data, error } = await db
-    .from('ai_configs')
-    .select(CONFIG_COLUMNS)
-    .eq('account_id', accountId)
-    .maybeSingle()
+  const load = (columns: string) => db.from('ai_configs').select(columns).eq('account_id', accountId).maybeSingle()
+  let { data, error } = await load(CONFIG_COLUMNS)
+  // Before migration 096 the backup columns don't exist — keep working without them.
+  if (error && /fallback_/.test(error.message)) ({ data, error } = await load(BASE_COLUMNS))
 
   if (error) throw error
   if (!data) return null
 
-  const row = data as AiConfigRow
+  const row = data as unknown as AiConfigRow
   // The Playground passes requireActive:false so an admin can test the
   // agent before flipping the master switch on.
   if (requireActive && !row.is_active) return null
@@ -81,6 +88,24 @@ export async function loadAiConfig(
     autoReplyMaxPerConversation: row.auto_reply_max_per_conversation,
     handoffAgentId: row.handoff_agent_id,
     embeddingsApiKey,
+    fallback: loadFallback(row, accountId),
+  }
+}
+
+/** Backup provider (096) — null when off, incomplete or undecryptable. */
+function loadFallback(row: AiConfigRow, accountId: string): AiConfig['fallback'] {
+  if (!row.fallback_enabled || !row.fallback_provider || !row.fallback_model || !row.fallback_api_key) return null
+  if (!isAiProvider(row.fallback_provider)) return null
+  try {
+    return {
+      provider: row.fallback_provider,
+      model: row.fallback_model,
+      baseUrl: row.fallback_base_url ?? null,
+      apiKey: decrypt(row.fallback_api_key),
+    }
+  } catch {
+    console.error(`[ai config] backup AI key for account ${accountId} could not be decrypted — re-enter it in AI settings.`)
+    return null
   }
 }
 

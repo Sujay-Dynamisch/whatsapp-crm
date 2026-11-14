@@ -87,7 +87,7 @@ describe('generateReply — OpenAI', () => {
       messages: [{ role: 'user', content: 'Hi' }],
     })
 
-    expect(res).toEqual({
+    expect(res).toMatchObject({
       text: 'Sure — happy to help!',
       handoff: false,
       usage: { promptTokens: 42, completionTokens: 8, totalTokens: 50 },
@@ -146,7 +146,7 @@ describe('generateReply — Anthropic', () => {
     })
 
     // Anthropic reports input/output only — total is summed by normalizeUsage.
-    expect(res).toEqual({
+    expect(res).toMatchObject({
       text: 'Hi there!',
       handoff: false,
       usage: { promptTokens: 30, completionTokens: 6, totalTokens: 36 },
@@ -235,7 +235,7 @@ describe('generateReply — OpenAI-compatible', () => {
       messages: [{ role: 'user', content: 'Hi' }],
     })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       text: 'Gateway reply',
       handoff: false,
       usage: { promptTokens: 12, completionTokens: 4, totalTokens: 16 },
@@ -323,5 +323,31 @@ describe('generateReply — OpenAI-compatible', () => {
     ).rejects.toMatchObject({ code: 'provider_error' })
 
     expect(fetchMock.mock.calls[0][1].redirect).toBe('manual')
+  })
+})
+
+describe('generateReply — backup model (096)', () => {
+  it('primary fails (quota / 429) → the same request goes to the backup, which answers', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(errResponse(429, { error: { message: 'Quota exceeded' } }))
+      .mockResolvedValueOnce(okResponse({ choices: [{ message: { content: 'From the backup' } }] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await generateReply({
+      config: { ...config({ provider: 'openai' }), fallback: { provider: 'openai', model: 'gpt-paid', baseUrl: null, apiKey: 'sk-paid' } },
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    })
+
+    expect(res).toMatchObject({ text: 'From the backup', usedFallback: true, model: 'gpt-paid' })
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('Bearer sk-paid')
+  })
+
+  it('no backup → the primary error is thrown as before', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errResponse(401, { error: { message: 'bad key' } })))
+    await expect(
+      generateReply({ config: config(), systemPrompt: 'sys', messages: [{ role: 'user', content: 'Hi' }] })
+    ).rejects.toMatchObject({ code: 'invalid_key' })
   })
 })
