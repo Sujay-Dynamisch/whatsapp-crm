@@ -14,7 +14,7 @@ import { NextResponse } from 'next/server';
 
 import { toErrorResponse } from '@/lib/auth/account';
 import { UUID_RE } from '@/lib/journeys/api';
-import { reassignContact, requireCallersAccess } from '@/lib/callers/server';
+import { reassignContact, releasedContacts, requireCallersAccess } from '@/lib/callers/server';
 
 const MAX = 2000;
 
@@ -59,7 +59,9 @@ export async function POST(request: Request) {
         admin.from('engagements').select('contact_id').eq('account_id', accountId).eq('status', 'open').is('assigned_caller_id', null).limit(MAX),
         admin.from('callback_requests').select('contact_id').eq('account_id', accountId).neq('status', 'done').is('assigned_caller_id', null).limit(MAX),
       ]);
-      contactIds = [...new Set([...(eng ?? []), ...(cbs ?? [])].map((r) => r.contact_id as string))];
+      contactIds = [
+        ...new Set([...(eng ?? []), ...(cbs ?? [])].map((r) => r.contact_id as string).concat([...(await releasedContacts(admin, accountId)).keys()])),
+      ];
     }
     if (!contactIds.length) return NextResponse.json({ moved: 0, perCaller: {} });
 

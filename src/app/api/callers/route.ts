@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 
 import { toErrorResponse } from '@/lib/auth/account';
-import { isAccountMember, requireCallersAccess } from '@/lib/callers/server';
+import { isAccountMember, releasedContacts, requireCallersAccess } from '@/lib/callers/server';
 
 export async function GET() {
   try {
@@ -58,6 +58,10 @@ export async function GET() {
         since: cur?.since ?? (r.requested_at as string),
         priority: (cur?.priority ?? false) || r.priority === 'high',
       });
+    }
+    // …and leads taken off a caller without a new owner (e.g. "Unassigned").
+    for (const [id, at] of await releasedContacts(admin, accountId)) {
+      if (!unassigned.has(id)) unassigned.set(id, { contact_id: id, since: at, priority: false });
     }
     const ids = [...unassigned.keys()].slice(0, 500);
     const { data: contacts } = ids.length

@@ -110,3 +110,36 @@ export async function releaseCallerWork(db: SupabaseClient, accountId: string, c
     .neq('status', 'done');
   return owned?.length ?? 0;
 }
+
+/**
+ * Leads a person took away from a caller without giving them to anyone
+ * (manual "Unassigned", deactivation, member removed) and that still have
+ * no owner — they belong in Admin Unassigned even when they have no open
+ * engagement or callback. contactId → when they were released.
+ */
+export async function releasedContacts(db: SupabaseClient, accountId: string): Promise<Map<string, string>> {
+  const { data: rows } = await db
+    .from('caller_assignment_history')
+    .select('contact_id, to_caller_id, created_at')
+    .eq('account_id', accountId)
+    .gte('created_at', new Date(Date.now() - 90 * 864e5).toISOString())
+    .order('created_at', { ascending: false })
+    .limit(5000);
+  const latest = new Map<string, { to: string | null; at: string }>();
+  for (const r of rows ?? []) {
+    const id = r.contact_id as string | null;
+    if (id && !latest.has(id)) latest.set(id, { to: (r.to_caller_id as string | null) ?? null, at: r.created_at as string });
+  }
+  const candidates = [...latest].filter(([, v]) => v.to === null).map(([id]) => id);
+  const out = new Map<string, string>();
+  for (let i = 0; i < candidates.length; i += 500) {
+    const { data } = await db
+      .from('contacts')
+      .select('id')
+      .eq('account_id', accountId)
+      .is('assigned_caller_id', null)
+      .in('id', candidates.slice(i, i + 500));
+    for (const c of data ?? []) out.set(c.id as string, latest.get(c.id as string)!.at);
+  }
+  return out;
+}
