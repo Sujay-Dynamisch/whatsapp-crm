@@ -227,7 +227,7 @@ export default function WebinarsPage() {
               <div key={k} className="space-y-2.5 rounded-xl border border-border bg-muted/30 p-4">
                 <p className="text-sm font-semibold capitalize text-foreground">{k} sessions</p>
                 <label className="block space-y-1">
-                  <span className="text-xs text-muted-foreground">Default time</span>
+                  <span className="block text-xs text-muted-foreground">Default time</span>
                   <Input type="time" className="h-9" value={rules[`default_${k}_time`]} onChange={(e) => setRules({ ...rules, [`default_${k}_time`]: e.target.value })} />
                 </label>
                 {([
@@ -238,7 +238,7 @@ export default function WebinarsPage() {
                   const key = `${k}_${f}_min` as keyof Rules;
                   return (
                     <label key={f} className="block space-y-1">
-                      <span className="text-xs text-muted-foreground">{label}</span>
+                      <span className="block text-xs text-muted-foreground">{label}</span>
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
@@ -248,15 +248,15 @@ export default function WebinarsPage() {
                           value={Number(rules[key]) / 60}
                           onChange={(e) => setRules({ ...rules, [key]: Math.round(Number(e.target.value) * 60) })}
                         />
-                        <span className="text-xs text-muted-foreground">hours before ({hrs(Number(rules[key]))})</span>
+                        <span className="block text-xs text-muted-foreground">hours before ({hrs(Number(rules[key]))})</span>
                       </div>
                     </label>
                   );
                 })}
               </div>
             ))}
-            <label className="space-y-1 md:col-span-2">
-              <span className="text-xs text-muted-foreground">Check-in message the next morning at</span>
+            <label className="block space-y-1.5 md:col-span-2">
+              <span className="block text-xs text-muted-foreground">Check-in message the next morning at</span>
               <select className={cn(SELECT, 'max-w-40')} value={rules.checkin_hour} onChange={(e) => setRules({ ...rules, checkin_hour: Number(e.target.value) })}>
                 {Array.from({ length: 24 }, (_, h) => (
                   <option key={h} value={h}>
@@ -317,12 +317,12 @@ export default function WebinarsPage() {
               </div>
             )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <label className="space-y-1">
-                <span className="text-xs text-muted-foreground">Starting from</span>
+              <label className="block space-y-1">
+                <span className="block text-xs text-muted-foreground">Starting from</span>
                 <Input type="date" className="h-9" value={from} min={todayIst()} onChange={(e) => setFrom(e.target.value)} />
               </label>
-              <label className="space-y-1">
-                <span className="text-xs text-muted-foreground">For the next</span>
+              <label className="block space-y-1">
+                <span className="block text-xs text-muted-foreground">For the next</span>
                 <select className={SELECT} value={span} onChange={(e) => setSpan(Number(e.target.value))}>
                   {[7, 14, 21, 30].map((n) => (
                     <option key={n} value={n}>
@@ -331,12 +331,12 @@ export default function WebinarsPage() {
                   ))}
                 </select>
               </label>
-              <label className="space-y-1">
-                <span className="text-xs text-muted-foreground">Time (blank = default)</span>
+              <label className="block space-y-1">
+                <span className="block text-xs text-muted-foreground">Time (blank = default)</span>
                 <Input type="time" className="h-9" value={customTime} onChange={(e) => setCustomTime(e.target.value)} />
               </label>
-              <label className="space-y-1">
-                <span className="text-xs text-muted-foreground">Zoom link (blank = main link)</span>
+              <label className="block space-y-1">
+                <span className="block text-xs text-muted-foreground">Zoom link (blank = main link)</span>
                 <Input className="h-9" placeholder="https://zoom.us/j/…" value={link} onChange={(e) => setLink(e.target.value)} />
               </label>
             </div>
@@ -406,7 +406,7 @@ export default function WebinarsPage() {
                                 <span className="truncate">{s.link}</span>
                               </button>
                             ) : (
-                              <span className="text-xs text-muted-foreground">Main webinar link</span>
+                              <span className="block text-xs text-muted-foreground">Main webinar link</span>
                             )}
                           </div>
                           {canEdit && (
