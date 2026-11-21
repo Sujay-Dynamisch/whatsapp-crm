@@ -464,8 +464,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const can = useCallback(
     (area: Area, level: AccessLevel = "view") =>
       atLeast(
-        area === "callers"
-          ? callersLevel(access, (profile?.account_role as AccountRole | undefined) ?? null)
+        area === "callers" || area === "webinars"
+          ? callersLevel(access, (profile?.account_role as AccountRole | undefined) ?? null, area)
           : levelFor(access, area),
         level,
       ),

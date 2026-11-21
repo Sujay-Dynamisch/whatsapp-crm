@@ -33,6 +33,7 @@ export const AREAS = [
   'callbacks',
   'payments',
   'callers',
+  'webinars',
   'button_clicks',
   'failed_messages',
   'settings',
@@ -82,6 +83,7 @@ export const AREA_FEATURE: Partial<Record<Area, Feature>> = {
   callbacks: 'callbacks',
   payments: 'payments',
   callers: 'caller_management',
+  webinars: 'webinar_schedule',
   button_clicks: 'button_analytics',
   failed_messages: 'failed_messages',
   api_access: 'api_access',
@@ -146,6 +148,7 @@ const PATH_RULES: { prefix: string; area: Area; exact?: boolean }[] = [
   { prefix: '/callbacks', area: 'callbacks' },
   { prefix: '/payments', area: 'payments' },
   { prefix: '/callers', area: 'callers' },
+  { prefix: '/webinars', area: 'webinars' },
   { prefix: '/button-clicks', area: 'button_clicks' },
   { prefix: '/failed-messages', area: 'failed_messages' },
   // APIs
@@ -167,6 +170,7 @@ const PATH_RULES: { prefix: string; area: Area; exact?: boolean }[] = [
   { prefix: '/api/callbacks', area: 'callbacks' },
   { prefix: '/api/payments', area: 'payments' },
   { prefix: '/api/callers', area: 'callers' },
+  { prefix: '/api/webinars', area: 'webinars' },
   { prefix: '/api/button-clicks', area: 'button_clicks' },
   { prefix: '/api/failed-messages', area: 'failed_messages' },
   { prefix: '/api/health', area: 'failed_messages' },
@@ -208,8 +212,12 @@ export function isWriteRequest(method: string, pathname: string): boolean {
  * without a custom role: owners/admins manage it, everyone else only when
  * a custom role grants the 'callers' area.
  */
-export function callersLevel(access: MyAccess | null | undefined, role: AccountRole | null | undefined): AccessLevel {
-  if (access) return levelFor(access, 'callers');
+export function callersLevel(
+  access: MyAccess | null | undefined,
+  role: AccountRole | null | undefined,
+  area: Area = 'callers'
+): AccessLevel {
+  if (access) return levelFor(access, area);
   return role === 'owner' || role === 'admin' ? 'edit' : 'none';
 }
 

@@ -60,6 +60,40 @@ async function realignNurtureRuns(db: SupabaseClient, journeyId: string, write: 
   console.log(write ? `Moved ${moved} parked run(s).` : `${(data ?? []).length} parked run(s) checked (dry run — nothing changed).`);
 }
 
+/**
+ * Webinar Schedule (097): templates now take the link from the schedule
+ * step (`nodes.schedule.link`). Runs parked from before this version have
+ * no link there yet — fill it in from their webinar_link setting so the
+ * reminders still carry it.
+ */
+async function fillScheduleLinks(db: SupabaseClient, journeyId: string, write: boolean): Promise<void> {
+  const { data, error } = await db
+    .from('journey_enrollments')
+    .select('id, context')
+    .eq('journey_id', journeyId)
+    .eq('status', 'waiting');
+  if (error) throw error;
+  let fixed = 0;
+  for (const run of data ?? []) {
+    const ctx = (run.context ?? {}) as { nodes?: Record<string, Record<string, unknown>>; vars?: Record<string, unknown> };
+    const link = String(ctx.vars?.webinar_link ?? '');
+    let changed = false;
+    for (const key of ['schedule', 'a_next']) {
+      const out = ctx.nodes?.[key];
+      if (out && typeof out === 'object' && !out.link && link) {
+        out.link = link;
+        changed = true;
+      }
+    }
+    if (!changed) continue;
+    fixed++;
+    if (!write) continue;
+    const { error: upErr } = await db.from('journey_enrollments').update({ context: ctx }).eq('id', run.id).eq('status', 'waiting');
+    if (upErr) throw upErr;
+  }
+  console.log(write ? `Filled the webinar link for ${fixed} parked run(s).` : `${fixed} parked run(s) need the webinar link filled (dry run).`);
+}
+
 async function main() {
   const insert = process.argv.includes('--insert') || process.argv.includes('--rebuild');
   const db = await connect();
@@ -98,6 +132,7 @@ async function main() {
     if (error) throw error;
     console.log(`Rebuilt journey ${dupe.id} (${graph.nodes.length} steps; Settings kept).`);
     await realignNurtureRuns(db, dupe.id, true);
+    await fillScheduleLinks(db, dupe.id, true);
     return;
   }
   if (dupe && process.argv.includes('--update-code')) {
@@ -112,6 +147,7 @@ async function main() {
   if (dupe) {
     console.log(`Journey "${JOURNEY_NAME}" already exists (${dupe.id}); use --rebuild to replace its graph.`);
     await realignNurtureRuns(db, dupe.id, false);
+    await fillScheduleLinks(db, dupe.id, false);
     return;
   }
   if (!process.argv.includes('--insert')) {

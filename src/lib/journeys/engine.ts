@@ -19,6 +19,7 @@
 // against an in-memory database without Meta.
 // ============================================================
 
+import { loadWebinarScope } from './webinar';
 import { claimPaymentLink, markPaymentLinkSent, releasePaymentLink } from '@/lib/payments/link-once';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -693,7 +694,10 @@ async function runNode(rt: Runtime, node: JourneyNode, now: Date): Promise<StepR
       const s = await rt.scope();
       const run = deps.runCode ?? (async (code, input) => (await import('./sandbox')).runUserCode(code, input));
       try {
-        const { result, logs } = await run(cfg.code, { ...s } as unknown as Record<string, unknown>);
+        const input: Record<string, unknown> = { ...(s as unknown as Record<string, unknown>) };
+        // Webinar schedule (097): sessions + timing rules for code that uses them.
+        if (cfg.code.includes('webinar')) input.webinar = await loadWebinarScope(db, e.account_id, now);
+        const { result, logs } = await run(cfg.code, input);
         if (logs.length) await logEvent(db, e, node.id, 'log', logs.join('\n').slice(0, 4000));
         return { slot: 'success', output: result };
       } catch (err) {
@@ -1021,6 +1025,74 @@ export async function resumeOnReply(
     resumed++;
   }
   return resumed;
+}
+
+/**
+ * Webinar Schedule (097): runs booked into a session (their schedule step
+ * picked `startIso`) that are still waiting for it — the reminder /
+ * check-in waits keyed on `nodes.schedule`.
+ */
+async function bookedRuns(db: SupabaseClient, accountId: string, startIso: string) {
+  const { data: journeys } = await db.from('journeys').select('*').eq('account_id', accountId).eq('status', 'active');
+  const out: { journey: JourneyRow; runs: EnrollmentRow[]; entry: string }[] = [];
+  for (const journey of (journeys ?? []) as JourneyRow[]) {
+    const entry = (findTrigger(journey.graph)?.config as TriggerConfig | undefined)?.session_moved_node;
+    if (!entry || !journey.graph.nodes.some((n) => n.id === entry)) continue;
+    const waits = journey.graph.nodes
+      .filter((n) => n.type === 'wait' && String((n.config as { until?: string }).until ?? '').includes('nodes.schedule.'))
+      .map((n) => n.id);
+    if (!waits.length) continue;
+    const { data: runs } = await db
+      .from('journey_enrollments')
+      .select('*')
+      .eq('journey_id', journey.id)
+      .eq('status', 'waiting')
+      .in('current_node_id', waits)
+      .eq('context->nodes->schedule->>start_iso', startIso);
+    out.push({ journey, runs: (runs ?? []) as EnrollmentRow[], entry });
+  }
+  return out;
+}
+
+/** How many leads are booked into a session (Webinar Schedule page). */
+export async function countBookedRuns(db: SupabaseClient, accountId: string, startIso: string): Promise<number> {
+  return (await bookedRuns(db, accountId, startIso)).reduce((n, j) => n + j.runs.length, 0);
+}
+
+/**
+ * A session was cancelled or its time changed: every lead still waiting
+ * for it resumes at the journey's `session_moved_node`, which books the
+ * next scheduled session, tells them and re-plans their reminders.
+ * Returns how many runs were moved. Never throws per run.
+ */
+export async function moveBookedRuns(
+  db: SupabaseClient,
+  accountId: string,
+  startIso: string,
+  deps: JourneyDeps
+): Promise<{ moved: number; errors: string[] }> {
+  let moved = 0;
+  const errors: string[] = [];
+  for (const { journey, runs, entry } of await bookedRuns(db, accountId, startIso)) {
+    for (const row of runs) {
+      try {
+        const { data: claimed } = await db
+          .from('journey_enrollments')
+          .update({ status: 'active', locked_at: deps.now().toISOString(), wait_kind: null, current_node_id: entry })
+          .eq('id', row.id)
+          .eq('status', 'waiting')
+          .eq('current_node_id', row.current_node_id)
+          .select('id');
+        if (!claimed?.length) continue;
+        await logEvent(db, row, entry, 'session_moved', `Booked session ${startIso} cancelled / moved`);
+        await advanceEnrollment(db, journey, { ...row, status: 'active', wait_kind: null, current_node_id: entry }, deps);
+        moved++;
+      } catch (err) {
+        errors.push(`${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+  return { moved, errors };
 }
 
 /** How long a finished run still answers a late menu tap. */

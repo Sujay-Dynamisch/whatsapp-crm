@@ -105,6 +105,7 @@ describe('GET', () => {
       'failed_messages',
       'payments',
       'caller_management',
+      'webinar_schedule',
     ]);
   });
 

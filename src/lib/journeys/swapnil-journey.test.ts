@@ -91,7 +91,7 @@ function fakeDb(): SupabaseClient {
         insert: (r: Row | Row[]) => ((op = 'insert'), (inserted = Array.isArray(r) ? r : [r]), b),
         update: (p: Row) => ((op = 'update'), (patch = p), b),
         delete: () => ((op = 'delete'), b),
-        eq: (c: string, v: unknown) => (preds.push((r) => r[c] === v), b),
+        eq: (c: string, v: unknown) => (preds.push((r) => readPath(r, c) === v), b),
         in: (c: string, vs: unknown[]) => (preds.push((r) => vs.includes(r[c])), b),
         gte: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) >= v), b),
         lte: (c: string, v: string) => (preds.push((r) => r[c] != null && String(r[c]) <= v), b),
@@ -124,6 +124,11 @@ const db = () => fakeDb();
 const H = 3_600_000;
 const IST = 5.5 * H;
 /** "2026-11-02 10:00" IST → Date. */
+/** Column or PostgREST JSON path (`context->nodes->schedule->>start_iso`). */
+function readPath(r: Record<string, unknown>, c: string): unknown {
+  if (!c.includes('->')) return r[c];
+  return c.split(/->>?/).reduce<unknown>((v, k) => (v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined), r);
+}
 const ist = (s: string) => new Date(Date.parse(`${s.replace(' ', 'T')}:00+05:30`));
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -318,6 +323,8 @@ describe('graph', () => {
       sg_webinar_session_reminder: 5,
       sg_post_webinar_checkin: 1,
       sg_webinar_session_rebooked: 4,
+      // Not in the PDF: Webinar Schedule "session changed" (097).
+      sg_webinar_session_changed: 4,
       // Also the Stage D (Testimonial Nurture) template since 087.
       sg_testimonial_reprompt: 1,
       sg_nurture_prewebinar: 4,
@@ -1253,5 +1260,59 @@ describe('two check-in buttons tapped back to back — both get a reply', () => 
     const before = sent.length;
     await tap('Ready to Join');
     expect(sent.length).toBe(before);
+  });
+});
+
+describe('Webinar Schedule (097) — the journey follows the planned sessions', () => {
+  const session = (when: string, extra: Record<string, unknown> = {}) => ({
+    id: `ws-${when}`,
+    account_id: 'acct',
+    starts_at: ist(when).toISOString(),
+    link: null,
+    status: 'scheduled',
+    ...extra,
+  });
+
+  it('alternate days: books the next session; after its cut-off → the one 2 days later', async () => {
+    tables.webinar_sessions = [session('2026-11-03 20:00'), session('2026-11-05 20:00')];
+    await register('2026-11-02 10:00');
+    expect(templates('sg_registration_confirmed')[0].params?.[1]).toBe('Tue, 3 Nov 2026');
+    await register('2026-11-03 15:00', 'c2'); // after Tue's 2 PM cut-off
+    expect(templates('sg_registration_confirmed')[1].params?.[1]).toBe('Thu, 5 Nov 2026');
+  });
+
+  it('reminders follow the session time; a per-session Zoom link is used', async () => {
+    tables.webinar_sessions = [session('2026-11-03 18:30', { link: 'https://zoom.us/j/special' })];
+    await register('2026-11-02 10:00');
+    expect(templates('sg_registration_confirmed')[0].params).toEqual(['Asha', 'Tue, 3 Nov 2026', '6:30 PM IST', 'https://zoom.us/j/special']);
+    await runUntil('2026-11-03 18:00');
+    expect(log().filter((l) => l.includes('sg_webinar_session_reminder'))).toEqual([
+      'Tue 03 12:30 sg_webinar_session_reminder',
+      'Tue 03 17:30 sg_webinar_session_reminder',
+    ]);
+  });
+
+  it('cancelling a session moves its booked leads to the next one and tells them', async () => {
+    tables.webinar_sessions = [session('2026-11-02 20:00'), session('2026-11-04 20:00')];
+    await register('2026-11-02 10:00');
+    expect(templates('sg_registration_confirmed')[0].params?.[1]).toBe('Mon, 2 Nov 2026');
+    await runUntil('2026-11-02 15:00'); // Msg 2 sent, waiting for Msg 3
+    tables.webinar_sessions[0].status = 'cancelled';
+    const { moveBookedRuns } = await import('./engine');
+    const r = await moveBookedRuns(db(), 'acct', '2026-11-02T20:00:00+05:30', deps);
+    expect(r.moved).toBe(1);
+    expect(templates('sg_webinar_session_changed')[0].params?.[1]).toBe('Wed, 4 Nov 2026');
+    await runUntil('2026-11-04 20:00');
+    expect(log().filter((l) => l.startsWith('Wed 04'))).toEqual([
+      'Wed 04 14:00 sg_webinar_session_reminder',
+      'Wed 04 19:00 sg_webinar_session_reminder',
+    ]);
+  });
+
+  it('no session scheduled → the built-in daily rule (unchanged behaviour)', async () => {
+    tables.webinar_sessions = [];
+    await register('2026-11-02 10:00');
+    expect(templates('sg_registration_confirmed')[0].params?.[1]).toBe('Mon, 2 Nov 2026');
+    expect(templates('sg_registration_confirmed')[0].params?.[2]).toBe('8:00 PM IST');
   });
 });

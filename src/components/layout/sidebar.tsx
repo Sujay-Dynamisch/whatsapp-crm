@@ -10,7 +10,7 @@ import { areaForPath } from "@/lib/auth/permissions";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useOpenCallbacks } from "@/hooks/use-open-callbacks";
-import { MessageSquareWarning,
+import { CalendarClock, MessageSquareWarning,
   Bell,
   Bot,
   Crown,
@@ -112,6 +112,7 @@ const navItems: NavItem[] = [
   { href: "/callbacks", labelKey: "callbacks", icon: PhoneCall, feature: "callbacks" },
   { href: "/payments", labelKey: "payments", icon: Wallet, feature: "payments" },
   { href: "/callers", labelKey: "callers", icon: UserCog, feature: "caller_management" },
+  { href: "/webinars", labelKey: "webinars", icon: CalendarClock, feature: "webinar_schedule" },
   { href: "/failed-messages", labelKey: "failedMessages", icon: MessageSquareWarning, feature: "failed_messages" },
   { href: "/automations", labelKey: "automations", icon: Zap, feature: "automations" },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, feature: "flows" },

@@ -35,6 +35,7 @@ export const FEATURES = [
   'failed_messages',
   'payments',
   'caller_management',
+  'webinar_schedule',
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -120,6 +121,11 @@ export const FEATURE_INFO: Record<Feature, FeatureInfo> = {
       'Callers module: round-robin lead assignment, 15-day repeat-registration rule, priority callbacks routed to the lead’s caller, and callers only see their own leads.',
     defaultOff: true,
   },
+  webinar_schedule: {
+    label: 'Webinar schedule',
+    description: 'Webinar Schedule page: plan sessions (skip days, alternate days, cancel / move) — the webinar journey follows it and re-plans booked leads.',
+    defaultOff: true,
+  },
   api_access: {
     label: 'API & webhooks',
     description: 'Public REST API keys and outbound webhooks.',
@@ -188,6 +194,7 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/callbacks', feature: 'callbacks' },
   { prefix: '/payments', feature: 'payments' },
   { prefix: '/callers', feature: 'caller_management' },
+  { prefix: '/webinars', feature: 'webinar_schedule' },
   { prefix: '/failed-messages', feature: 'failed_messages' },
   // Internal APIs
   { prefix: '/api/whatsapp/broadcast', feature: 'broadcasts' },
@@ -201,6 +208,7 @@ const PATH_RULES: { prefix: string; feature: Feature }[] = [
   { prefix: '/api/callbacks', feature: 'callbacks' },
   { prefix: '/api/payments', feature: 'payments' },
   { prefix: '/api/callers', feature: 'caller_management' },
+  { prefix: '/api/webinars', feature: 'webinar_schedule' },
   { prefix: '/api/failed-messages', feature: 'failed_messages' },
   { prefix: '/api/health', feature: 'failed_messages' },
   { prefix: '/api/delivery-settings', feature: 'smart_sending' },
