@@ -219,8 +219,15 @@ export default function WebinarsPage() {
       {showRules && canEdit && (
         <Card>
           <CardHeader className="border-b">
-            <CardTitle>Timing rules</CardTitle>
-            <CardDescription className="text-xs">How long before each session the journey stops booking it and sends the reminders (India time).</CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>Timing rules</CardTitle>
+                <CardDescription className="text-xs">How long before each session the journey stops booking it and sends the reminders (India time).</CardDescription>
+              </div>
+              <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label="Close timing rules" onClick={() => setShowRules(false)}>
+                <X className="size-4" />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="grid gap-4 pt-4 md:grid-cols-2">
             {(['weekday', 'weekend'] as const).map((k) => (
