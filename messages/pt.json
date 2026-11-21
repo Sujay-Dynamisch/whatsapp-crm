@@ -48,6 +48,7 @@
     "callbacks": "Retornos de ligação",
     "payments": "Pagamentos",
     "callers": "Atendentes",
+    "webinars": "Agenda de webinars",
     "openCallbacks": "{count} pedidos de ligação aguardando",
     "journeys": "Jornadas"
   },
@@ -57,6 +58,7 @@
     "callbacks": "Retornos de ligação",
     "payments": "Pagamentos",
     "callers": "Atendentes",
+    "webinars": "Agenda de webinars",
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
     "contacts": "Contatos",
@@ -3543,6 +3545,10 @@
       "callbacks": {
         "label": "Retornos",
         "desc": "Solicitações de retorno"
+      },
+      "webinars": {
+        "label": "Agenda de webinars",
+        "desc": "Planeje as sessões; a jornada segue"
       },
       "callers": {
         "label": "Atendentes",

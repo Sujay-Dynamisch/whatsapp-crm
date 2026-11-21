@@ -31,6 +31,9 @@ const tablesWithoutDomainData = new Set([
   // 095: payment ledger rows exist only alongside contacts (guarded).
   "payment_plans",
   "payment_installments",
+  // 097: webinar schedule (settings / session calendar, no customer data).
+  "webinar_sessions",
+  "webinar_settings",
 ]);
 
 function accountScopedTables(): Set<string> {

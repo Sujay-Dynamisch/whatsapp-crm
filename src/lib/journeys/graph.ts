@@ -128,12 +128,15 @@ export interface TriggerConfig extends Partial<ScheduleConfig> {
   revive_tag_id?: string;
   /** …and the step their new run starts at (their message is {{ reply.text }}). */
   revive_node?: string;
+  /** Webinar Schedule (097): a booked session was cancelled / moved — the
+   *  waiting run resumes here to book the next one and tell the lead. */
+  session_moved_node?: string;
 }
 
 /** Steps a run can start at besides the trigger (callback follow-ups). */
 export function entryNodeIds(graph: JourneyGraph): string[] {
   const cfg = (findTrigger(graph)?.config ?? {}) as TriggerConfig;
-  return [cfg.callback_return_node, cfg.callback_missed_node, cfg.revive_node].filter((x): x is string => Boolean(x));
+  return [cfg.callback_return_node, cfg.callback_missed_node, cfg.revive_node, cfg.session_moved_node].filter((x): x is string => Boolean(x));
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

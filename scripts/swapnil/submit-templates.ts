@@ -65,6 +65,22 @@ const TEMPLATES: TemplatePayload[] = [
     ].join('\n\n'),
     sample_values: { body: ['Priya', 'Tue, 27 Oct 2026', '8:00 PM IST', 'https://example.com/webinar'] },
   },
+  // Webinar Schedule page: the lead's booked session was cancelled or its
+  // time changed — the new session's details. Informational → Utility.
+  {
+    name: 'sg_webinar_session_changed',
+    category: 'Utility',
+    language: 'en_US',
+    header_type: 'text',
+    header_content: 'Webinar Session Update',
+    body_text: [
+      'Hi {{1}},',
+      'There is a change to the Transformation Webinar session you registered for. Your new session details:',
+      '📅 Date: {{2}}\n🕒 Time: {{3}}\n🔗 Join link: {{4}}',
+      'Sorry for any inconvenience — see you there.',
+    ].join('\n\n'),
+    sample_values: { body: ['Priya', 'Thu, 29 Oct 2026', '8:00 PM IST', 'https://example.com/webinar'] },
+  },
   // Sent when the team marks a callback "No answer" (Callbacks page). A
   // reply to the lead's own callback request — informational, so Utility.
   {

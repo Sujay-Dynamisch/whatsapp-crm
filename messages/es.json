@@ -48,6 +48,7 @@
     "callbacks": "Devoluciones de llamada",
     "payments": "Pagos",
     "callers": "Llamadores",
+    "webinars": "Calendario de webinars",
     "openCallbacks": "{count} solicitudes de llamada pendientes",
     "journeys": "Recorridos"
   },
@@ -57,6 +58,7 @@
     "callbacks": "Devoluciones de llamada",
     "payments": "Pagos",
     "callers": "Llamadores",
+    "webinars": "Calendario de webinars",
     "inbox": "Bandeja de entrada",
     "notifications": "Notificaciones",
     "contacts": "Contactos",
@@ -3543,6 +3545,10 @@
       "callbacks": {
         "label": "Devoluciones de llamada",
         "desc": "Solicitudes de llamada"
+      },
+      "webinars": {
+        "label": "Calendario de webinars",
+        "desc": "Planifica las sesiones; el journey las sigue"
       },
       "callers": {
         "label": "Llamadores",

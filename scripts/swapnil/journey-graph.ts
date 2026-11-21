@@ -58,6 +58,40 @@ export const scheduleCode = (fromNow: boolean) => `${CLOCK}
 const nowIst = new Date(NOW + IST).toISOString().slice(0, 19);
 const added = ${fromNow ? 'nowIst' : "vars.reschedule === 'yes' || (trigger && trigger.reregistered) ? nowIst : String(contact.created_at_ist || nowIst).slice(0, 19)"};
 const base = Date.parse(added.replace(' ', 'T') + 'Z'); // IST clock as plain ms
+const ist = (ms) => new Date(ms).toISOString().slice(0, 19) + '+05:30';
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dateText = (ms) => { const d = new Date(ms); return DAYS[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); };
+const timeText = (ms) => { const d = new Date(ms); const h = d.getUTCHours(), m = d.getUTCMinutes(); return ((h % 12) || 12) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' AM' : ' PM') + ' IST'; };
+const mainLink = (vars && vars.webinar_link) || '';
+// Webinar Schedule page (migration 097): the next scheduled session whose
+// registration cut-off hasn't passed. No session → the built-in rule below.
+const W = $input.webinar || null;
+if (W && W.sessions && W.sessions.length) {
+  const R = W.rules;
+  for (const sess of W.sessions) {
+    const st = Date.parse(String(sess.start_iso).slice(0, 19) + 'Z');
+    const wd = new Date(st).getUTCDay();
+    const we = wd === 0 || wd === 6;
+    if (base >= st - (we ? R.weekend_cutoff_min : R.weekday_cutoff_min) * 60e3) continue;
+    const m2 = st - (we ? R.weekend_msg2_min : R.weekday_msg2_min) * 60e3;
+    const h = new Date(st).getUTCHours();
+    const tt = timeText(st);
+    return {
+      added_ist: added,
+      date_text: dateText(st),
+      time_text: tt,
+      phrase: (h >= 17 ? 'coming up tonight at ' : h >= 12 ? 'this afternoon at ' : 'this morning at ') + tt.replace(' IST', ''),
+      start_iso: ist(st),
+      msg2_due: base < m2 ? 'yes' : 'no',
+      msg2_iso: ist(m2),
+      msg3_iso: ist(st - (we ? R.weekend_msg3_min : R.weekday_msg3_min) * 60e3),
+      checkin_iso: ist(Math.floor(st / DAY) * DAY + DAY + R.checkin_hour * H),
+      link: sess.link || mainLink,
+      source: 'schedule',
+    };
+  }
+}
 let day = Math.floor(base / DAY) * DAY;
 let start = 0, msg2 = 0, msg3 = 0, weekend = false;
 for (let i = 0; i < 8; i++) {
@@ -69,13 +103,9 @@ for (let i = 0; i < 8; i++) {
   if (i > 0 || base < day + (weekend ? 10 : 14) * H) break; // before today's cutoff, or the next day
   day += DAY;
 }
-const ist = (ms) => new Date(ms).toISOString().slice(0, 19) + '+05:30';
-const d = new Date(start);
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 return {
   added_ist: added,
-  date_text: DAYS[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear(),
+  date_text: dateText(start),
   time_text: weekend ? '3:00 PM IST' : '8:00 PM IST',
   phrase: weekend ? 'this afternoon at 3:00 PM' : 'coming up tonight at 8:00 PM',
   start_iso: ist(start),
@@ -83,6 +113,8 @@ return {
   msg2_iso: ist(msg2),
   msg3_iso: ist(msg3),
   checkin_iso: ist(day + DAY + 7 * H),
+  link: mainLink,
+  source: 'built_in',
 };`;
 
 // When the next nurture step happens: the first send at the next 11 AM;
@@ -141,7 +173,8 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
   });
   const NAME = '{{ contact.name | default:"there" }}';
   const S = (f: string) => `{{ nodes.schedule.${f} }}`;
-  const LINK = '{{ vars.webinar_link }}';
+  // The session's own link (Webinar Schedule) — the main link otherwise.
+  const LINK = '{{ nodes.schedule.link }}';
   const lc = '{{ reply.text | lower | trim }}';
   const isYes = (left: string) => ({ kind: 'expression' as const, left, op: 'equals' as const, right: 'yes' });
   // Missing value (a run from before this version) counts as "go ahead".
@@ -162,6 +195,7 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     // A closed-lost lead writes back → team notified, menu again.
     revive_tag_id: tag.closed_lost,
     revive_node: 'revived',
+    session_moved_node: 'session_moved',
   }, { next: 'settings' });
   add('settings', 'set_variable', 'Settings (edit me)', {
     assignments: [
@@ -172,7 +206,17 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     ],
   }, { next: 'nurture_days' });
   add('nurture_days', 'code', 'Nurture days (every 2nd day × 8)', { code: 'return [1, 2, 3, 4, 5, 6, 7, 8];' }, { success: 'schedule' });
-  add('schedule', 'code', 'Webinar schedule (IST)', { code: scheduleCode(false) }, { success: 'is_reinvite' });
+  add('schedule', 'code', 'Webinar schedule (IST)', { code: scheduleCode(false) }, { success: 'is_moved' });
+  // Webinar Schedule page cancelled / moved the lead's session: the API
+  // resumes their run at 'session_moved' → next session → "session
+  // changed" message → reminders for the new date.
+  add('session_moved', 'set_variable', 'Session cancelled / moved', {
+    assignments: [{ key: 'moved', value: 'yes' }, { key: 'reschedule', value: 'yes' }],
+  }, { next: 'schedule' });
+  add('is_moved', 'condition', 'Session changed?', isYes('{{ vars.moved }}'), { yes: 't6_changed', no: 'is_reinvite' });
+  add('t6_changed', 'send_template', 'Session changed (new date)',
+    tpl('sg_webinar_session_changed', [NAME, S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'clear_moved' });
+  add('clear_moved', 'set_variable', 'Clear "moved"', { assignments: [{ key: 'moved', value: 'no' }] }, { next: 'msg2_due' });
   add('is_reinvite', 'condition', 'Re-invite?', isYes('{{ vars.reschedule }}'), { yes: 't4_reinvite', no: 't1_confirm' });
   add('t1_confirm', 'send_template', 'Msg 1 Confirmation + webinar link',
     tpl('sg_registration_confirmed', [NAME, S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'tag_registered' });
@@ -375,7 +419,7 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     add(`${key}_send`, 'send_template', template, tpl(template, params, `{{ nodes.${key}_slot.retry_until }}`), { next: `${key}_slot` });
   };
   stage('a', 'pre-webinar dropout', 'sg_nurture_prewebinar',
-    [NAME, '{{ nodes.a_next.date_text }}', '{{ nodes.a_next.time_text }}', LINK], 'mark_menu', 'a_next');
+    [NAME, '{{ nodes.a_next.date_text }}', '{{ nodes.a_next.time_text }}', '{{ nodes.a_next.link }}'], 'mark_menu', 'a_next');
   stage('b', 'post check-in cold', 'sg_nurture_postwebinar', [NAME], 'mark_menu');
   stage('c', 'conversion menu cold', 'sg_nurture_coldlead', [NAME], 'mark_menu');
   // Testimonial Nurture (was Payment Nurture): no link in the nurture

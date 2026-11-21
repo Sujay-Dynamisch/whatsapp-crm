@@ -48,6 +48,7 @@
     "callbacks": "Callbacks",
     "payments": "Payments",
     "callers": "Callers",
+    "webinars": "Webinar Schedule",
     "openCallbacks": "{count} callback requests waiting",
     "journeys": "Journeys"
   },
@@ -57,6 +58,7 @@
     "callbacks": "Callbacks",
     "payments": "Payments",
     "callers": "Callers",
+    "webinars": "Webinar Schedule",
     "inbox": "Inbox",
     "notifications": "Notifications",
     "contacts": "Contacts",
@@ -2267,7 +2269,7 @@
       "title": "Agent setup",
       "description": "Bring your own OpenAI or Anthropic key. Flowza calls the provider directly with your key — no per-seat AI fees, and your data stays yours. This powers AI-drafted replies in the inbox, the auto-reply bot, and the Playground.",
       "adminOnlyConfig": "Only admins and owners can change the AI configuration.",
-      "loadFailed": "Failed to load AI configuration",
+      "loadFailed": "Loading AI configuration",
       "providerAndKey": "Provider & key",
       "encryptionNotice": "Your key is encrypted at rest (AES-256-GCM) and never shown again after saving.",
       "provider": "Provider",
@@ -3544,6 +3546,10 @@
         "label": "Callbacks",
         "desc": "Callback requests"
       },
+      "webinars": {
+        "label": "Webinar Schedule",
+        "desc": "Plan webinar sessions; the journey follows it"
+      },
       "callers": {
         "label": "Callers",
         "desc": "Callers, lead assignment and reassignment"
@@ -3992,7 +3998,7 @@
     "ai": {
       "pausedRequired": "paused (boolean) is required",
       "updateConversationFailed": "Failed to update conversation",
-      "loadConfigFailed": "Failed to load AI configuration",
+      "loadConfigFailed": "Loading AI configuration",
       "providerInvalid": "provider must be \"openai\", \"anthropic\", or \"openai_compatible\"",
       "baseUrlRequired": "base_url is required for openai_compatible",
       "baseUrlInvalid": "base_url must be a valid http(s) URL",

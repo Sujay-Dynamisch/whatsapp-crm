@@ -48,6 +48,7 @@
     "callbacks": "콜백 요청",
     "payments": "결제",
     "callers": "콜러",
+    "webinars": "웨비나 일정",
     "openCallbacks": "대기 중인 콜백 요청 {count}건",
     "journeys": "여정"
   },
@@ -57,6 +58,7 @@
     "callbacks": "콜백 요청",
     "payments": "결제",
     "callers": "콜러",
+    "webinars": "웨비나 일정",
     "inbox": "인박스",
     "notifications": "알림",
     "contacts": "연락처",
@@ -3543,6 +3545,10 @@
       "callbacks": {
         "label": "콜백",
         "desc": "콜백 요청"
+      },
+      "webinars": {
+        "label": "웨비나 일정",
+        "desc": "웨비나 세션 계획, 여정이 따라감"
       },
       "callers": {
         "label": "콜러",

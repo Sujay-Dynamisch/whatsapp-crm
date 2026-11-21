@@ -40,13 +40,14 @@ describe('feature registry', () => {
       'failed_messages',
       'payments',
       'caller_management',
+      'webinar_schedule',
     ]);
   });
 
   it('failed_messages is opt-in (off by default via migration 060) and gates its page and APIs', () => {
     expect(FEATURE_INFO.failed_messages.defaultOff).toBe(true);
     // Each opt-in key is also added by a migration's default-off trigger (060, 064).
-    expect(FEATURES.filter((f) => FEATURE_INFO[f].defaultOff)).toEqual(['failed_messages', 'payments', 'caller_management']);
+    expect(FEATURES.filter((f) => FEATURE_INFO[f].defaultOff)).toEqual(['failed_messages', 'payments', 'caller_management', 'webinar_schedule']);
     for (const path of ['/failed-messages', '/api/failed-messages', '/api/failed-messages/actions', '/api/health']) {
       expect(featureForPath(path), path).toBe('failed_messages');
     }
