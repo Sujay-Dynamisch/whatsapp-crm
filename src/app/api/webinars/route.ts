@@ -9,9 +9,9 @@
 import { NextResponse } from 'next/server';
 
 import { toErrorResponse } from '@/lib/auth/account';
-import { countBookedRuns } from '@/lib/journeys/engine';
+import { bookedImpact, countBookedRuns, orphanBookedIsos } from '@/lib/journeys/engine';
 import { loadWebinarRules, toIstIso } from '@/lib/journeys/webinar';
-import { DATE_RE, TIME_RE, istToUtc, isWeekendDate, requireWebinarAccess } from '@/lib/webinars/server';
+import { DATE_RE, TIME_RE, istToUtc, isWeekendDate, logWebinarChange, requireWebinarAccess, webinarReadiness } from '@/lib/webinars/server';
 
 export async function GET() {
   try {
@@ -38,11 +38,29 @@ export async function GET() {
       })
     );
     const upcomingCount = sessions.filter((s) => s.upcoming && s.status === 'scheduled').length;
+
+    // Leads booked into a time that isn't a scheduled session (e.g. by the
+    // built-in daily rule) — the page offers to move them.
+    let orphans = 0;
+    for (const iso of await orphanBookedIsos(admin, accountId, new Date())) orphans += (await bookedImpact(admin, accountId, iso)).booked;
+
+    const [{ data: moves }, { data: changes }] = await Promise.all([
+      admin.from('webinar_moves').select('id, reason, status, total, moved, errors, created_at, finished_at').eq('account_id', accountId).order('created_at', { ascending: false }).limit(10),
+      admin.from('webinar_changes').select('id, action, detail, affected, actor_id, created_at').eq('account_id', accountId).order('created_at', { ascending: false }).limit(20),
+    ]);
+    const actorIds = [...new Set((changes ?? []).map((c) => c.actor_id as string).filter(Boolean))];
+    const { data: people } = actorIds.length ? await admin.from('profiles').select('user_id, full_name').in('user_id', actorIds) : { data: [] };
+    const nameOf = new Map((people ?? []).map((p) => [p.user_id as string, (p.full_name as string) || '']));
+
     return NextResponse.json({
       sessions,
       rules: await loadWebinarRules(admin, accountId),
       upcoming: upcomingCount,
       low: upcomingCount < 3,
+      readiness: await webinarReadiness(admin, accountId),
+      orphans,
+      moves: moves ?? [],
+      changes: (changes ?? []).map((c) => ({ ...c, actor: nameOf.get(c.actor_id as string) ?? null })),
     });
   } catch (error) {
     return toErrorResponse(error);
@@ -80,6 +98,7 @@ export async function POST(request: Request) {
     if (fresh.length) {
       const { error } = await admin.from('webinar_sessions').insert(fresh);
       if (error) throw error;
+      await logWebinarChange(admin, { accountId, sessionId: null, action: 'add', detail: `Added ${fresh.length} session${fresh.length === 1 ? '' : 's'}`, affected: 0, actorId: userId });
     }
     return NextResponse.json({ added: fresh.length, skipped: rows.length - fresh.length });
   } catch (error) {

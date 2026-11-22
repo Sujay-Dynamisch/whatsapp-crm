@@ -73,7 +73,10 @@ if (W && W.sessions && W.sessions.length) {
     const st = Date.parse(String(sess.start_iso).slice(0, 19) + 'Z');
     const wd = new Date(st).getUTCDay();
     const we = wd === 0 || wd === 6;
-    if (base >= st - (we ? R.weekend_cutoff_min : R.weekday_cutoff_min) * 60e3) continue;
+    // Moved by an admin change (cancel / new time): any session at least
+    // 30 min ahead — the booking cut-off is for new registrations only.
+    const moved = vars && vars.moved === 'yes';
+    if (moved ? st < base + 30 * 60e3 : base >= st - (we ? R.weekend_cutoff_min : R.weekday_cutoff_min) * 60e3) continue;
     const m2 = st - (we ? R.weekend_msg2_min : R.weekday_msg2_min) * 60e3;
     const h = new Date(st).getUTCHours();
     const tt = timeText(st);

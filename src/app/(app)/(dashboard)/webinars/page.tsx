@@ -25,6 +25,46 @@ interface Session {
   upcoming: boolean;
   booked: number;
 }
+interface Readiness {
+  ready: boolean;
+  problems: string[];
+  warnings: string[];
+}
+interface MoveJob {
+  id: string;
+  reason: 'cancelled' | 'time_changed' | 'resync';
+  status: 'pending' | 'running' | 'done' | 'failed';
+  total: number;
+  moved: number;
+  created_at: string;
+}
+interface Change {
+  id: string;
+  detail: string | null;
+  affected: number;
+  actor: string | null;
+  created_at: string;
+}
+interface Preview {
+  session: string;
+  booked: number;
+  confirmationSent: number;
+  reminder1Sent: number;
+  goesTo: string | null;
+  blocked: string | null;
+  warnings: string[];
+  messagesToSend: number;
+}
+interface PageData {
+  sessions: Session[];
+  rules: Rules;
+  upcoming: number;
+  low: boolean;
+  readiness?: Readiness;
+  orphans?: number;
+  moves?: MoveJob[];
+  changes?: Change[];
+}
 interface Rules {
   weekday_cutoff_min: number;
   weekday_msg2_min: number;
@@ -70,7 +110,7 @@ const SELECT = 'h-9 w-full rounded-md border border-input bg-background px-2.5 t
 export default function WebinarsPage() {
   const { can } = useAuth();
   const canEdit = can('webinars', 'edit');
-  const [data, setData] = useState<{ sessions: Session[]; rules: Rules; upcoming: number; low: boolean } | null>(null);
+  const [data, setData] = useState<PageData | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   // Add sessions
@@ -89,7 +129,7 @@ export default function WebinarsPage() {
 
   const load = useCallback(async () => {
     try {
-      const d = await api<{ sessions: Session[]; rules: Rules; upcoming: number; low: boolean }>('/api/webinars');
+      const d = await api<PageData>('/api/webinars');
       setData(d);
       setRules(d.rules);
     } catch (e) {
@@ -99,6 +139,49 @@ export default function WebinarsPage() {
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
+
+  // While leads are being moved, refresh every 5 s for progress.
+  const moving = (data?.moves ?? []).some((m) => m.status === 'pending' || m.status === 'running');
+  useEffect(() => {
+    if (!moving) return;
+    const t = window.setInterval(() => void load(), 5000);
+    return () => window.clearInterval(t);
+  }, [moving, load]);
+
+  /** Impact preview → a clear refusal, or a confirmation that spells out the effect. */
+  const confirmImpact = async (s: Session, action: 'cancel' | 'time', title: string, confirmLabel: string, extra?: { date: string; time: string }) => {
+    const p = await api<Preview>(`/api/webinars/${s.id}`, { method: 'POST', body: JSON.stringify({ action, ...extra }) });
+    if (p.blocked) {
+      await confirmDialog({ title: 'This change is not allowed', description: p.blocked, confirmLabel: 'OK' });
+      return false;
+    }
+    const lines =
+      p.booked === 0
+        ? ['Nobody is booked into this session yet — no messages will be sent.']
+        : [
+            `${p.booked} lead${p.booked === 1 ? ' is' : 's are'} booked into ${p.session}.`,
+            `All ${p.confirmationSent} already received the confirmation with this date${p.reminder1Sent ? `, and ${p.reminder1Sent} also got Reminder 1` : ''}.`,
+            `They will be moved to ${p.goesTo} and their reminders re-timed.`,
+            p.messagesToSend
+              ? `${p.messagesToSend} "session changed" WhatsApp message${p.messagesToSend === 1 ? '' : 's'} will be sent (1 per lead).`
+              : 'No "session changed" message can be sent — the template is not approved yet.',
+            ...p.warnings,
+          ];
+    return confirmDialog({
+      title,
+      description: (
+        <span className="block space-y-2">
+          {lines.map((l) => (
+            <span key={l} className="block">
+              {l}
+            </span>
+          ))}
+        </span>
+      ),
+      confirmLabel,
+      destructive: action === 'cancel',
+    });
+  };
 
   const planned = useMemo(() => {
     const out: string[] = [];
@@ -134,39 +217,43 @@ export default function WebinarsPage() {
     });
 
   const cancel = async (s: Session) => {
-    const ok = await confirmDialog({
-      title: `Cancel ${fmtDate(istDate(s.start_iso))}, ${fmtTime(istTime(s.start_iso))}?`,
-      description:
-        s.booked > 0
-          ? `${s.booked} registered lead${s.booked === 1 ? '' : 's'} will be moved to the next scheduled session and get a WhatsApp message with the new date, time and link.`
-          : 'Nobody is booked into this session yet.',
-      confirmLabel: 'Cancel session',
-      destructive: true,
-    });
-    if (!ok) return;
+    try {
+      const ok = await confirmImpact(s, 'cancel', `Cancel ${fmtDate(istDate(s.start_iso))}, ${fmtTime(istTime(s.start_iso))}?`, 'Cancel session');
+      if (!ok) return;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not check this change');
+      return;
+    }
     await run(`c-${s.id}`, async () => {
-      const r = await api<{ moved: number }>(`/api/webinars/${s.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
-      toast.success(r.moved ? `Session cancelled — ${r.moved} lead${r.moved === 1 ? '' : 's'} moved to the next session` : 'Session cancelled');
+      const r = await api<{ booked: number; jobId: string | null }>(`/api/webinars/${s.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
+      toast.success(r.jobId ? `Session cancelled — moving ${r.booked} lead${r.booked === 1 ? '' : 's'} (see progress below)` : 'Session cancelled');
     });
   };
 
   const saveEdit = async (s: Session) => {
     const timeChanged = edit.date !== istDate(s.start_iso) || edit.time !== istTime(s.start_iso);
-    if (timeChanged && s.booked > 0) {
-      const ok = await confirmDialog({
-        title: 'Change the session time?',
-        description: `${s.booked} booked lead${s.booked === 1 ? '' : 's'} will get a WhatsApp message with the new date and time, and their reminders will be re-timed.`,
-        confirmLabel: 'Change time',
-      });
-      if (!ok) return;
+    if (timeChanged) {
+      try {
+        const ok = await confirmImpact(s, 'time', 'Change the session time?', 'Change time', { date: edit.date, time: edit.time });
+        if (!ok) return;
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not check this change');
+        return;
+      }
     }
     await run(`e-${s.id}`, async () => {
-      const r = await api<{ moved: number }>(`/api/webinars/${s.id}`, {
+      const r = await api<{ booked: number; jobId: string | null; linkSynced: number }>(`/api/webinars/${s.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ date: edit.date, time: edit.time, link: edit.link }),
       });
       setEditing(null);
-      toast.success(r.moved ? `Saved — ${r.moved} lead${r.moved === 1 ? '' : 's'} told about the change` : 'Saved');
+      toast.success(
+        r.jobId
+          ? `Saved — moving ${r.booked} lead${r.booked === 1 ? '' : 's'} (see progress below)`
+          : r.linkSynced
+            ? `Saved — ${r.linkSynced} booked lead${r.linkSynced === 1 ? '' : 's'} will get the new link in their reminders`
+            : 'Saved'
+      );
     });
   };
 
@@ -207,6 +294,46 @@ export default function WebinarsPage() {
         )}
       </div>
 
+      {data.readiness && !data.readiness.ready && (
+        <div className="rounded-xl border border-rose-500/50 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-300">
+          <p className="flex items-center gap-2 font-semibold">
+            <AlertTriangle className="size-4 shrink-0" /> The system is NOT following this schedule yet
+          </p>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-6">
+            {data.readiness.problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-xs">Until this is fixed, new registrations use the built-in daily times and cancelling / moving sessions is blocked.</p>
+        </div>
+      )}
+      {data.readiness?.ready && data.readiness.warnings.length > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span>{data.readiness.warnings.join(' ')}</span>
+        </div>
+      )}
+      {canEdit && (data.orphans ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-sm text-sky-800 dark:text-sky-300">
+          <span>
+            {data.orphans} booked lead{data.orphans === 1 ? ' is' : 's are'} waiting for a time that is not a scheduled session (booked before the schedule or a change).
+          </span>
+          <Button
+            size="sm"
+            disabled={busy === 'resync' || !data.readiness?.ready}
+            onClick={async () => {
+              const ok = await confirmDialog({
+                title: `Move ${data.orphans} lead${data.orphans === 1 ? '' : 's'}?`,
+                description: `Each one is booked into the next scheduled session and gets 1 "session changed" WhatsApp message with the new date, time and link.`,
+                confirmLabel: 'Move them',
+              });
+              if (ok) await run('resync', () => api('/api/webinars/resync', { method: 'POST' }), 'Moving leads — see progress below');
+            }}
+          >
+            Move them to scheduled sessions
+          </Button>
+        </div>
+      )}
       {data.low && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
@@ -457,6 +584,57 @@ export default function WebinarsPage() {
           )}
         </CardContent>
       </Card>
+      {(data.moves ?? []).length > 0 && (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Lead moves</CardTitle>
+            <CardDescription className="text-xs">Booked leads moved after a cancel or time change (runs in the background, about a minute).</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-border">
+              {(data.moves ?? []).map((m) => (
+                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
+                  <span className="text-foreground">
+                    {m.reason === 'cancelled' ? 'Session cancelled' : m.reason === 'time_changed' ? 'Time changed' : 'Moved off unscheduled times'}
+                    <span className="ml-2 text-xs text-muted-foreground">{new Date(m.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                      m.status === 'done' ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-400' : m.status === 'failed' ? 'bg-rose-500/12 text-rose-700 dark:text-rose-400' : 'bg-amber-500/12 text-amber-700 dark:text-amber-400'
+                    )}
+                  >
+                    {m.status === 'done' ? `Done · ${m.moved}/${m.total} moved` : m.status === 'failed' ? `Failed · ${m.moved}/${m.total} moved` : `Moving… ${m.moved}/${m.total}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {(data.changes ?? []).length > 0 && (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Change history</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-border">
+              {(data.changes ?? []).map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
+                  <span className="text-foreground">
+                    {c.detail}
+                    {c.affected > 0 && <span className="ml-2 text-xs text-muted-foreground">· {c.affected} lead{c.affected === 1 ? '' : 's'} affected</span>}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {c.actor || 'Team'} · {new Date(c.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

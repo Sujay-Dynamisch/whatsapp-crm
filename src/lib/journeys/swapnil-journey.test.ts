@@ -1316,3 +1316,89 @@ describe('Webinar Schedule (097) — the journey follows the planned sessions', 
     expect(templates('sg_registration_confirmed')[0].params?.[2]).toBe('8:00 PM IST');
   });
 });
+
+describe('Webinar Schedule safety (098) and no duplicate sends', () => {
+  const session = (when: string, extra: Record<string, unknown> = {}) => ({
+    id: `ws-${when}`,
+    account_id: 'acct',
+    starts_at: ist(when).toISOString(),
+    link: null,
+    status: 'scheduled',
+    ...extra,
+  });
+
+  it('a run another worker took over is never sent twice', async () => {
+    tables.webinar_sessions = [session('2026-11-02 20:00')];
+    await register('2026-11-02 10:00');
+    await runUntil('2026-11-02 13:59');
+    const before = sent.length;
+    clock = ist('2026-11-02 14:01');
+    // Claim as usual, then — before this worker gets to the runs — another
+    // worker takes them over (stale-lock rule): our copies are stale.
+    const base = db();
+    const racing = new Proxy(base, {
+      get(target, prop) {
+        if (prop !== 'rpc') return Reflect.get(target, prop);
+        return async (fn: string, args: unknown) => {
+          const res = await (target.rpc as unknown as (f: string, a: unknown) => Promise<{ data: unknown }>)(fn, args);
+          if (fn === 'claim_journey_enrollments') {
+            for (const r of (res.data ?? []) as { id: string }[]) {
+              const live = tables.journey_enrollments.find((e) => e.id === r.id)!;
+              live.locked_at = new Date(clock.getTime() + 1000).toISOString();
+            }
+          }
+          return res;
+        };
+      },
+    });
+    const report = await runJourneyTick(racing as typeof base, deps);
+    expect(report.claimed).toBeGreaterThan(0);
+    expect(report.skipped).toBe(report.claimed);
+    expect(sent.length).toBe(before);
+  });
+
+  it('an admin re-time after the cut-off keeps booked leads on the same day (new time)', async () => {
+    tables.webinar_sessions = [session('2026-11-02 20:00'), session('2026-11-03 20:00')];
+    await register('2026-11-02 10:00');
+    await runUntil('2026-11-02 16:00'); // past Monday's 2 PM cut-off
+    tables.webinar_sessions[0].starts_at = ist('2026-11-02 21:00').toISOString();
+    const { moveBookedRuns } = await import('./engine');
+    const r = await moveBookedRuns(db(), 'acct', '2026-11-02T20:00:00+05:30', deps);
+    expect(r.moved).toBe(1);
+    expect(templates('sg_webinar_session_changed')[0].params?.slice(1, 3)).toEqual(['Mon, 2 Nov 2026', '9:00 PM IST']);
+  });
+
+  it('the background move job moves booked leads and records its progress', async () => {
+    tables.webinar_sessions = [session('2026-11-02 20:00', { status: 'cancelled' }), session('2026-11-04 20:00')];
+    // Booked before the cancel (Monday was scheduled then).
+    tables.webinar_sessions[0].status = 'scheduled';
+    await register('2026-11-02 10:00');
+    tables.webinar_sessions[0].status = 'cancelled';
+    tables.webinar_moves = [{ id: 'job1', account_id: 'acct', from_iso: '2026-11-02T20:00:00+05:30', reason: 'cancelled', status: 'pending', total: 1, moved: 0, created_at: clock.toISOString() }];
+    const { runWebinarMoves } = await import('./engine');
+    const rep = await runWebinarMoves(db(), deps);
+    expect(rep).toMatchObject({ jobs: 1, moved: 1 });
+    expect(tables.webinar_moves[0]).toMatchObject({ status: 'done', moved: 1, total: 1 });
+    expect(templates('sg_webinar_session_changed')[0].params?.[1]).toBe('Wed, 4 Nov 2026');
+  });
+
+  it('finds leads booked into an unscheduled time — but never when the schedule is empty', async () => {
+    tables.webinar_sessions = [];
+    await register('2026-11-02 10:00'); // built-in rule → Mon 8 PM
+    const { orphanBookedIsos } = await import('./engine');
+    expect(await orphanBookedIsos(db(), 'acct', clock)).toEqual([]);
+    tables.webinar_sessions = [session('2026-11-03 20:00')];
+    expect(await orphanBookedIsos(db(), 'acct', clock)).toEqual(['2026-11-02T20:00:00+05:30']);
+  });
+
+  it('a Zoom link changed after booking reaches the reminders', async () => {
+    tables.webinar_sessions = [session('2026-11-02 20:00', { link: 'https://zoom.us/j/old' })];
+    await register('2026-11-02 10:00');
+    const { updateBookedLink } = await import('./engine');
+    expect(await updateBookedLink(db(), 'acct', '2026-11-02T20:00:00+05:30', 'https://zoom.us/j/new')).toBe(1);
+    await runUntil('2026-11-02 19:30');
+    const reminders = templates('sg_webinar_session_reminder');
+    expect(reminders.length).toBeGreaterThan(0);
+    for (const m of reminders) expect(m.params?.at(-1)).toBe('https://zoom.us/j/new');
+  });
+});

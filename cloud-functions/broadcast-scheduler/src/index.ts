@@ -39,7 +39,7 @@ import {
   type HandlerOutcome,
 } from '@/lib/broadcast-scheduling/execute';
 import { runWindowKeepalive } from '@/lib/conversations/window-keepalive';
-import { runJourneyTick } from '@/lib/journeys/engine';
+import { ENGINE_VERSION, runJourneyTick, runWebinarMoves } from '@/lib/journeys/engine';
 import { liveJourneyDeps } from '@/lib/journeys/dispatch';
 import { runCallbackFollowUps } from '@/lib/callbacks/followups';
 import { runScheduledResends } from '@/lib/failed-messages/service';
@@ -213,6 +213,11 @@ export async function journeyTick(req: Req, res: Res): Promise<void> {
     const leadSync = await runLeadSync(s.db).catch((err) => ({
       error: err instanceof Error ? err.message : String(err),
     }));
+    // Webinar Schedule: move leads off cancelled / re-timed sessions before
+    // the due reminders run, so nobody gets a reminder for a dead session.
+    const webinarMoves = await runWebinarMoves(s.db, liveJourneyDeps).catch((err) => ({
+      error: err instanceof Error ? err.message : String(err),
+    }));
     const report = await runJourneyTick(s.db, liveJourneyDeps);
     // Callback reminders (4h) and the 48h "No answer" → nurture rule.
     const callbacks = await runCallbackFollowUps(s.db, liveJourneyDeps).catch((err) => ({
@@ -226,8 +231,8 @@ export async function journeyTick(req: Req, res: Res): Promise<void> {
       error: err instanceof Error ? err.message : String(err),
     }));
     // Last: proves this tick ran end to end (the app warns after 10 min without).
-    await recordHeartbeat(s.db, TICK_HEARTBEAT, { claimed: report.claimed, errors: report.errors.length });
-    console.log(JSON.stringify({ fn: 'journeyTick', ...report, leadSync, callbacks, resends, health }));
+    await recordHeartbeat(s.db, TICK_HEARTBEAT, { claimed: report.claimed, errors: report.errors.length, engine: ENGINE_VERSION });
+    console.log(JSON.stringify({ fn: 'journeyTick', ...report, webinarMoves, leadSync, callbacks, resends, health }));
     res.status(200).json(report);
   } catch (err) {
     console.error('[journeyTick]', err);

@@ -19,7 +19,7 @@
 // against an in-memory database without Meta.
 // ============================================================
 
-import { loadWebinarScope } from './webinar';
+import { loadWebinarScope, toIstIso } from './webinar';
 import { claimPaymentLink, markPaymentLinkSent, releasePaymentLink } from '@/lib/payments/link-once';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -65,6 +65,8 @@ export interface JourneyRow {
 
 export interface EnrollmentRow {
   id: string;
+  /** Set when claimed by a tick (the ownership token). */
+  locked_at?: string | null;
   journey_id: string;
   account_id: string;
   contact_id: string;
@@ -1059,40 +1061,178 @@ export async function countBookedRuns(db: SupabaseClient, accountId: string, sta
   return (await bookedRuns(db, accountId, startIso)).reduce((n, j) => n + j.runs.length, 0);
 }
 
+/** Before a change: who is booked and what they have already been sent. */
+export async function bookedImpact(
+  db: SupabaseClient,
+  accountId: string,
+  startIso: string
+): Promise<{ booked: number; reminder1Sent: number }> {
+  let booked = 0;
+  let reminder1Sent = 0;
+  for (const { journey, runs } of await bookedRuns(db, accountId, startIso)) {
+    // The wait after Msg 2 (its `until` is the Msg 3 time).
+    const afterMsg2 = new Set(
+      journey.graph.nodes
+        .filter((n) => n.type === 'wait' && String((n.config as { until?: string }).until ?? '').includes('nodes.schedule.msg3'))
+        .map((n) => n.id)
+    );
+    booked += runs.length;
+    reminder1Sent += runs.filter((r) => afterMsg2.has(String(r.current_node_id))).length;
+  }
+  return { booked, reminder1Sent };
+}
+
 /**
  * A session was cancelled or its time changed: every lead still waiting
  * for it resumes at the journey's `session_moved_node`, which books the
  * next scheduled session, tells them and re-plans their reminders.
- * Returns how many runs were moved. Never throws per run.
+ * Contacts in parallel. Never throws per run.
  */
 export async function moveBookedRuns(
   db: SupabaseClient,
   accountId: string,
   startIso: string,
-  deps: JourneyDeps
-): Promise<{ moved: number; errors: string[] }> {
+  deps: JourneyDeps,
+  onProgress?: (moved: number, total: number) => Promise<void>
+): Promise<{ moved: number; total: number; errors: string[] }> {
   let moved = 0;
   const errors: string[] = [];
-  for (const { journey, runs, entry } of await bookedRuns(db, accountId, startIso)) {
-    for (const row of runs) {
-      try {
-        const { data: claimed } = await db
-          .from('journey_enrollments')
-          .update({ status: 'active', locked_at: deps.now().toISOString(), wait_kind: null, current_node_id: entry })
-          .eq('id', row.id)
-          .eq('status', 'waiting')
-          .eq('current_node_id', row.current_node_id)
-          .select('id');
-        if (!claimed?.length) continue;
-        await logEvent(db, row, entry, 'session_moved', `Booked session ${startIso} cancelled / moved`);
-        await advanceEnrollment(db, journey, { ...row, status: 'active', wait_kind: null, current_node_id: entry }, deps);
-        moved++;
-      } catch (err) {
-        errors.push(`${row.id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
+  const groups = await bookedRuns(db, accountId, startIso);
+  const work = groups.flatMap(({ journey, runs, entry }) => runs.map((row) => ({ journey, row, entry })));
+  await runPool(work, TICK_CONCURRENCY, async ({ journey, row, entry }) => {
+    try {
+      const { data: claimed } = await db
+        .from('journey_enrollments')
+        .update({ status: 'active', locked_at: deps.now().toISOString(), wait_kind: null, current_node_id: entry })
+        .eq('id', row.id)
+        .eq('status', 'waiting')
+        .eq('current_node_id', row.current_node_id)
+        .select('id');
+      if (!claimed?.length) return;
+      await logEvent(db, row, entry, 'session_moved', `Booked session ${startIso} cancelled / moved`);
+      await advanceEnrollment(db, journey, { ...row, status: 'active', wait_kind: null, current_node_id: entry }, deps);
+      moved++;
+      if (onProgress && moved % 10 === 0) await onProgress(moved, work.length);
+    } catch (err) {
+      errors.push(`${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+  return { moved, total: work.length, errors };
+}
+
+/**
+ * Booked session times that are no longer scheduled (cancelled, moved,
+ * or booked by the built-in daily rule before the schedule was set up).
+ * Empty when the account has no upcoming scheduled session at all — then
+ * the built-in rule is in charge and nothing must move.
+ */
+export async function orphanBookedIsos(db: SupabaseClient, accountId: string, now: Date): Promise<string[]> {
+  const { data: sessions, error } = await db
+    .from('webinar_sessions')
+    .select('starts_at')
+    .eq('account_id', accountId)
+    .eq('status', 'scheduled')
+    .gte('starts_at', now.toISOString());
+  if (error || !sessions?.length) return [];
+  const scheduled = new Set(sessions.map((x) => toIstIso(x.starts_at as string)));
+  const nowIso = toIstIso(now);
+  const out = new Set<string>();
+  const { data: journeys } = await db.from('journeys').select('*').eq('account_id', accountId).eq('status', 'active');
+  for (const journey of (journeys ?? []) as JourneyRow[]) {
+    if (!(findTrigger(journey.graph)?.config as TriggerConfig | undefined)?.session_moved_node) continue;
+    const waits = journey.graph.nodes
+      .filter((n) => n.type === 'wait' && String((n.config as { until?: string }).until ?? '').includes('nodes.schedule.'))
+      .map((n) => n.id);
+    if (!waits.length) continue;
+    const { data: runs } = await db
+      .from('journey_enrollments')
+      .select('context')
+      .eq('journey_id', journey.id)
+      .eq('status', 'waiting')
+      .in('current_node_id', waits)
+      .limit(5000);
+    for (const r of runs ?? []) {
+      const iso = String(((r.context as RunContext | null)?.nodes?.schedule as { start_iso?: string } | undefined)?.start_iso ?? '');
+      // Only sessions still ahead; IST ISO strings compare chronologically.
+      if (iso && iso > nowIso && !scheduled.has(iso)) out.add(iso);
     }
   }
-  return { moved, errors };
+  return [...out];
+}
+
+/** A session's Zoom link changed: booked leads' reminders carry the new one. */
+export async function updateBookedLink(db: SupabaseClient, accountId: string, startIso: string, link: string | null): Promise<number> {
+  let n = 0;
+  for (const { runs } of await bookedRuns(db, accountId, startIso)) {
+    for (const row of runs) {
+      const ctx = (row.context ?? {}) as RunContext;
+      const sched = (ctx.nodes?.schedule ?? {}) as Record<string, unknown>;
+      const next = link || String(ctx.vars?.webinar_link ?? '');
+      if (sched.link === next) continue;
+      const nodes = { ...(ctx.nodes ?? {}), schedule: { ...sched, link: next } };
+      const { error } = await db
+        .from('journey_enrollments')
+        .update({ context: { ...ctx, nodes } })
+        .eq('id', row.id)
+        .eq('status', 'waiting');
+      if (!error) n++;
+    }
+  }
+  return n;
+}
+
+/**
+ * Minute job: run pending webinar move jobs (migration 098). A job moves
+ * the leads booked into one session time, or — 'resync' — every booked
+ * time that is no longer in the schedule. Progress is written back for
+ * the page. A job left 'running' by a crashed worker is retried.
+ */
+export async function runWebinarMoves(db: SupabaseClient, deps: JourneyDeps): Promise<{ jobs: number; moved: number; errors: string[] }> {
+  const report = { jobs: 0, moved: 0, errors: [] as string[] };
+  const now = deps.now();
+  try {
+    const { data: jobs, error } = await db.from('webinar_moves').select('*').in('status', ['pending', 'running']).order('created_at').limit(5);
+    if (error) return report; // before migration 098
+    for (const job of jobs ?? []) {
+      const stale = job.status === 'running' && Date.parse(String(job.started_at ?? '')) < now.getTime() - 15 * 60_000;
+      if (job.status === 'running' && !stale) continue;
+      const { data: claimed } = await db
+        .from('webinar_moves')
+        .update({ status: 'running', started_at: deps.now().toISOString() })
+        .eq('id', job.id)
+        .eq('status', job.status)
+        .select('id');
+      if (!claimed?.length) continue;
+      report.jobs++;
+      const isos = job.from_iso ? [job.from_iso as string] : await orphanBookedIsos(db, job.account_id as string, deps.now());
+      let moved = 0;
+      let total = 0;
+      const errors: string[] = [];
+      for (const iso of isos) {
+        const r = await moveBookedRuns(db, job.account_id as string, iso, deps, async (m, t) => {
+          await db.from('webinar_moves').update({ moved: moved + m, total: total + t }).eq('id', job.id);
+        });
+        moved += r.moved;
+        total += r.total;
+        errors.push(...r.errors);
+      }
+      await db
+        .from('webinar_moves')
+        .update({
+          status: errors.length && !moved ? 'failed' : 'done',
+          moved,
+          total,
+          errors: errors.slice(0, 20),
+          finished_at: deps.now().toISOString(),
+        })
+        .eq('id', job.id);
+      report.moved += moved;
+      report.errors.push(...errors.slice(0, 5));
+    }
+  } catch (err) {
+    report.errors.push(err instanceof Error ? err.message : String(err));
+  }
+  return report;
 }
 
 /** How long a finished run still answers a late menu tap. */
@@ -1192,6 +1332,8 @@ export async function stopEnrollment(
 
 export interface TickReport {
   claimed: number;
+  /** Claimed runs another worker had taken over (never run twice). */
+  skipped?: number;
   outcomes: Record<AdvanceOutcome, number>;
   errors: string[];
   schedules?: { ran: number; enrolled: number };
@@ -1199,6 +1341,26 @@ export interface TickReport {
 }
 
 /** Advance due timers, reply timeouts and crashed steps, then due schedules. */
+/** Bumped when the engine gains behaviour the app checks for (heartbeat). 3 = Webinar Schedule. */
+export const ENGINE_VERSION = 3;
+/** Contacts processed at once by one tick / move job. */
+const TICK_CONCURRENCY = 8;
+
+function groupBy<T>(items: T[], key: (t: T) => string): T[][] {
+  const m = new Map<string, T[]>();
+  for (const it of items) m.set(key(it), [...(m.get(key(it)) ?? []), it]);
+  return [...m.values()];
+}
+
+async function runPool<T>(items: T[], size: number, fn: (t: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(size, items.length) }, async () => {
+      while (next < items.length) await fn(items[next++]);
+    })
+  );
+}
+
 export async function runJourneyTick(db: SupabaseClient, deps: JourneyDeps): Promise<TickReport> {
   const report: TickReport = {
     claimed: 0,
@@ -1209,22 +1371,47 @@ export async function runJourneyTick(db: SupabaseClient, deps: JourneyDeps): Pro
   if (error) throw new Error(`claim_journey_enrollments failed: ${error.message}`);
 
   const journeys = new Map<string, JourneyRow | null>();
-  for (const row of (data ?? []) as EnrollmentRow[]) {
-    report.claimed++;
-    try {
-      if (!journeys.has(row.journey_id)) journeys.set(row.journey_id, await loadJourney(db, row.journey_id));
-      const journey = journeys.get(row.journey_id);
-      if (!journey) continue;
-      // Timer elapsed → 'next'; reply never came → 'timeout';
-      // wait_kind cleared = a step crashed mid-run → re-run it.
-      const slot = row.wait_kind === 'timer' ? 'next' : row.wait_kind === 'reply' ? 'timeout' : undefined;
-      await patchEnrollment(db, row.id, { wait_kind: null });
-      const outcome = await advanceEnrollment(db, journey, { ...row, wait_kind: null }, deps, slot);
-      report.outcomes[outcome]++;
-    } catch (err) {
-      report.errors.push(`${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+  const journeyOf = async (id: string) => {
+    if (!journeys.has(id)) journeys.set(id, await loadJourney(db, id));
+    return journeys.get(id) ?? null;
+  };
+  const rows = (data ?? []) as EnrollmentRow[];
+  report.claimed = rows.length;
+  // One contact's runs in order; different contacts in parallel, so a
+  // burst (e.g. everyone's 11 AM reminder) finishes in a minute or two
+  // instead of queueing for 10+ minutes.
+  await runPool(groupBy(rows, (r) => r.contact_id), TICK_CONCURRENCY, async (group) => {
+    for (const row of group) {
+      try {
+        // Ownership: we claimed this run; if it sat in our queue long
+        // enough for another worker to take it over (stale-lock rule),
+        // that worker owns it now — never run it twice.
+        if (row.locked_at) {
+          const { data: mine } = await db
+            .from('journey_enrollments')
+            .update({ locked_at: deps.now().toISOString() })
+            .eq('id', row.id)
+            .eq('status', 'active')
+            .eq('locked_at', row.locked_at)
+            .select('id');
+          if (!mine?.length) {
+            report.skipped = (report.skipped ?? 0) + 1;
+            continue;
+          }
+        }
+        const journey = await journeyOf(row.journey_id);
+        if (!journey) continue;
+        // Timer elapsed → 'next'; reply never came → 'timeout';
+        // wait_kind cleared = a step crashed mid-run → re-run it.
+        const slot = row.wait_kind === 'timer' ? 'next' : row.wait_kind === 'reply' ? 'timeout' : undefined;
+        await patchEnrollment(db, row.id, { wait_kind: null });
+        const outcome = await advanceEnrollment(db, journey, { ...row, wait_kind: null }, deps, slot);
+        report.outcomes[outcome]++;
+      } catch (err) {
+        report.errors.push(`${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
-  }
+  });
 
   // Failed templates whose retry is due (journey_messages, migration 056).
   try {

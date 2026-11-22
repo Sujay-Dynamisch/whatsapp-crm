@@ -34,6 +34,9 @@ const tablesWithoutDomainData = new Set([
   // 097: webinar schedule (settings / session calendar, no customer data).
   "webinar_sessions",
   "webinar_settings",
+  // 098: webinar move jobs + change history (no customer data).
+  "webinar_moves",
+  "webinar_changes",
 ]);
 
 function accountScopedTables(): Set<string> {
