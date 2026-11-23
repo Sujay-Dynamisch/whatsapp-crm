@@ -4,6 +4,7 @@
 // journey books leads into — skip days, alternate days, cancel or move a
 // session (booked leads are moved to the next one and told).
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, CalendarClock, CalendarPlus, Check, Copy, Loader2, Pencil, RotateCcw, Settings2, Users, X } from 'lucide-react';
@@ -280,9 +281,12 @@ export default function WebinarsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-            <CalendarClock className="size-6 text-primary" /> Webinar Schedule
-          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+              <CalendarClock className="size-6 text-primary" /> Webinar Schedule
+            </h1>
+            <PageGuide module="webinars" />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             New registrations are booked into the next session below. Cancel or move one and the booked leads are moved and told automatically.
           </p>

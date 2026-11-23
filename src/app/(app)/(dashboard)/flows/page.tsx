@@ -1,4 +1,5 @@
 "use client";
+import { PageGuide } from '@/components/guide/page-guide';
 import { confirmDialog } from "@/components/ui/confirm-dialog";
 
 import { useEffect, useState } from "react";
@@ -206,7 +207,10 @@ export default function FlowsPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold text-foreground">{t("title")}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold text-foreground">{t("title")}</h1>
+              <PageGuide module="flows" />
+            </div>
             <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
               {t("beta")}
             </span>

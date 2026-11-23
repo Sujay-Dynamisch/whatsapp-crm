@@ -1,5 +1,6 @@
 'use client';
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -364,7 +365,10 @@ export default function ContactsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+            <PageGuide module="contacts" />
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
             {totalCount > 0 ? t('subtitle', { count: totalCount }) : t('subtitleZero')}
           </p>

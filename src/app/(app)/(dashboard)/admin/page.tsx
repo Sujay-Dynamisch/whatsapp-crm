@@ -1,5 +1,6 @@
 "use client";
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
@@ -102,9 +103,12 @@ export default function AdminPortalPage() {
               System Admin Portal
             </span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Platform Management & Onboarding
-          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Platform Management & Onboarding
+            </h1>
+            <PageGuide module="admin" />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
             View all registered customers, provision new tenant workspaces with zero email verification, and manage platform credentials.
           </p>

@@ -3,6 +3,7 @@
 // Caller management (migration 086): who takes leads, their workload,
 // the Admin Unassigned queue and manual reassignment.
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { BulkMoveDialog } from '@/components/callers/bulk-move-dialog';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -265,7 +266,10 @@ export default function CallersPage() {
       {/* Page Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Callers</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Callers</h1>
+            <PageGuide module="callers" />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             New website leads rotate across active, lead-eligible callers. A returning lead (after 15 days) goes back to their caller.
           </p>

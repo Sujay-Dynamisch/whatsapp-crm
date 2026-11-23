@@ -1,5 +1,6 @@
 'use client';
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -21,6 +22,7 @@ import {
   Download,
 } from 'lucide-react';
 import { PaymentLedgerSheet } from '@/components/payments/payment-ledger-sheet';
+import { TrashButton } from '@/components/trash/trash-sheet';
 
 import { useAuth } from '@/hooks/use-auth';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -208,7 +210,10 @@ export default function PaymentsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+            <PageGuide module="payments" />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -218,6 +223,7 @@ export default function PaymentsPage() {
               Export CSV
             </a>
           )}
+          {canManageMembers && <TrashButton kind="payment" onRestored={() => void load()} />}
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
             {t('refresh')}
@@ -447,6 +453,7 @@ export default function PaymentsPage() {
       <PaymentLedgerSheet
         contactId={ledgerFor}
         canEdit={canSendMessages}
+        canDelete={canManageMembers}
         onClose={() => setLedgerFor(null)}
         onChanged={() => void load()}
       />

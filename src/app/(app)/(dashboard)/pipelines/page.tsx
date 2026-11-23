@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { PageGuide } from "@/components/guide/page-guide";
 import { createClient } from "@/lib/supabase/client";
 import type { Pipeline, PipelineStage, Deal } from "@/types";
 import { PipelineBoard } from "@/components/pipelines/pipeline-board";
@@ -367,6 +368,7 @@ export default function PipelinesPage() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          <PageGuide module="pipelines" />
         </div>
 
         <div className="flex items-center gap-2">
