@@ -6,6 +6,7 @@
 // or dismiss. Plus website registrations the lead sync skipped, and the
 // scheduler / lead-feed status.
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -267,7 +268,10 @@ export default function FailedMessagesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+            <PageGuide module="failed-messages" />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>

@@ -116,11 +116,14 @@ function PaymentForm({
 export function PaymentLedgerSheet({
   contactId,
   canEdit,
+  canDelete = false,
   onClose,
   onChanged,
 }: {
   contactId: string | null;
   canEdit: boolean;
+  /** Admins only (100): deleted payments go to the Trash. */
+  canDelete?: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -351,19 +354,26 @@ export function PaymentLedgerSheet({
                               >
                                 <Pencil className="size-3.5" />
                               </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-8 text-destructive hover:text-destructive"
-                                aria-label="Delete payment"
-                                disabled={busy}
-                                onClick={async () => {
-                                  const ok = await confirmDialog({ title: `Delete the ${money(p.amount)} payment?`, description: 'The balance is recalculated.', confirmLabel: 'Delete', destructive: true });
-                                  if (ok) await call(`${base}/${p.id}`, 'DELETE', undefined, 'Payment deleted');
-                                }}
-                              >
-                                <Trash2 className="size-3.5" />
-                              </Button>
+                              {canDelete && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="size-8 text-destructive hover:text-destructive"
+                                  aria-label="Delete payment"
+                                  disabled={busy}
+                                  onClick={async () => {
+                                    const ok = await confirmDialog({
+                                      title: `Delete the ${money(p.amount)} payment?`,
+                                      description: 'It moves to the Trash and the balance is recalculated. An admin can restore it from the Trash.',
+                                      confirmLabel: 'Move to Trash',
+                                      destructive: true,
+                                    });
+                                    if (ok) await call(`${base}/${p.id}`, 'DELETE', undefined, 'Moved to Trash');
+                                  }}
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              )}
                             </div>
                           )}
                         </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { PageGuide } from '@/components/guide/page-guide'
 import { Briefcase, ChevronDown, Plus, Radio, UserPlus, Zap } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
@@ -105,6 +106,7 @@ export function OverviewHeader({
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        <PageGuide module="dashboard" />
         <WhatsAppHealthChip />
         <Tabs value={String(range)} onValueChange={(v) => onRangeChange(Number(v) as OverviewRange)}>
           <TabsList aria-label={t('rangeLabel')}>

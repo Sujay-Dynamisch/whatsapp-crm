@@ -10,13 +10,123 @@
 
 import { NextResponse } from 'next/server';
 
-import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/account';
 import { UUID_RE } from '@/lib/journeys/api';
 import { handleNoAnswer } from '@/lib/callbacks/followups';
+import { accountPaymentLink, generalTemplateApproved, logCallbackEvent } from '@/lib/callbacks/timeline';
+import { TrashError, trashCallback } from '@/lib/trash/server';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { liveJourneyDeps } from '@/lib/journeys/dispatch';
 
 const STATUSES = ['new', 'called', 'no_answer', 'done'] as const;
+
+/** DELETE /api/callbacks/[id] — admins only; moves the request to the trash (100). */
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { accountId, userId } = await requireRole('admin');
+    const { id } = await params;
+    if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    try {
+      await trashCallback(supabaseAdmin(), { accountId, userId, id });
+    } catch (err) {
+      if (err instanceof TrashError) return NextResponse.json({ error: err.message }, { status: err.status });
+      throw err;
+    }
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}
+
+interface TimelineItem {
+  at: string;
+  kind: 'requested' | 'status' | 'note' | 'payment_link';
+  value: string | null;
+  detail: string | null;
+  actor: string | null;
+}
+
+/**
+ * GET /api/callbacks/[id] — full details for the card's side panel: the
+ * lead, their tags, every callback request they made, and one timeline
+ * (requests, status changes, notes, payment links), newest first.
+ * Reads run with the viewer's RLS, so callers see only their own leads.
+ */
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { supabase, accountId } = await getCurrentAccount();
+    const { id } = await params;
+    if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    const { data: req } = await supabase
+      .from('callback_requests')
+      .select('id, contact_id, conversation_id, status, source, requested_at, handled_at, handled_by, no_answer_count, priority, source_kind, assigned_caller_id, ai_meta')
+      .eq('id', id)
+      .eq('account_id', accountId)
+      .maybeSingle();
+    if (!req) return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+    const contactId = req.contact_id as string;
+
+    const [{ data: contact }, { data: tagRows }, { data: requests }, { data: events }, { data: conv }] = await Promise.all([
+      supabase.from('contacts').select('name, phone, email, created_at, assigned_caller_id').eq('id', contactId).maybeSingle(),
+      supabase.from('contact_tags').select('tags(name, color)').eq('contact_id', contactId),
+      supabase
+        .from('callback_requests')
+        .select('id, status, source, requested_at, handled_at, handled_by')
+        .eq('account_id', accountId)
+        .eq('contact_id', contactId)
+        .order('requested_at', { ascending: false })
+        .limit(50),
+      supabase.from('callback_events').select('callback_id, kind, value, detail, actor_id, created_at').eq('contact_id', contactId).order('created_at', { ascending: false }).limit(300),
+      req.conversation_id
+        ? supabase.from('conversations').select('last_customer_message_at').eq('id', req.conversation_id as string).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const people = [
+      ...new Set(
+        [req.assigned_caller_id, contact?.assigned_caller_id, ...(events ?? []).map((e) => e.actor_id), ...(requests ?? []).map((r) => r.handled_by)].filter(Boolean) as string[]
+      ),
+    ];
+    const { data: profs } = people.length ? await supabase.from('profiles').select('user_id, full_name').in('user_id', people) : { data: [] };
+    const nameOf = (uid: unknown) => (uid ? ((profs ?? []).find((p) => p.user_id === uid)?.full_name as string) || 'Team member' : null);
+
+    const timeline: TimelineItem[] = [];
+    const withEvents = new Set((events ?? []).filter((e) => e.kind === 'status').map((e) => e.callback_id as string));
+    for (const r of requests ?? []) {
+      timeline.push({ at: r.requested_at as string, kind: 'requested', value: null, detail: (r.source as string) ?? null, actor: null });
+      // Requests handled before the timeline existed: show the last change.
+      if (!withEvents.has(r.id as string) && r.handled_at && r.status !== 'new') {
+        timeline.push({ at: r.handled_at as string, kind: 'status', value: r.status as string, detail: null, actor: nameOf(r.handled_by) });
+      }
+    }
+    for (const e of events ?? []) {
+      timeline.push({ at: e.created_at as string, kind: e.kind as TimelineItem['kind'], value: (e.value as string) ?? null, detail: (e.detail as string) ?? null, actor: nameOf(e.actor_id) });
+    }
+    timeline.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+
+    const admin = supabaseAdmin();
+    const lastIn = Date.parse(String((conv as { last_customer_message_at?: string } | null)?.last_customer_message_at ?? ''));
+    const [link, templateOk] = await Promise.all([accountPaymentLink(admin, accountId), generalTemplateApproved(admin, accountId)]);
+
+    return NextResponse.json({
+      request: { ...req, caller_name: nameOf(req.assigned_caller_id) },
+      contact: contact ? { ...contact, owner_name: nameOf(contact.assigned_caller_id) } : null,
+      tags: (tagRows ?? [])
+        .map((t) => (Array.isArray(t.tags) ? t.tags[0] : t.tags) as { name: string; color: string } | null)
+        .filter(Boolean),
+      requests: (requests ?? []).length,
+      timeline,
+      paymentLink: {
+        available: !!link,
+        windowOpen: Number.isFinite(lastIn) && Date.now() - lastIn < 24 * 3600_000,
+        templateOk,
+        sentCount: timeline.filter((t) => t.kind === 'payment_link').length,
+      },
+    });
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -73,6 +183,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       throw error;
     }
     if (!row) return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+
+    // Timeline (099): every status change and every note is kept.
+    const log = { accountId, callbackId: row.id as string, contactId: row.contact_id as string, actorId: userId };
+    if (body.status !== undefined) await logCallbackEvent(supabaseAdmin(), { ...log, kind: 'status', value: body.status });
+    if (body.note !== undefined && update.note) await logCallbackEvent(supabaseAdmin(), { ...log, kind: 'note', detail: update.note as string });
 
     if (row.status === 'done') {
       const { data: tag } = await supabase

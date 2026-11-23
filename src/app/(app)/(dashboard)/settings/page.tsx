@@ -1,5 +1,6 @@
 'use client';
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { Suspense, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -98,9 +99,12 @@ function SettingsPageInner() {
   return (
     <div>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          {t('pageTitle')}
-        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            {t('pageTitle')}
+          </h1>
+          <PageGuide module="settings" />
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {t('pageDesc')}
         </p>

@@ -1,5 +1,6 @@
 'use client';
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Bot, Sparkles, Settings2, BarChart3, Loader2 } from 'lucide-react';
@@ -44,9 +45,12 @@ export default function AgentsPage() {
     <div>
       <div className="flex items-center gap-2">
         <Bot className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          {t('title')}
-        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            {t('title')}
+          </h1>
+          <PageGuide module="agents" />
+        </div>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
         {t('description')}

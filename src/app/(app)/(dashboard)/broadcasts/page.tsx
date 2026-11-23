@@ -1,5 +1,6 @@
 'use client';
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -183,7 +184,10 @@ export default function BroadcastsPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+            <PageGuide module="broadcasts" />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {t('subtitle')}
           </p>

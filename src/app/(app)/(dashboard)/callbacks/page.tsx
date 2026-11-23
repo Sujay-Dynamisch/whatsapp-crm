@@ -1,5 +1,6 @@
 'use client';
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -7,8 +8,10 @@ import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import {
   CheckCircle2,
+  ChevronRight,
   Clock,
   Copy,
+  CreditCard,
   Loader2,
   MessageSquare,
   PhoneCall,
@@ -19,6 +22,7 @@ import {
   RotateCcw,
   Search,
   StickyNote,
+  Trash2,
   X,
 } from 'lucide-react';
 
@@ -29,7 +33,8 @@ import { Input } from '@/components/ui/input';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import { CallbackNoteDialog } from '@/components/callbacks/callback-note-dialog';
-
+import { CallbackDetailsSheet } from '@/components/callbacks/callback-details-sheet';
+import { TrashButton } from '@/components/trash/trash-sheet';
 type Status = 'new' | 'called' | 'no_answer' | 'done';
 type StatusFilter = 'open' | Status | 'all';
 type DayFilter = 'today' | 'yesterday' | 'week' | 'all';
@@ -75,6 +80,13 @@ const DAY_FILTERS: DayFilter[] = ['today', 'yesterday', 'week', 'all'];
 /** A new request older than this is highlighted as overdue. */
 const OVERDUE_MS = 2 * 3600_000;
 
+const STATUS_BAR: Record<Status, string> = {
+  new: 'bg-amber-500',
+  called: 'bg-sky-500',
+  no_answer: 'bg-rose-500',
+  done: 'bg-emerald-500',
+};
+
 const STATUS_STYLE: Record<Status, string> = {
   new: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
   called: 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400',
@@ -105,7 +117,7 @@ function initials(name: string): string {
 
 export default function CallbacksPage() {
   const t = useTranslations('Callbacks');
-  const { canSendMessages } = useAuth();
+  const { canSendMessages, canManageMembers } = useAuth();
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
@@ -113,6 +125,8 @@ export default function CallbacksPage() {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [detailsKey, setDetailsKey] = useState(0);
 
   useEffect(() => {
     const id = setTimeout(() => setSearch(query.trim()), 300);
@@ -179,6 +193,54 @@ export default function CallbacksPage() {
         toast.success(okMsg);
       }
       await load();
+      setDetailsKey((k) => k + 1);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function sendPaymentLink(r: CallbackRequest) {
+    const ok = await confirmDialog({
+      title: `Send the payment link to ${r.contact_name || r.contact_phone || 'this lead'}?`,
+      description:
+        'The lead gets the payment link on WhatsApp right away. It is added to the timeline, the lead is tagged "payment_link_sent", and the journey will not send its automatic payment link again.',
+      confirmLabel: 'Send payment link',
+    });
+    if (!ok) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(`/api/callbacks/${r.id}/payment-link`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json?.error || 'Could not send the payment link');
+        return;
+      }
+      toast.success('Payment link sent on WhatsApp');
+      setDetailsKey((k) => k + 1);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function remove(r: CallbackRequest) {
+    const ok = await confirmDialog({
+      title: `Delete the callback request of ${r.contact_name || r.contact_phone || 'this lead'}?`,
+      description: 'It moves to the Trash with its notes and timeline. An admin can restore it from there.',
+      confirmLabel: 'Move to Trash',
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(`/api/callbacks/${r.id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json?.error || t('updateFailed'));
+        return;
+      }
+      toast.success('Moved to Trash');
+      if (detailsId === r.id) setDetailsId(null);
+      await load();
     } finally {
       setBusyId(null);
     }
@@ -227,13 +289,19 @@ export default function CallbacksPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+            <PageGuide module="callbacks" />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-          {t('refresh')}
-        </Button>
+        <div className="flex items-center gap-2">
+          {canManageMembers && <TrashButton kind="callback" onRestored={() => void load()} />}
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+            {t('refresh')}
+          </Button>
+        </div>
       </div>
 
       {/* Headline numbers + 14-day trend, one strip */}
@@ -359,14 +427,28 @@ export default function CallbacksPage() {
             return (
               <li
                 key={r.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open details for ${name}`}
+                onClick={() => setDetailsId(r.id)}
+                onKeyDown={(e) => {
+                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    setDetailsId(r.id);
+                  }
+                }}
                 className={cn(
-                  'rounded-2xl border bg-card p-4 transition-shadow hover:shadow-md',
-                  overdue ? 'border-rose-500/50' : r.priority === 'high' && r.status !== 'done' ? 'border-amber-500/60' : 'border-border',
+                  'group relative cursor-pointer overflow-hidden rounded-2xl border bg-card p-4 pl-5 transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none',
+                  overdue ? 'border-rose-500/50' : r.priority === 'high' && r.status !== 'done' ? 'border-amber-500/60' : 'border-border hover:border-primary/40',
                   busy && 'opacity-60'
                 )}
               >
+                <span className={cn('absolute inset-y-0 left-0 w-1', STATUS_BAR[r.status])} aria-hidden />
+                <span className="absolute top-4 right-4 hidden items-center gap-0.5 text-[11px] font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100 sm:inline-flex">
+                  View details <ChevronRight className="h-3.5 w-3.5" />
+                </span>
                 <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-violet-500 text-sm font-semibold text-white shadow-sm">
                     {initials(name) || <PhoneCall className="h-4 w-4" />}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -402,12 +484,19 @@ export default function CallbacksPage() {
                     </div>
                     {r.contact_phone && (
                       <div className="mt-1 flex items-center gap-1.5">
-                        <a href={`tel:${r.contact_phone}`} className="text-lg font-semibold tracking-wide text-foreground tabular-nums hover:text-primary">
+                        <a
+                          href={`tel:${r.contact_phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-lg font-semibold tracking-wide text-foreground tabular-nums hover:text-primary"
+                        >
                           {r.contact_phone}
                         </a>
                         <button
                           type="button"
-                          onClick={() => void copy(r.contact_phone!)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void copy(r.contact_phone!);
+                          }}
                           aria-label={t('copy')}
                           className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                         >
@@ -445,7 +534,7 @@ export default function CallbacksPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3" onClick={(e) => e.stopPropagation()}>
                   {r.contact_phone && (
                     <a href={`tel:${r.contact_phone}`} className={buttonVariants({ size: 'sm' })}>
                       <PhoneOutgoing className="h-3.5 w-3.5" />
@@ -489,15 +578,32 @@ export default function CallbacksPage() {
                           </Button>
                         </>
                       ) : (
+                        /* Done only — Called / No answer are already in Waiting. */
                         <Button size="sm" variant="ghost" disabled={busy} onClick={() => void update(r, { status: 'new' }, t('reopened'))}>
                           <RotateCcw className="h-3.5 w-3.5" />
                           {t('reopen')}
                         </Button>
                       )}
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => void sendPaymentLink(r)}>
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Send payment link
+                      </Button>
                       <Button size="sm" variant="ghost" disabled={busy} onClick={() => void editNote(r)}>
                         <StickyNote className="h-3.5 w-3.5" />
                         {r.note ? t('editNote') : t('addNote')}
                       </Button>
+                      {canManageMembers && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          aria-label="Delete request"
+                          className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => void remove(r)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
@@ -507,6 +613,21 @@ export default function CallbacksPage() {
         </ul>
         </div>
       )}
+      {(() => {
+        const open = data?.requests.find((x) => x.id === detailsId) ?? null;
+        return (
+          <CallbackDetailsSheet
+            id={detailsId}
+            refreshKey={detailsKey}
+            canAct={canSendMessages}
+            busy={!!open && busyId === open.id}
+            onClose={() => setDetailsId(null)}
+            onNote={() => open && editNote(open)}
+            onReopen={() => open && void update(open, { status: 'new' }, t('reopened'))}
+            onPaymentLink={() => open && void sendPaymentLink(open)}
+          />
+        );
+      })()}
       {noteFor && (
         <CallbackNoteDialog
           key={noteFor.id}

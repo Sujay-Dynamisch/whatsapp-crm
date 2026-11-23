@@ -1,4 +1,5 @@
 'use client';
+import { PageGuide } from '@/components/guide/page-guide';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -133,7 +134,10 @@ export default function JourneysPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('list.title')}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{t('list.title')}</h1>
+            <PageGuide module="journeys" />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">{t('list.subtitle')}</p>
         </div>
         <Button onClick={() => setCreateOpen(true)} disabled={!canSendMessages} className="w-full sm:w-auto">

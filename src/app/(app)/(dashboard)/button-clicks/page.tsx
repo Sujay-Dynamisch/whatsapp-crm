@@ -1,5 +1,6 @@
 'use client';
 
+import { PageGuide } from '@/components/guide/page-guide';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
@@ -194,7 +195,10 @@ export default function ButtonClicksPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+            <PageGuide module="button-clicks" />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">{t('subtitleSimple')}</p>
         </div>
         <div className="flex gap-1 overflow-x-auto rounded-full border border-border bg-muted/40 p-1">
