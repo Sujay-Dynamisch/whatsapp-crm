@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { PageGuide } from "@/components/guide/page-guide";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import {
   CONVERSATION_SELECT,
   matchesContactFilters,
@@ -56,12 +57,15 @@ export function ConversationList({
   initialFilter = "all",
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterAll"), value: "all" },
     { label: t("filterUnread"), value: "unread" },
     { label: t("filterWaiting"), value: "waiting" },
     { label: t("filterUnassigned"), value: "unassigned" },
+    { label: "My leads", value: "my_leads" },
     { label: t("filterExpiring"), value: "expiring" },
     { label: t("filterOpen"), value: "open" },
     { label: t("filterPending"), value: "pending" },
@@ -137,6 +141,22 @@ export function ConversationList({
     // up on any events sent while the WS was disconnected or throttled.
   }, [resyncToken]);
 
+  // Team names, to show each lead's caller on its chat (086).
+  const [names, setNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("profiles").select("user_id, full_name");
+      if (!cancelled && data) {
+        setNames(new Map(data.map((p) => [p.user_id as string, ((p.full_name as string) || "").trim()])));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Tag definitions for the filter picker — loaded once so labels/colours
   // stay stable regardless of which conversations happen to be loaded.
   useEffect(() => {
@@ -170,7 +190,7 @@ export function ConversationList({
   }, [tags]);
 
   const filtered = useMemo(() => {
-    let result = applyInboxFilter(conversations, filter, now);
+    let result = applyInboxFilter(conversations, filter, now, userId);
 
     // Contact-based filters (tags via OR logic, exact company match).
     if (selectedTagIds.length > 0 || selectedCompany !== null) {
@@ -193,7 +213,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, now, search, selectedTagIds, selectedCompany]);
+  }, [conversations, filter, now, userId, search, selectedTagIds, selectedCompany]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -422,6 +442,9 @@ export function ConversationList({
                 isActive={conv.id === activeConversationId}
                 onSelect={handleSelect}
                 t={t}
+                ownerName={
+                  names.get(conv.contact?.assigned_caller_id ?? conv.assigned_agent_id ?? "") || null
+                }
               />
             ))}
           </div>
@@ -436,6 +459,8 @@ interface ConversationItemProps {
   isActive: boolean;
   onSelect: (conversation: Conversation) => void;
   t: ReturnType<typeof useTranslations>;
+  /** The lead's caller (or the chat's assignee). */
+  ownerName?: string | null;
 }
 
 function ConversationItem({
@@ -443,6 +468,7 @@ function ConversationItem({
   isActive,
   onSelect,
   t,
+  ownerName,
 }: ConversationItemProps) {
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || t("unknown");
@@ -507,6 +533,14 @@ function ConversationItem({
             {conversation.last_message_text || t("noMessagesYet")}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
+            {ownerName && (
+              <span
+                className="max-w-[88px] truncate rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                title={`Lead of ${ownerName}`}
+              >
+                {ownerName.split(" ")[0]}
+              </span>
+            )}
             {conversation.unread_count > 0 && (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
                 {conversation.unread_count}

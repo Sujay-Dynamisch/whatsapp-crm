@@ -7,6 +7,7 @@ import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
+import { buildLiveContext } from './live-context'
 import {
   engineSendText,
   loadAccountMetaCredentials,
@@ -170,6 +171,7 @@ export async function dispatchInboundToAiReply(
       userPrompt: config.systemPrompt,
       mode: 'auto_reply',
       knowledge,
+      liveContext: await buildLiveContext(db, accountId, contactId),
     })
 
     const { text, handoff, usage, provider: usedProvider, model: usedModel } = await generateReply({

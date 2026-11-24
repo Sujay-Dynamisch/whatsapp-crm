@@ -1003,9 +1003,14 @@ export function MessageThread({
   );
   const assignedAgentId = conversation.assigned_agent_id ?? null;
   const currentAssignee = profiles.find((p) => p.user_id === assignedAgentId);
+  // No one on the chat, but the lead has a caller (086 round-robin) → show them.
+  const leadCallerId = conversation.contact?.assigned_caller_id ?? null;
+  const leadCaller = !assignedAgentId && leadCallerId ? profiles.find((p) => p.user_id === leadCallerId) : undefined;
   const assignLabel = assignedAgentId
     ? (currentAssignee?.full_name ?? t("assigned"))
-    : t("assign");
+    : leadCaller?.full_name
+      ? `Lead: ${leadCaller.full_name}`
+      : t("assign");
 
   return (
     // `min-w-0` is load-bearing: the page already puts min-w-0 on the
@@ -1136,8 +1141,9 @@ export function MessageThread({
             <DropdownMenuTrigger
               className={cn(
                 "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
-                assignedAgentId ? "text-primary" : "text-muted-foreground"
+                assignedAgentId || leadCaller ? "text-primary" : "text-muted-foreground"
               )}
+              title={leadCaller ? `This lead belongs to ${leadCaller.full_name} (caller). Pick someone to assign the chat.` : undefined}
             >
               <UserPlus className="h-3 w-3" />
               <span className="hidden sm:inline">{assignLabel}</span>

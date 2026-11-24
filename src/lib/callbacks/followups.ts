@@ -221,6 +221,12 @@ export async function returnToNurture(
   return r;
 }
 
+/** Does this contact's journey return leads to nurture automatically? (default yes) */
+async function autoReturnOn(db: SupabaseClient, accountId: string, contactId: string): Promise<boolean> {
+  const found = await journeyFor(db, accountId, contactId);
+  return !found || cfgOf(found.journey).callback_auto_return !== false;
+}
+
 /** Limit of "No answer" marks for this contact's journey. */
 async function noAnswerLimit(db: SupabaseClient, accountId: string, contactId: string): Promise<number> {
   const found = await journeyFor(db, accountId, contactId);
@@ -246,6 +252,8 @@ export async function handleNoAnswer(
   const limit = await noAnswerLimit(db, req.account_id, req.contact_id);
   const count = Number(req.no_answer_count) || 0;
   if (count >= limit) {
+    // Automatic return switched off: only "Back to nurture" moves the lead.
+    if (!(await autoReturnOn(db, req.account_id, req.contact_id))) return { action: 'none', count, limit };
     const r = await returnToNurture(db, req, deps, 'auto');
     return { action: r.started ? 'returned' : 'none', reason: r.reason, count, limit };
   }
@@ -259,6 +267,8 @@ export interface FollowUpReport {
   /** Caller management (087): policy reminders sent / escalations. */
   policyReminders?: number;
   escalated?: number;
+  /** Callers told "time to call" at the customer's chosen time (102). */
+  scheduledReminders?: number;
   errors: string[];
 }
 
@@ -379,6 +389,8 @@ export async function runCallbackFollowUps(db: SupabaseClient, deps: JourneyDeps
   for (const req of (stale ?? []) as CallbackRow[]) {
     try {
       if (!(await on(req.account_id))) continue;
+      // Automatic return switched off for this journey — the request stays waiting.
+      if (!(await autoReturnOn(db, req.account_id, req.contact_id))) continue;
       // Claim: push handled_at forward so a parallel / failed attempt waits another 48h.
       const { data: claimed } = await db
         .from('callback_requests')
@@ -397,8 +409,79 @@ export async function runCallbackFollowUps(db: SupabaseClient, deps: JourneyDeps
       report.errors.push(`stale ${req.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+  // Never lets the "time to call" alerts break the other follow-ups.
+  await runScheduledCalls(db, now, on, report).catch((err) => report.errors.push(`scheduled: ${err instanceof Error ? err.message : String(err)}`));
   await runPolicyReminders(db, now, on, managed, report);
   return report;
+}
+
+/** How early the caller is told before the customer's chosen time. */
+export const SCHEDULED_LEAD_MS = 10 * 60_000;
+
+/**
+ * The customer asked to be called at a time (102): tell the request's
+ * caller (or owners/admins when unassigned) once, 10 minutes before.
+ * Before migration 102 the columns don't exist — skipped quietly.
+ */
+async function runScheduledCalls(
+  db: SupabaseClient,
+  now: Date,
+  on: (accountId: string) => Promise<boolean>,
+  report: FollowUpReport
+): Promise<void> {
+  const { data: due, error } = await db
+    .from('callback_requests')
+    .select('id, account_id, contact_id, conversation_id, assigned_caller_id, scheduled_for, contacts(name, phone)')
+    .neq('status', 'done')
+    .is('scheduled_reminded_at', null)
+    .lte('scheduled_for', new Date(now.getTime() + SCHEDULED_LEAD_MS).toISOString())
+    .limit(100);
+  if (error) return;
+  for (const req of (due ?? []) as {
+    id: string;
+    account_id: string;
+    contact_id: string;
+    conversation_id: string | null;
+    assigned_caller_id: string | null;
+    scheduled_for: string;
+    contacts: { name?: string | null; phone?: string | null } | { name?: string | null; phone?: string | null }[] | null;
+  }[]) {
+    try {
+      if (!(await on(req.account_id))) continue;
+      const { data: claimed } = await db
+        .from('callback_requests')
+        .update({ scheduled_reminded_at: now.toISOString() })
+        .eq('id', req.id)
+        .is('scheduled_reminded_at', null)
+        .select('id');
+      if (!claimed?.length) continue;
+      const c = Array.isArray(req.contacts) ? req.contacts[0] : req.contacts;
+      const who = (c?.name || c?.phone || 'Customer').trim();
+      const at = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(req.scheduled_for));
+      const title = `Time to call ${who} — asked for ${at} IST`;
+      let users: string[] = req.assigned_caller_id ? [req.assigned_caller_id] : [];
+      if (!users.length) {
+        const { data: admins } = await db.from('profiles').select('user_id').eq('account_id', req.account_id).in('account_role', ['owner', 'admin']);
+        users = (admins ?? []).map((a) => a.user_id as string);
+      }
+      if (users.length) {
+        await db.from('notifications').insert(
+          users.map((user_id) => ({
+            account_id: req.account_id,
+            user_id,
+            type: 'callback_requested',
+            conversation_id: req.conversation_id,
+            contact_id: req.contact_id,
+            title,
+            body: c?.phone ?? null,
+          }))
+        );
+      }
+      report.scheduledReminders = (report.scheduledReminders ?? 0) + 1;
+    } catch (err) {
+      report.errors.push(`scheduled ${req.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }
 
 /** Caller management (087): reminders by the account's policy. */
@@ -409,21 +492,28 @@ async function runPolicyReminders(
   managed: (accountId: string) => Promise<boolean>,
   report: FollowUpReport
 ): Promise<void> {
-  const { data: due } = await db
-    .from('callback_requests')
-    .select('id, account_id, contact_id, conversation_id, priority, status, assigned_caller_id, reminder_count, next_reminder_at')
-    .in('status', ['new', 'no_answer'])
-    .lte('next_reminder_at', now.toISOString())
-    .limit(200);
+  const base = 'id, account_id, contact_id, conversation_id, priority, status, assigned_caller_id, reminder_count, next_reminder_at';
+  const load = (cols: string) =>
+    db.from('callback_requests').select(cols).in('status', ['new', 'no_answer']).lte('next_reminder_at', now.toISOString()).limit(200);
+  // scheduled_for (102) — fall back if the migration isn't applied yet.
+  const first = await load(`${base}, scheduled_for`);
+  const due = first.error ? (await load(base)).data : first.data;
   const policies = new Map<string, ReminderPolicy>();
-  for (const req of (due ?? []) as (CallbackRow & {
+  for (const req of (due ?? []) as unknown as (CallbackRow & {
     priority: 'high' | 'normal';
     assigned_caller_id: string | null;
     reminder_count: number;
     next_reminder_at: string;
+    scheduled_for?: string | null;
   })[]) {
     try {
       if (!(await on(req.account_id)) || !(await managed(req.account_id))) continue;
+      // The customer chose a later time (102): no nagging before it — the
+      // "time to call" alert comes then, regular reminders after that.
+      if (req.scheduled_for && Date.parse(req.scheduled_for) > now.getTime()) {
+        await db.from('callback_requests').update({ next_reminder_at: req.scheduled_for }).eq('id', req.id);
+        continue;
+      }
       if (!policies.has(req.account_id)) {
         const { data } = await db.from('callback_settings').select('*').eq('account_id', req.account_id).maybeSingle();
         policies.set(req.account_id, { ...DEFAULT_POLICY, ...((data ?? {}) as Partial<ReminderPolicy>) });

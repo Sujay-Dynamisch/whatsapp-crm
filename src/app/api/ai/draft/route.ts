@@ -5,6 +5,7 @@ import { loadAiConfig } from '@/lib/ai/config'
 import { buildConversationContext } from '@/lib/ai/context'
 import { retrieveKnowledge } from '@/lib/ai/knowledge'
 import { generateReply } from '@/lib/ai/generate'
+import { buildLiveContext } from '@/lib/ai/live-context'
 import { buildSystemPrompt } from '@/lib/ai/defaults'
 import { latestUserMessage } from '@/lib/ai/query'
 import { logAiUsage } from '@/lib/ai/usage'
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     // row means "not yours / not found" either way.
     const { data: conversation, error: convErr } = await supabase
       .from('conversations')
-      .select('id')
+      .select('id, contact_id')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr) {
@@ -105,6 +106,7 @@ export async function POST(request: Request) {
       userPrompt: config.systemPrompt,
       mode: 'draft',
       knowledge,
+      liveContext: await buildLiveContext(supabase, accountId, (conversation.contact_id as string | null) ?? null),
     })
 
     const { text, usage, provider: usedProvider, model: usedModel } = await generateReply({ config, systemPrompt, messages })

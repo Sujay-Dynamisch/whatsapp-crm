@@ -497,13 +497,26 @@ describe('no response → re-invite → Stage A/B/C at 11 AM every 2nd day → C
     expect(log().at(-1)).toBe('Tue 03 09:00 sg_webinar_session_rebooked');
   });
 
-  it('unrecognised answer → asked for 1–4; still quiet → Stage C', async () => {
+  it('a typed message that is not a menu choice goes to the AI; the menu keeps waiting', async () => {
     await register('2026-11-02 10:00');
-    await reply('hmm', '2026-11-03 09:00');
-    expect(log().at(-1)).toBe('Tue 03 09:00 text:Please reply with 1, 2, 3 or 4 so I can help you with your next step. 🙏');
-    await runUntil('2026-11-30 00:00');
-    expect(templates('sg_nurture_coldlead')).toHaveLength(8);
-    expect(templates('sg_nurture_prewebinar')).toHaveLength(0);
+    await runUntil('2026-11-03 09:00');
+    const before = sent.length;
+    for (const text of ['hmm', 'I joined yesterday’s webinar but that was without sound', 'Ok']) {
+      expect(await dispatchJourneyInbound(db(), { accountId: 'acct', contactId: 'c1', text }, deps)).toBe(false);
+    }
+    expect(sent.length).toBe(before); // no payment link, no FAQ menu — the AI answers these
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: 'reply_menu' });
+    // A real menu choice still works afterwards.
+    await reply('3');
+    expect(log().at(-1)).toBe('Tue 03 09:00 sg_webinar_session_rebooked');
+  });
+
+  it('short menu replies and button taps still work (“join”, “call me”, “3 and 4”)', async () => {
+    const { isMenuChoice } = await import('./engine');
+    const g = buildJourney(TAG_IDS, 'owner');
+    const wait = g.nodes.find((n) => n.id === 'reply_menu')!;
+    for (const t of ['1', '3 and 4', 'join', 'Ready to Join', 'call me', 'Couldn’t attend']) expect(isMenuChoice(g, wait, t)).toBe(true);
+    for (const t of ['hmm', 'Ok', 'I joined yesterday’s webinar but that was without sound', 'what is the fee?']) expect(isMenuChoice(g, wait, t)).toBe(false);
   });
 
   it('every nurture send is at 11 AM IST, 2 days apart', async () => {
@@ -534,22 +547,24 @@ describe('conversion menu', () => {
 
   it('T5 “Request Callback” → handoff', async () => {
     await register('2026-11-02 10:00');
-    await reply('Want to see testimonials', '2026-11-03 08:00');
-    await reply('Request Callback', '2026-11-04 10:00');
+    await tap('Want to see testimonials', '2026-11-03 08:00');
+    await tap('Request Callback', '2026-11-04 10:00');
     expect(hasTag('callback_requested')).toBe(true);
-    expect(run()).toMatchObject({ status: 'completed' });
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
   });
 
-  it('4 / Request a callback → callback_requested tag, assigned to Swapnil, confirmation, automation stops', async () => {
+  it('4 / Request a callback → callback_requested tag, chat left unassigned (AI keeps answering), confirmation, nurture goes on', async () => {
     await register('2026-11-02 10:00');
     await reply('Request a callback', '2026-11-03 08:00');
     expect(hasTag('callback_requested')).toBe(true);
-    expect(tables.conversations.find((c) => c.id === 'conv1')!.assigned_agent_id).toBe('owner');
+    expect(tables.conversations.find((c) => c.id === 'conv1')!.assigned_agent_id ?? null).toBeNull();
     expect(sent.at(-1)!.text).toBe('Thank you, Asha! 🙏 My team will call you shortly.');
-    expect(run()).toMatchObject({ status: 'completed' });
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
     const count = sent.length;
     await runUntil('2026-11-30 00:00');
-    expect(sent.length).toBe(count); // no nurture after a handoff
+    // The journey ends only on paid / closed / 15 days — after a callback request the lead is still nurtured.
+    expect(sent.slice(count).map((m) => m.name)).toEqual(Array(8).fill('sg_nurture_coldlead'));
+    expect(hasTag('closed_lost')).toBe(true);
   });
 
   it('typed “CALLBACK” also hands off', async () => {
@@ -644,15 +659,15 @@ describe('payment link → nudges → Stage D', () => {
   it('Stage D “Complete Payment” → link again; “I Have a Question” → top-5 FAQ, a number → its answer, 6 → callback', async () => {
     await register('2026-11-02 10:00');
     await reply('1', '2026-11-03 10:00');
-    await reply('Complete Payment', '2026-11-04 12:00');
+    await tap('Complete Payment', '2026-11-04 12:00');
     expect(sent.at(-1)!.text).toContain('Great decision');
-    await reply('I Have a Question', '2026-11-04 13:00');
+    await tap('I Have a Question', '2026-11-04 13:00');
     expect(sent.at(-1)!.text).toContain('Here are the questions people ask us most');
     await reply('3');
     expect(sent.at(-1)!.text).toContain('15–30 kg');
     await reply('6');
     expect(hasTag('callback_requested')).toBe(true);
-    expect(run().status).toBe('completed');
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
   });
 
   it('Stage D “Not Proceeding” → manually_closed, goodbye, nothing more', async () => {
@@ -722,7 +737,7 @@ describe('STOP / kill switch', () => {
 
   it('a nurture reply re-opens the menu (“I’m Ready to Join” → payment link)', async () => {
     await register('2026-11-02 10:00');
-    await reply("I'm Ready to Join", '2026-11-06 12:00');
+    await tap("I'm Ready to Join", '2026-11-06 12:00');
     expect(sent.at(-1)!.text).toContain('Great decision');
   });
 });
@@ -965,7 +980,7 @@ describe('callback follow-ups', () => {
     await register('2026-11-02 10:00');
     await reply('Request a callback', '2026-11-03 08:00');
     expect(request()).toMatchObject({ status: 'new', contact_id: 'c1' });
-    expect(run().status).toBe('completed');
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
   };
 
   it('1st “No answer” → “we tried calling you”; request stays open for another try', async () => {
@@ -983,7 +998,7 @@ describe('callback follow-ups', () => {
     await reply('Call me again', '2026-11-03 13:00');
     expect(sent.at(-1)!.text).toBe('Thank you, Asha! 🙏 My team will call you shortly.');
     expect(request().status).not.toBe('done');
-    expect(run().status).toBe('completed');
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
   });
 
   it('… lead taps “Not now” → Stage C nurture at 11 AM, closed-lost on day 15', async () => {
@@ -1004,16 +1019,39 @@ describe('callback follow-ups', () => {
     expect(sent.at(-1)!.text).toContain(LINKS.pay);
   });
 
-  it('… no reply in 24h → nothing more is sent; the request waits for the team', async () => {
+  it('… no reply in 24h → the request waits for the team, the lead goes back into nurture', async () => {
     await askForCallback();
     await noAnswer('2026-11-03 12:00');
     const count = sent.length;
     await runUntil('2026-11-05 11:00');
-    expect(sent.length).toBe(count);
-    expect(run()).toMatchObject({ status: 'completed', current_node_id: 'end' });
+    expect(sent.slice(count).map((m) => m.name)).toEqual(['sg_nurture_coldlead']); // Thu 05 11 AM
+    expect(request().status).toBe('no_answer');
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
   });
 
-  it('2nd “No answer” → request closed, tag removed, owner told, lead back in Stage C', async () => {
+  /** Swapnil's journey has automatic return OFF; these tests turn it on. */
+  const setAutoReturn = (on: boolean) => {
+    for (const j of tables.journeys as unknown as JourneyRow[]) {
+      const t = j.graph.nodes.find((n) => n.type === 'trigger')!;
+      (t.config as NodeConfigs['trigger']).callback_auto_return = on;
+    }
+  };
+
+  it('automatic return OFF (Swapnil): 2nd “No answer” and 48h quiet leave the request waiting', async () => {
+    await askForCallback();
+    await noAnswer('2026-11-03 12:00');
+    expect(await noAnswer('2026-11-04 12:00')).toMatchObject({ action: 'none', count: 2 });
+    expect(request()).toMatchObject({ status: 'no_answer' });
+    expect(hasTag('callback_requested')).toBe(true);
+    await runUntil('2026-11-07 12:00');
+    expect((await runCallbackFollowUps(db(), deps)).returned).toBe(0);
+    expect(request().status).toBe('no_answer'); // still in Waiting for the team
+    expect(templates('sg_nurture_coldlead').length).toBeGreaterThan(0); // and still nurtured meanwhile
+    expect(tables.notifications.filter((n) => n.type === 'callback_returned')).toHaveLength(0);
+  });
+
+  it('2nd “No answer” (automatic return on) → request closed, tag removed, owner told, lead back in Stage C', async () => {
+    setAutoReturn(true);
     await askForCallback();
     await noAnswer('2026-11-03 12:00');
     expect(await noAnswer('2026-11-04 12:00')).toMatchObject({ action: 'returned', count: 2 });
@@ -1056,7 +1094,8 @@ describe('callback follow-ups', () => {
     expect((await runCallbackFollowUps(db(), deps)).reminded).toBe(0);
   });
 
-  it('“No answer” then nobody tries again for 48h → back to nurture automatically', async () => {
+  it('“No answer” then nobody tries again for 48h (automatic return on) → back to nurture automatically', async () => {
+    setAutoReturn(true);
     await askForCallback();
     await noAnswer('2026-11-03 12:00');
     await runUntil('2026-11-05 11:59');
@@ -1105,7 +1144,7 @@ describe('callback follow-ups', () => {
   it('the follow-up steps are valid entry points of the journey', () => {
     const g = buildJourney(TAG_IDS, 'owner');
     const t = g.nodes.find((n) => n.type === 'trigger')!.config as NodeConfigs['trigger'];
-    expect(t).toMatchObject({ callback_missed_node: 'cb_missed', callback_return_node: 'c_slot', callback_no_answer_limit: 2 });
+    expect(t).toMatchObject({ callback_missed_node: 'cb_missed', callback_return_node: 'cb_after', callback_no_answer_limit: 2, callback_auto_return: false });
     expect(validateGraph(g)).toEqual([]);
     t.callback_missed_node = 'nope';
     expect(validateGraph(g)).toContainEqual({ nodeId: 'trigger', message: 'Follow-up step "nope" does not exist' });
@@ -1124,7 +1163,7 @@ describe('callbacks feature off', () => {
     expect(tables.callback_requests).toEqual([]);
     expect(tables.conversations.find((c) => c.id === 'conv1')!.assigned_agent_id).toBe('owner');
     expect(sent.at(-1)!.text).toBe('Thank you, Asha! 🙏 My team will call you shortly.');
-    expect(run().status).toBe('completed');
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
   });
 
   it('with the feature on, the same reply opens a callback request', async () => {
@@ -1210,11 +1249,12 @@ describe('closed-lost lead writes back', () => {
     expect(hasTag('closed_lost')).toBe(true);
   });
 
-  it('a lead whose run ended at a callback (not lost) → nothing extra', async () => {
+  it('a lead who asked for a callback asks “when will you call?” → the AI answers (no menu, no repeat)', async () => {
     await register('2026-11-02 10:00');
     await reply('4', '2026-11-03 08:00');
+    await runUntil('2026-11-03 12:00');
     const before = sent.length;
-    await reply('when will you call?', '2026-11-03 12:00');
+    await reply('when will you call?');
     expect(sent.length).toBe(before);
     expect(notes()).toEqual([]);
   });
@@ -1239,7 +1279,7 @@ describe('two check-in buttons tapped back to back — both get a reply', () => 
     await register('2026-11-02 10:00');
     await tap('Request a callback', '2026-11-03 10:00');
     expect(sent.at(-1)!.text).toContain('My team will call you shortly');
-    expect(run().status).toBe('completed');
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
     await tap('Ready to Join');
     expect(sent.at(-1)!.text).toContain('Great decision');
     expect(sent.at(-1)!.text).toContain(LINKS.pay);

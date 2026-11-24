@@ -57,6 +57,8 @@ interface CallbackRequest {
   note_by_name?: string | null;
   note_at?: string | null;
   ai_meta?: { confidence?: number; requested_time?: string; language?: string } | null;
+  /** When the customer asked to be called (102). */
+  scheduled_for?: string | null;
   contact_name: string | null;
   contact_phone: string | null;
 }
@@ -471,6 +473,18 @@ export default function CallbacksPage() {
                       {r.source_kind === 'ai_review' && r.status !== 'done' && (
                         <span className="rounded-full border border-amber-500/50 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
                           Needs review{typeof r.ai_meta?.confidence === 'number' ? ` · ${Math.round(r.ai_meta.confidence * 100)}%` : ''}
+                        </span>
+                      )}
+                      {r.scheduled_for && r.status !== 'done' && (
+                        <span
+                          className={cn(
+                            'rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                            Date.parse(r.scheduled_for) <= now ? 'bg-rose-500 text-white' : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                          )}
+                          title="The time the customer asked to be called"
+                        >
+                          📅 Call at {format(new Date(r.scheduled_for), 'h:mm a, EEE d MMM')}
+                          {Date.parse(r.scheduled_for) <= now ? ' — now' : ''}
                         </span>
                       )}
                       {r.caller_name && (

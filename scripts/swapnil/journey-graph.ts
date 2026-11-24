@@ -193,8 +193,10 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     // Callback follow-ups (Callbacks page): "No answer" → cb_missed; 2nd
     // "No answer", "Back to nurture" or 48h without action → Stage C.
     callback_missed_node: 'cb_missed',
-    callback_return_node: 'c_slot',
+    callback_return_node: 'cb_after',
     callback_no_answer_limit: CALLBACK_NO_ANSWER_LIMIT,
+    // Leads go back to nurture only when the team clicks "Back to nurture".
+    callback_auto_return: false,
     // A closed-lost lead writes back → team notified, menu again.
     revive_tag_id: tag.closed_lost,
     revive_node: 'revived',
@@ -392,16 +394,40 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
   // Callback requests switched off for the account (system admin) → no
   // request would open, so skip the tag and hand straight to Swapnil.
   add('callback_on', 'condition', 'Callback requests on?', { kind: 'feature_enabled', feature: 'callbacks' }, { yes: 'tag_callback', no: 'assign_owner' });
-  add('tag_callback', 'add_tag', 'Tag: callback_requested', { tag_id: tag.callback_requested }, { next: 'assign_owner' });
+  // Callback requests on: the Callbacks page + callers handle it and the chat
+  // stays unassigned, so the AI agent keeps answering their questions.
+  add('tag_callback', 'add_tag', 'Tag: callback_requested', { tag_id: tag.callback_requested }, { next: 'callback_msg' });
   add('assign_owner', 'conversation', 'Human handoff (assign Swapnil)', { action: 'assign', user_id: ownerUserId }, { next: 'callback_msg' });
-  add('callback_msg', 'send_text', 'Confirm callback', { text: `Thank you, ${NAME}! 🙏 My team will call you shortly.` }, { next: 'end' });
+  add('callback_msg', 'send_text', 'Confirm callback', { text: `Thank you, ${NAME}! 🙏 My team will call you shortly.` }, { next: 'cb_after' });
+
+  // After a callback step the journey goes on (it ends only when they pay,
+  // close, or the 15-day nurture runs out): back to their webinar
+  // reminders if the session is still ahead, otherwise into nurture —
+  // Stage D if they already have the payment link, else Stage C.
+  add('cb_after', 'code', 'After callback: reminders or nurture?', {
+    code: `${CLOCK}
+const s = (nodes && nodes.schedule) || {};
+const t = (x) => Date.parse(x || '') || 0;
+if (s.msg2_due === 'yes' && NOW < t(s.msg2_iso)) return { route: 'msg2' };
+if (NOW < t(s.msg3_iso)) return { route: 'msg3' };
+if (NOW < t(s.checkin_iso)) return { route: 'checkin' };
+return { route: 'nurture' };`,
+  }, { success: 'cb_route', error: 'faq_back' });
+  add('cb_route', 'switch', 'Back to reminders or nurture', {
+    value: '{{ nodes.cb_after.route }}',
+    cases: [
+      { op: 'equals', value: 'msg2', label: 'Reminder 2 ahead' },
+      { op: 'equals', value: 'msg3', label: 'Reminder 3 ahead' },
+      { op: 'equals', value: 'checkin', label: 'Check-in ahead' },
+    ],
+  }, { case_0: 'wait_msg2', case_1: 'wait_msg3', case_2: 'wait_checkin', default: 'faq_back' });
 
   // Callback not answered (started from the Callbacks page): tell them we
   // tried. "Call me again" → back to the team; "Not now" → Stage C
   // nurture; anything else → the conversion menu. No reply → the
   // request stays with the team (2nd "No answer" / 48h → Stage C).
   add('cb_missed', 'send_template', 'We tried calling you', tpl('sg_callback_missed', [NAME]), { next: 'cb_wait' });
-  add('cb_wait', 'wait_for_reply', 'Wait 24h for a reply', { amount: 24, unit: 'hours' }, { replied: 'cb_reply', timeout: 'end' });
+  add('cb_wait', 'wait_for_reply', 'Wait 24h for a reply', { amount: 24, unit: 'hours' }, { replied: 'cb_reply', timeout: 'cb_after' });
   add('cb_reply', 'switch', 'Reply to "we tried calling"', {
     value: lc,
     cases: [
@@ -465,6 +491,12 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     const i = rows.get(d) ?? 0;
     rows.set(d, i + 1);
     n.position = { x: i * 300, y: d * 180 };
+  }
+  // Typed messages that aren't a menu choice ("I joined but there was no
+  // sound", "Ok") are answered by the AI agent instead of the menu / FAQ;
+  // the wait goes on. Button taps and short menu replies work as before.
+  for (const n of nodes) {
+    if (n.type === 'wait_for_reply') (n.config as NodeConfigs['wait_for_reply']).typed = 'menu_only';
   }
   return { nodes };
 }

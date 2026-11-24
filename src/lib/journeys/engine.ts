@@ -984,6 +984,54 @@ async function loadJourney(db: SupabaseClient, id: string): Promise<JourneyRow |
 }
 
 /** A customer message arrived: resume their "wait for reply" steps. */
+const MENU_REPLY_MAX_WORDS = 3;
+
+/**
+ * Is a typed reply a choice for the menu after this wait (the first
+ * switch reached through its `replied` slot)? A number option ("3",
+ * "3 and 4") or a short reply (≤ 3 words, not a question) that names an option ("join",
+ * "Ready to Join", "call me"). A sentence like "I joined yesterday's
+ * webinar but there was no sound" is not — the AI answers it.
+ */
+export function isMenuChoice(graph: JourneyGraph, wait: JourneyNode, text: string): boolean {
+  const t = text.toLowerCase().trim();
+  if (!t) return true;
+  /** The switch reached from `id` through pass-through steps (mark / tag). */
+  const switchFrom = (start: string | undefined): JourneyNode | undefined => {
+    let id = start;
+    for (let hops = 0; id && hops < 4; hops++) {
+      const n = graph.nodes.find((x) => x.id === id);
+      if (!n) return undefined;
+      if (n.type === 'switch') return n;
+      if (n.type !== 'set_variable' && n.type !== 'add_tag') return undefined;
+      id = n.next.next;
+    }
+    return undefined;
+  };
+  // The menu after the wait, plus any menu its "anything else" path leads to
+  // (e.g. "we tried calling" → the main menu, where "1" is valid).
+  const switches: JourneyNode[] = [];
+  for (let sw = switchFrom(wait.next.replied); sw && switches.length < 3 && !switches.includes(sw); sw = switchFrom(sw.next.default)) {
+    switches.push(sw);
+  }
+  if (!switches.length) return true;
+  const words = t.split(/\s+/).filter(Boolean).length;
+  if (words > MENU_REPLY_MAX_WORDS) return false;
+  // A question ("when will you call?") is for the AI, not a menu choice — unless it's just a number.
+  if (t.includes('?') && !/^\d/.test(t)) return false;
+  for (const c of switches.flatMap((sw) => (sw.config as NodeConfigs['switch']).cases)) {
+    const v = String(c.value ?? '').toLowerCase().trim();
+    const label = String(c.label ?? '').toLowerCase().trim();
+    if (!v) continue;
+    if (/^\d+$/.test(v)) {
+      if (new RegExp(`^${v}(\\D|$)`).test(t)) return true;
+      continue;
+    }
+    if (t === v || t === label || t.includes(v)) return true;
+  }
+  return false;
+}
+
 export async function resumeOnReply(
   db: SupabaseClient,
   accountId: string,
@@ -1004,6 +1052,14 @@ export async function resumeOnReply(
   let resumed = 0;
   for (const row of (waiting ?? []) as EnrollmentRow[]) {
     if (skip.has(row.id) && !isUnsubscribeText(reply.text)) continue;
+    // A typed message that isn't a menu choice goes to the AI; the run keeps waiting.
+    if (!reply.button && !isUnsubscribeText(reply.text)) {
+      const j = await loadJourney(db, row.journey_id);
+      const node = j?.graph.nodes.find((n) => n.id === row.current_node_id);
+      if (j && node?.type === 'wait_for_reply' && (node.config as NodeConfigs['wait_for_reply']).typed === 'menu_only') {
+        if (!isMenuChoice(j.graph, node, reply.text ?? '')) continue;
+      }
+    }
     // Claim atomically — the tick may be timing this one out right now.
     const { data: claimed } = await db
       .from('journey_enrollments')

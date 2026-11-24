@@ -30,23 +30,30 @@ export async function GET(request: Request) {
     const to = p.get('to');
     const search = (p.get('q') ?? '').replace(/[^\p{L}\p{N} +@.\-_]/gu, '').trim();
 
-    let q = supabase
-      .from('callback_requests')
-      .select(
-        `id, contact_id, conversation_id, status, source, note, requested_at, handled_at, handled_by, no_answer_count, priority, source_kind, assigned_caller_id, ai_meta, note_by, note_at, contacts${search ? '!inner' : ''}(name, phone)`
-      )
-      .eq('account_id', accountId)
-      // Priority (customer-requested, 086) first; 'high' < 'normal'.
-      .order('priority', { ascending: true })
-      .order('requested_at', { ascending: false })
-      .limit(300);
-    if (status === 'open') q = q.neq('status', 'done');
-    else if (status && STATUSES.includes(status)) q = q.eq('status', status);
-    if (from && !Number.isNaN(Date.parse(from))) q = q.gte('requested_at', from);
-    if (to && !Number.isNaN(Date.parse(to))) q = q.lt('requested_at', to);
-    if (search) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`, { referencedTable: 'contacts' });
-    const { data, error } = await q;
-    if (error) throw error;
+    const build = (extra: string) => {
+      let q = supabase
+        .from('callback_requests')
+        .select(
+          `id, contact_id, conversation_id, status, source, note, requested_at, handled_at, handled_by, no_answer_count, priority, source_kind, assigned_caller_id, ai_meta, note_by, note_at${extra}, contacts${search ? '!inner' : ''}(name, phone)`
+        )
+        .eq('account_id', accountId)
+        // Priority (customer-requested, 086) first; 'high' < 'normal'.
+        .order('priority', { ascending: true })
+        .order('requested_at', { ascending: false })
+        .limit(300);
+      if (status === 'open') q = q.neq('status', 'done');
+      else if (status && STATUSES.includes(status)) q = q.eq('status', status);
+      if (from && !Number.isNaN(Date.parse(from))) q = q.gte('requested_at', from);
+      if (to && !Number.isNaN(Date.parse(to))) q = q.lt('requested_at', to);
+      if (search) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`, { referencedTable: 'contacts' });
+      return q;
+    };
+    // scheduled_for (102 — the time the customer asked to be called); older DBs without it still work.
+    type Row = { assigned_caller_id: string | null; note_by: string | null; contacts: unknown; [k: string]: unknown };
+    let res = await build(', scheduled_for');
+    if (res.error) res = await build('');
+    if (res.error) throw res.error;
+    const data = res.data as unknown as Row[] | null;
 
     // Headline counts + daily series from the last 14 days in one read.
     const now = Date.now();

@@ -37,11 +37,35 @@ export interface CallbackIntent {
   confidence: number;
   language: string | null;
   requested_time: string | null;
+  /** The named time resolved to an exact IST moment ("…+05:30"), or null (102). */
+  scheduled_for: string | null;
   reason: string;
 }
 
-export const CLASSIFIER_PROMPT = `You classify ONE inbound WhatsApp message from a customer of an Indian business.
+/** One line of the recent chat given to the classifier (oldest first). */
+export interface ChatLine {
+  from: 'customer' | 'business';
+  text: string;
+}
+
+/** The business just asked about a call / a time ("when shall we call?"). */
+const ASKED_TIME_RE = /\b(call|calling|phone|time|when|slot|schedule|convenient|preferred)\b|कॉल|फोन|समय|वेळ/i;
+
+/**
+ * Worth classifying? The message mentions a call, or it answers the
+ * business's question about a call / a time ("12:30 tomorrow").
+ */
+export function worthClassifying(text: string, chat: ChatLine[] = []): boolean {
+  if (mightRequestCallback(text)) return true;
+  const t = text.trim();
+  if (t.length < 2 || t.length > 300) return false;
+  const lastBusiness = [...chat].reverse().find((l) => l.from === 'business');
+  return !!lastBusiness && ASKED_TIME_RE.test(lastBusiness.text);
+}
+
+export const CLASSIFIER_PROMPT = `You classify the LATEST inbound WhatsApp message from a customer of an Indian business, using the recent conversation for context.
 Decide whether the customer is asking the business to PHONE them (a callback), prefers speaking over typing, or names a time to be called.
+Use the conversation: a short reply like "12:30 tomorrow" or "after 6" answering the business's question about when to call IS a callback request with a time; "A quick call" after the business offered a call IS a callback request.
 Messages may be English, Hindi, Marathi, Hinglish or mixed.
 
 Rules:
@@ -49,10 +73,21 @@ Rules:
 - "ambiguous": it might be a call request but it is unclear.
 - "none": ordinary mentions that are not a request to be called (e.g. "I was on a call", "the call yesterday was great", "what time is the webinar call?").
 - requested_time: the time/day they named, copied as written (e.g. "after 6 pm", "tomorrow morning"); null when none. Never invent a time.
+- scheduled_for: that time as an exact India time "YYYY-MM-DDTHH:MM:00+05:30", worked out from the current date/time given to you ("tomorrow" = the next calendar day; a bare hour like "12:30" or "4" means the daytime hour between 9 AM and 9 PM; "morning" = 10:00, "afternoon" = 14:00, "evening" = 18:00, "after 6" = 18:00). null when they named no time. Never invent a time.
 - language: ISO-like code: en, hi, mr, or mixed.
 
 Reply with ONLY this JSON, no prose:
-{"intent":"callback_request|ambiguous|none","confidence":0.0-1.0,"language":"en","requested_time":null,"reason":"short evidence"}`;
+{"intent":"callback_request|ambiguous|none","confidence":0.0-1.0,"language":"en","requested_time":null,"scheduled_for":null,"reason":"short evidence"}`;
+
+const SCHEDULED_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?\+05:30$/;
+
+/** A resolved call time, only if well-formed and between 1 hour ago and 30 days ahead. */
+export function validScheduledFor(v: unknown, now = Date.now()): string | null {
+  if (typeof v !== 'string' || !SCHEDULED_RE.test(v.trim())) return null;
+  const t = Date.parse(v.trim());
+  if (!Number.isFinite(t) || t < now - 3600_000 || t > now + 30 * 864e5) return null;
+  return v.trim();
+}
 
 /** Parse the model's JSON (tolerates code fences / surrounding text). */
 export function parseIntent(raw: string): CallbackIntent | null {
@@ -68,6 +103,7 @@ export function parseIntent(raw: string): CallbackIntent | null {
       confidence: Number.isFinite(c) ? Math.max(0, Math.min(1, c)) : 0,
       language: typeof o.language === 'string' ? o.language.slice(0, 10) : null,
       requested_time: typeof o.requested_time === 'string' && o.requested_time.trim() ? o.requested_time.trim().slice(0, 100) : null,
+      scheduled_for: validScheduledFor(o.scheduled_for),
       reason: typeof o.reason === 'string' ? o.reason.slice(0, 300) : '',
     };
   } catch {
@@ -83,13 +119,34 @@ export function decide(r: CallbackIntent, threshold: number): 'definite' | 'revi
   return r.confidence >= 0.4 ? 'review' : 'ignore';
 }
 
-export async function classifyCallbackIntent(config: AiConfig, text: string): Promise<CallbackIntent | null> {
+const istNow = (now = new Date()) =>
+  new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }).format(now) + ' IST';
+
+export async function classifyCallbackIntent(config: AiConfig, text: string, chat: ChatLine[] = []): Promise<CallbackIntent | null> {
+  const convo = chat.length
+    ? `Recent conversation (oldest first):\n${chat.map((l) => `${l.from === 'customer' ? 'Customer' : 'Business'}: ${l.text.replace(/\s+/g, ' ').slice(0, 300)}`).join('\n')}\n\n`
+    : '';
   const res = await generateReply({
     config,
     systemPrompt: CLASSIFIER_PROMPT,
-    messages: [{ role: 'user', content: text.slice(0, 2000) }],
+    messages: [{ role: 'user', content: `Current date and time: ${istNow()}\n\n${convo}LATEST customer message to classify:\n${text.slice(0, 2000)}` }],
   });
   return parseIntent(res.text);
+}
+
+/** The last few messages before this one (oldest first). */
+async function recentChat(db: SupabaseClient, conversationId: string, waMessageId: string): Promise<ChatLine[]> {
+  const { data } = await db
+    .from('messages')
+    .select('sender_type, content_text, message_id')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false })
+    .limit(9);
+  return ((data ?? []) as { sender_type: string; content_text: string | null; message_id: string | null }[])
+    .filter((m) => m.message_id !== waMessageId && (m.content_text ?? '').trim())
+    .slice(0, 8)
+    .reverse()
+    .map((m) => ({ from: m.sender_type === 'customer' ? ('customer' as const) : ('business' as const), text: String(m.content_text) }));
 }
 
 export interface DetectInput {
@@ -104,10 +161,12 @@ export interface DetectInput {
 export async function detectCallbackIntent(
   db: SupabaseClient,
   input: DetectInput,
-  classify: (config: AiConfig, text: string) => Promise<CallbackIntent | null> = classifyCallbackIntent
+  classify: (config: AiConfig, text: string, chat?: ChatLine[]) => Promise<CallbackIntent | null> = classifyCallbackIntent
 ): Promise<string> {
   try {
-    if (!mightRequestCallback(input.text)) return 'no_hint';
+    // A call word in the message, or an answer to "when shall we call?" ("12:30 tomorrow").
+    const chat = await recentChat(db, input.conversationId, input.waMessageId).catch((): ChatLine[] => []);
+    if (!worthClassifying(input.text, chat)) return 'no_hint';
     if (!(await accountHasFeature(db, input.accountId, 'caller_management'))) return 'off';
     if (!(await accountHasFeature(db, input.accountId, 'callbacks'))) return 'off';
 
@@ -122,7 +181,7 @@ export async function detectCallbackIntent(
     const config = await loadAiConfig(db, input.accountId, { requireActive: false });
     if (!config?.apiKey) return 'no_ai';
 
-    const result = await classify(config, input.text);
+    const result = await classify(config, input.text, chat);
     if (!result) return 'unparsed';
     const verdict = decide(result, threshold);
     if (verdict === 'ignore') return 'ignored';
@@ -138,6 +197,7 @@ export async function detectCallbackIntent(
         confidence: result.confidence,
         language: result.language,
         requested_time: result.requested_time ?? 'ASAP / time not specified',
+        scheduled_for: result.scheduled_for,
         reason: result.reason,
         model: `${config.provider}:${config.model}`,
         intent_type: 'CALLBACK_REQUEST',
