@@ -473,8 +473,12 @@ export async function advanceEnrollment(
   for (let i = 0; i < MAX_STEPS_PER_ADVANCE; i++) {
     const now = deps.now();
     steps += 1;
+    // Save the step AND what earlier steps decided (e.g. the newly booked
+    // session) before running it: a worker that dies mid-run is resumed
+    // here by the stale-lock rule, and must not replay this step with the
+    // context from the last wait (it re-sent the cancelled date).
+    await patchEnrollment(db, e.id, { current_node_id: node.id, steps_taken: steps, context });
     await logEvent(db, e, node.id, 'entered');
-    await patchEnrollment(db, e.id, { current_node_id: node.id, steps_taken: steps });
 
     let result: StepResult;
     try {
