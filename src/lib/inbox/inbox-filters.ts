@@ -5,6 +5,7 @@ export const INBOX_FILTERS = [
   "unread",
   "waiting",
   "unassigned",
+  "my_leads",
   "expiring",
   "open",
   "pending",
@@ -42,6 +43,8 @@ export function applyInboxFilter(
   conversations: Conversation[],
   filter: InboxFilter,
   now: number,
+  /** The viewer — for "my_leads". */
+  userId?: string | null,
 ): Conversation[] {
   switch (filter) {
     case "all":
@@ -53,7 +56,18 @@ export function applyInboxFilter(
     case "expiring":
       return conversations.filter((c) => isWindowClosing(c, now)).sort(byOldestInbound);
     case "unassigned":
-      return conversations.filter((c) => c.status === "open" && !c.assigned_agent_id);
+      // Nobody on the chat AND the lead has no caller (086) — a lead given
+      // to a caller by round-robin is not "unassigned".
+      return conversations.filter(
+        (c) => c.status === "open" && !c.assigned_agent_id && !c.contact?.assigned_caller_id,
+      );
+    case "my_leads":
+      // Chats assigned to me, or whose lead is mine as their caller.
+      return userId
+        ? conversations.filter(
+            (c) => c.assigned_agent_id === userId || c.contact?.assigned_caller_id === userId,
+          )
+        : [];
     default:
       return conversations.filter((c) => c.status === (filter as ConversationStatus));
   }

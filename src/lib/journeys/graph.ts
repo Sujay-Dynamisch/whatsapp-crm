@@ -124,6 +124,12 @@ export interface TriggerConfig extends Partial<ScheduleConfig> {
   callback_missed_node?: string;
   /** Callbacks: after this many "No answer" marks the lead goes back to `callback_return_node` (default 2). */
   callback_no_answer_limit?: number;
+  /**
+   * Callbacks: false = a lead goes back to nurture ONLY when the team clicks
+   * "Back to nurture" — no automatic return at the "No answer" limit or
+   * after 48h. Default true.
+   */
+  callback_auto_return?: boolean;
   /** Lost lead writes back: the tag that marks a lost lead (e.g. closed_lost)… */
   revive_tag_id?: string;
   /** …and the step their new run starts at (their message is {{ reply.text }}). */
@@ -155,7 +161,19 @@ export interface NodeConfigs {
   /** late_taps: a menu button tapped after the run moved on (busy with an
    *  earlier tap, parked on a timer, or finished) resumes the run here, as
    *  if the tap answered this step — so every tap gets the journey's reply. */
-  wait_for_reply: { amount: number; unit: DurationUnit; until?: string; late_taps?: boolean };
+  wait_for_reply: {
+    amount: number;
+    unit: DurationUnit;
+    until?: string;
+    late_taps?: boolean;
+    /**
+     * 'menu_only': a typed message resumes this wait only when it is a menu
+     * choice for the switch after it (a number, or a short reply naming an
+     * option). Anything else stays with the AI agent; the wait goes on.
+     * Button taps always resume.
+     */
+    typed?: 'menu_only';
+  };
   condition: {
     kind: ConditionKind;
     /** kind 'replied': count replies since the last wait started (default) or since the run started. */

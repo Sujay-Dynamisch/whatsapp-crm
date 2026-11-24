@@ -48,6 +48,7 @@ interface Details {
     source_kind: string | null;
     caller_name: string | null;
     ai_meta: { confidence?: number; requested_time?: string; language?: string } | null;
+    scheduled_for?: string | null;
   };
   contact: { name: string | null; phone: string | null; email: string | null; created_at: string; owner_name: string | null } | null;
   tags: { name: string; color: string }[];
@@ -236,6 +237,9 @@ export function CallbackDetailsSheet({
               {/* Quick facts */}
               <div className="grid grid-cols-2 gap-2">
                 {[
+                  ...(r.request.scheduled_for
+                    ? [{ label: 'Call at (their choice)', value: format(new Date(r.request.scheduled_for), 'h:mm a, EEE d MMM'), sub: r.request.ai_meta?.requested_time ? `They said “${r.request.ai_meta.requested_time}”` : null }]
+                    : []),
                   { label: 'Asked', value: `${formatDistanceToNow(new Date(r.request.requested_at), { addSuffix: true })}`, sub: format(new Date(r.request.requested_at), 'd MMM, h:mm a') },
                   { label: 'Handled by', value: r.request.caller_name || r.contact?.owner_name || 'Not assigned', sub: r.contact?.owner_name ? 'Lead owner' : null },
                   { label: 'Calls not answered', value: String(r.request.no_answer_count ?? 0), sub: 'this request' },

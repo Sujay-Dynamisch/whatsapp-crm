@@ -57,12 +57,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { supabase, accountId } = await getCurrentAccount();
     const { id } = await params;
     if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
-    const { data: req } = await supabase
-      .from('callback_requests')
-      .select('id, contact_id, conversation_id, status, source, requested_at, handled_at, handled_by, no_answer_count, priority, source_kind, assigned_caller_id, ai_meta')
-      .eq('id', id)
-      .eq('account_id', accountId)
-      .maybeSingle();
+    const cols = 'id, contact_id, conversation_id, status, source, requested_at, handled_at, handled_by, no_answer_count, priority, source_kind, assigned_caller_id, ai_meta';
+    const one = (c: string) => supabase.from('callback_requests').select(c).eq('id', id).eq('account_id', accountId).maybeSingle();
+    type ReqRow = {
+      id: string;
+      contact_id: string;
+      conversation_id: string | null;
+      status: string;
+      assigned_caller_id: string | null;
+      scheduled_for?: string | null;
+      [k: string]: unknown;
+    };
+    const first = await one(`${cols}, scheduled_for`);
+    const req = (first.error ? (await one(cols)).data : first.data) as unknown as ReqRow | null;
     if (!req) return NextResponse.json({ error: 'Request not found' }, { status: 404 });
     const contactId = req.contact_id as string;
 
