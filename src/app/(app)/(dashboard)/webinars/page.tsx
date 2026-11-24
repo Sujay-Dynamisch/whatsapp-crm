@@ -184,16 +184,30 @@ export default function WebinarsPage() {
     });
   };
 
+  // IST dates that already have a scheduled session, and the first free
+  // day after the last one — new sessions start there, never in the past.
+  const { taken, firstFree } = useMemo(() => {
+    const istDate = (iso: string) => new Date(Date.parse(iso) + 5.5 * 3600e3).toISOString().slice(0, 10);
+    const dates = (data?.sessions ?? []).filter((s) => s.upcoming && s.status === 'scheduled').map((s) => istDate(s.starts_at));
+    const last = dates.reduce((a, b) => (b > a ? b : a), '');
+    const today = todayIst();
+    return { taken: new Set(dates), firstFree: last && addDays(last, 1) > today ? addDays(last, 1) : today };
+  }, [data]);
+  useEffect(() => {
+    if (from < firstFree) setFrom(firstFree);
+  }, [firstFree, from]);
+
   const planned = useMemo(() => {
     const out: string[] = [];
     for (let i = 0; i < span; i++) {
       const d = addDays(from, i);
       if (pattern === 'alternate' && i % 2 === 1) continue;
       if (pattern === 'weekdays' && !days.includes(dow(d))) continue;
+      if (taken.has(d)) continue;
       out.push(d);
     }
     return out;
-  }, [from, span, pattern, days]);
+  }, [from, span, pattern, days, taken]);
 
   const run = async (key: string, fn: () => Promise<unknown>, ok?: string) => {
     setBusy(key);
@@ -457,7 +471,7 @@ export default function WebinarsPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <label className="block space-y-1">
                 <span className="block text-xs text-muted-foreground">Starting from</span>
-                <Input type="date" className="h-9" value={from} min={todayIst()} onChange={(e) => setFrom(e.target.value)} />
+                <Input type="date" className="h-9" value={from} min={firstFree} onChange={(e) => setFrom(e.target.value)} />
               </label>
               <label className="block space-y-1">
                 <span className="block text-xs text-muted-foreground">For the next</span>
