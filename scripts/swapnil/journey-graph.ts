@@ -434,7 +434,13 @@ return { route: 'nurture' };`,
       { op: 'contains', value: 'not now', label: 'Not now' },
       { op: 'contains', value: 'call', label: 'Call me again' },
     ],
-  }, { case_0: 'c_slot', case_1: 'callback_on', default: 'mark_menu' });
+  }, { case_0: 'cb_notnow', case_1: 'callback_on', default: 'mark_menu' });
+  // "Not now": never leave them without an answer — ask when to call. Their
+  // reply ("tomorrow 5 pm") goes to the AI + the callback detector, which
+  // saves the time on the request; meanwhile reminders / nurture go on.
+  add('cb_notnow', 'send_text', 'Not now → ask for a better time', {
+    text: `No problem, ${NAME}! 😊 When would be a good time for our team to call you?\n\nJust reply with a day and time (for example: tomorrow 5 PM).`,
+  }, { next: 'cb_after' });
 
   // ---------- 15-day alternate-day nurture (11 AM IST) → CLOSED-LOST ----------
   //   x_slot → x_wait (until the slot; a reply leaves the nurture)
