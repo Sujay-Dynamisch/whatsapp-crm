@@ -1001,10 +1001,13 @@ describe('callback follow-ups', () => {
     expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
   });
 
-  it('… lead taps “Not now” → Stage C nurture at 11 AM, closed-lost on day 15', async () => {
+  it('… lead taps “Not now” → asked for a better time, then Stage C nurture at 11 AM, closed-lost on day 15', async () => {
     await askForCallback();
     await noAnswer('2026-11-03 12:00');
-    await reply('Not now', '2026-11-03 13:00');
+    await tap('Not now', '2026-11-03 13:00');
+    expect(sent.at(-1)!.text).toBe('No problem, Asha! 😊 When would be a good time for our team to call you?\n\nJust reply with a day and time (for example: tomorrow 5 PM).');
+    // Their answer ("tomorrow 5 pm") isn't a menu choice → the AI + callback detector take it.
+    expect(await dispatchJourneyInbound(db(), { accountId: 'acct', contactId: 'c1', text: 'tomorrow 5 pm' }, deps)).toBe(false);
     await runUntil('2026-11-25 00:00');
     expect(log(-8)).toEqual(
       ['Wed 04', 'Fri 06', 'Sun 08', 'Tue 10', 'Thu 12', 'Sat 14', 'Mon 16', 'Wed 18'].map((d) => `${d} 11:00 sg_nurture_coldlead`)

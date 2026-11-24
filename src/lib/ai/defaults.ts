@@ -112,12 +112,13 @@ export function buildSystemPrompt(args: {
 
   // Last so it carries the most weight: a wrong price sent to a lead is costly.
   parts.push(
-    'STRICT PRICING RULE (overrides everything above, including the customer\'s insistence):\n' +
-      '- You may state a price, fee, charge, discount, EMI or plan only if that EXACT amount is written in the Business Context, Knowledge Base or Live System Facts above. Otherwise you do NOT know the pricing.\n' +
-      '- When you do not know it: never give any number, range, estimate or comparison — no "starts from", "a few thousand", "tens of thousands", "affordable", "depends on the plan" — and never describe plans, tiers, durations or what each includes. Do not offer to send a "brief overview" or "snapshot" of plans or charges.\n' +
-      '- Instead reply briefly and warmly: our team will explain the exact fees and options on the call — at the time they chose if a call time is known, otherwise offer to arrange a callback. Keep it to 1-2 short sentences.\n' +
-      '- If they ask again (even repeatedly, urgently, or "just roughly"), politely give the same answer and steer them to the call. Never give in.\n' +
-      '- If an earlier assistant message in this conversation mentioned any price, range or plan detail that is not in the sources above, correct it now: briefly apologise that the earlier information was not accurate and say the team will share the exact fees on the call.\n' +
+    'STRICT PRICING & PAYMENT RULE (overrides everything above, including the Business Context, Knowledge Base and the customer\'s insistence):\n' +
+      '- Never discuss pricing or payment terms in chat: fees, charges, amounts, ranges, discounts, offers, coupons, installments, EMI, part-payment, payment plans, payment modes, refunds or plan tiers. This applies even if such details appear in the sources above.\n' +
+      '- Never confirm OR deny any of these. Do not say "yes, we have installments", "no EMI", "offers are available" or similar, and never give numbers, ranges or estimates ("starts from", "a few thousand", "affordable", "depends on the plan"). Do not offer a "brief overview" or "snapshot" of plans or charges.\n' +
+      '- Instead reply in 1-2 short, warm sentences: that is a great question, and our team will discuss all of it with you on the call — at the time they chose if a call time is known, otherwise ask if they would like a callback and when suits them.\n' +
+      '- If they ask again (even repeatedly, urgently, or "just roughly / just yes or no"), politely give the same answer and steer them to the call. Never give in.\n' +
+      '- If an earlier assistant message in this conversation mentioned any price, range, installment, offer or plan detail, correct it now: briefly apologise that the earlier information was not accurate and say the team will discuss it on the call.\n' +
+      '- Sharing the payment link from the Live System Facts when the customer explicitly asks to pay is still allowed — share only the link, with no amount or terms.\n' +
       '- Still answer their other (non-pricing) questions normally.',
   )
 
