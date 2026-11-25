@@ -151,7 +151,7 @@ function StatusIcon({
     case "delivered":
       return <CheckCheck className="h-3 w-3 text-muted-foreground" />;
     case "read":
-      return <CheckCheck className="h-3 w-3 text-blue-400" />;
+      return <CheckCheck className="wa-tick-read h-3.5 w-3.5" />;
     case "failed":
       return (
         <span className="inline-flex" title={title ?? undefined}>
@@ -398,10 +398,8 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2",
-          isAgent
-            ? "rounded-br-md bg-primary text-primary-foreground"
-            : "rounded-bl-md bg-muted text-foreground",
+          "relative rounded-lg px-2.5 py-1.5",
+          isAgent ? "wa-bubble-out rounded-tr-none" : "wa-bubble-in rounded-tl-none",
         )}
       >
         {reply && (

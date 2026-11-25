@@ -233,7 +233,7 @@ export async function sendJourneyFallbacks(
       .from('journey_enrollments')
       .select('id, status')
       .in('id', [...new Set(failed.map((r) => r.enrollment_id))]);
-    const live = new Set(((runs ?? []) as { id: string; status: string }[]).filter((r) => r.status !== 'exited').map((r) => r.id));
+    const live = new Set(((runs ?? []) as { id: string; status: string }[]).filter((r) => r.status === 'active' || r.status === 'waiting').map((r) => r.id)); // a finished run (paid / closed / ended) gets no catch-up messages
 
     const superseded: string[] = [];
     for (const row of failed) {
@@ -323,7 +323,7 @@ export async function runJourneyRetries(
       .eq('enrollment_id', row.enrollment_id)
       .gt('created_at', row.created_at);
     const { data: run } = await db.from('journey_enrollments').select('status').eq('id', row.enrollment_id).maybeSingle();
-    if ((newer ?? 0) > 0 || !run || run.status === 'exited') {
+    if ((newer ?? 0) > 0 || !run || run.status === 'exited' || run.status === 'completed') {
       await resolve(db, [row.id], 'superseded');
       report.superseded++;
       continue;

@@ -14,6 +14,7 @@ import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/acco
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { UUID_RE } from '@/lib/journeys/api';
 import { ensureTag, loadTracking, stopRunsExitingOnTag, tagIdsByName } from '@/lib/payments/tracking';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 type Status = 'pending' | 'paid' | 'closed';
 const DAY_MS = 864e5;
@@ -45,16 +46,19 @@ export async function GET(request: Request) {
     const closedId = ids.get(tracking.closed_tag.toLowerCase());
     const tagIds = [pendingId, paidId, closedId].filter((x): x is string => !!x);
 
-    const [links, records] = await Promise.all([
+    // Every row (the API caps one request at 1000 — fetchAll pages).
+    const [linkRows, recordRows] = await Promise.all([
       tagIds.length
-        ? supabase.from('contact_tags').select('contact_id, tag_id, created_at').in('tag_id', tagIds).limit(5000)
-        : Promise.resolve({ data: [] }),
-      supabase
-        .from('payment_records')
-        .select('contact_id, amount, method, note, paid_at')
-        .eq('account_id', accountId)
-        .limit(5000),
+        ? fetchAll((from, to) =>
+            supabase.from('contact_tags').select('contact_id, tag_id, created_at').in('tag_id', tagIds).order('contact_id').order('tag_id').range(from, to)
+          )
+        : Promise.resolve([]),
+      fetchAll((from, to) =>
+        supabase.from('payment_records').select('contact_id, amount, method, note, paid_at').eq('account_id', accountId).order('contact_id').range(from, to)
+      ),
     ]);
+    const links = { data: linkRows };
+    const records = { data: recordRows };
 
     const leads = new Map<string, Lead>();
     const lead = (id: string) => {
@@ -230,6 +234,7 @@ export async function POST(request: Request) {
       tagId: paidTagId,
       reason: `Marked as paid by ${who}`,
       now,
+      completed: true,
     });
     return NextResponse.json({ paid: true, journeys_stopped: stopped });
   } catch (error) {

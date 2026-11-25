@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 import { hasMinRole } from '@/lib/auth/roles';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 interface Row {
   id: string;
@@ -34,25 +35,32 @@ export async function GET(request: Request) {
     monthStart.setHours(0, 0, 0, 0);
     const from = range === 'month' ? monthStart.toISOString() : range === '30d' ? new Date(Date.now() - 30 * 864e5).toISOString() : null;
 
-    let q = supabase
-      .from('conversions')
-      .select(`id, contact_id, caller_id, amount, source, note, converted_at, contacts${search ? '!inner' : ''}(name, phone)`)
-      .eq('account_id', accountId)
-      .order('converted_at', { ascending: false })
-      .limit(2000);
-    if (from) q = q.gte('converted_at', from);
-    if (search) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`, { referencedTable: 'contacts' });
+    // Every row (one API request returns at most 1000 — fetchAll pages).
+    const page = (lo: number, hi: number) => {
+      let q = supabase
+        .from('conversions')
+        .select(`id, contact_id, caller_id, amount, source, note, converted_at, contacts${search ? '!inner' : ''}(name, phone)`)
+        .eq('account_id', accountId)
+        .order('converted_at', { ascending: false })
+        .order('id');
+      if (from) q = q.gte('converted_at', from);
+      if (search) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`, { referencedTable: 'contacts' });
+      return q.range(lo, hi);
+    };
 
-    const [{ data, error }, { data: all }, { count: leads }, { data: people }, { data: tracking }] = await Promise.all([
-      q,
+    const [listRes, all, { count: leads }, { data: people }, { data: tracking }] = await Promise.all([
+      fetchAll(page).then((data) => ({ data, error: null }), (error: { message: string }) => ({ data: null, error })),
       // Headline numbers ignore the range / search filters.
-      supabase.from('conversions').select('caller_id, amount, converted_at').eq('account_id', accountId).limit(20000),
+      fetchAll((lo, hi) => supabase.from('conversions').select('caller_id, amount, converted_at').eq('account_id', accountId).order('id').range(lo, hi)).catch(
+        () => [] as { caller_id: string | null; amount: number | null; converted_at: string }[]
+      ),
       isAdmin
         ? supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('account_id', accountId)
         : supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('account_id', accountId).eq('assigned_caller_id', userId),
       supabase.from('profiles').select('user_id, full_name').eq('account_id', accountId),
       supabase.from('payment_tracking').select('currency').eq('account_id', accountId).maybeSingle(),
     ]);
+    const { data, error } = listRes;
     if (error) {
       if (/conversions/.test(error.message)) return NextResponse.json({ error: 'not_ready' }, { status: 404 });
       throw error;
@@ -88,12 +96,9 @@ export async function GET(request: Request) {
     // Per-caller leaderboard (admins): conversions, revenue and their lead count.
     let byCaller: { caller_id: string | null; name: string; customers: number; revenue: number; leads: number; rate: number }[] = [];
     if (isAdmin) {
-      const { data: owned } = await supabase
-        .from('contacts')
-        .select('assigned_caller_id')
-        .eq('account_id', accountId)
-        .not('assigned_caller_id', 'is', null)
-        .limit(50000);
+      const owned = await fetchAll((lo, hi) =>
+        supabase.from('contacts').select('assigned_caller_id').eq('account_id', accountId).not('assigned_caller_id', 'is', null).order('id').range(lo, hi)
+      );
       const leadCount = new Map<string, number>();
       for (const o of owned ?? []) leadCount.set(o.assigned_caller_id as string, (leadCount.get(o.assigned_caller_id as string) ?? 0) + 1);
       const agg = new Map<string, { customers: number; revenue: number }>();

@@ -238,8 +238,10 @@ export type NoAnswerAction = 'messaged' | 'returned' | 'none';
 
 /**
  * The team just marked a callback "No answer" (no_answer_count already
- * incremented): below the limit, tell the lead we tried; at the limit,
- * back to nurture.
+ * incremented). Nothing is sent: the caller decides what happens next —
+ * "Send callback request message" (we tried calling) or "Stop calling —
+ * send messages instead" (back to nurture). Only a journey with
+ * `callback_auto_return` on moves the lead back by itself at the limit.
  */
 export async function handleNoAnswer(
   db: SupabaseClient,
@@ -257,8 +259,7 @@ export async function handleNoAnswer(
     const r = await returnToNurture(db, req, deps, 'auto');
     return { action: r.started ? 'returned' : 'none', reason: r.reason, count, limit };
   }
-  const r = await startFollowUp(db, { accountId: req.account_id, contactId: req.contact_id, kind: 'missed' }, deps);
-  return { action: r.started ? 'messaged' : 'none', reason: r.reason, count, limit };
+  return { action: 'none', count, limit };
 }
 
 export interface FollowUpReport {

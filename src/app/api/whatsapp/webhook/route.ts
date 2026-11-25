@@ -1080,7 +1080,8 @@ async function processMessage(
   // account has enabled it. Awaited inside `after()`
   // (same reason as the webhook dispatch below); `dispatchInboundToAiReply`
   // owns its eligibility gates + try/catch and never throws.
-  if (!contentConsumed && !journeyHandled && inboundText.trim()) {
+  // Images (e.g. a payment screenshot) and videos count too, caption or not.
+  if (!contentConsumed && !journeyHandled && (inboundText.trim() || message.type === 'image' || message.type === 'video')) {
     await timed('ai_reply', () =>
       dispatchInboundToAiReply({
         accountId,

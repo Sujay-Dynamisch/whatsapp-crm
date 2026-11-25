@@ -7,8 +7,11 @@ import { NextResponse } from 'next/server';
 
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 import { UUID_RE } from '@/lib/journeys/api';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 const STATUSES = ['active', 'waiting', 'completed', 'exited', 'failed'];
+/** Runs per page in Run history ("Load more" asks for the next). */
+const RUNS_PAGE = 50;
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,6 +20,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     const params_ = new URL(request.url).searchParams;
     const status = params_.get('status');
+    const offset = Math.max(0, Math.floor(Number(params_.get('offset')) || 0));
     // Contact name/phone search; strip PostgREST filter syntax characters.
     const search = (params_.get('q') ?? '').replace(/[^\p{L}\p{N} +@.\-_]/gu, '').trim();
 
@@ -28,23 +32,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .eq('journey_id', id)
       .eq('account_id', accountId)
       .order('entered_at', { ascending: false })
-      .limit(50);
+      .order('id')
+      .range(offset, offset + RUNS_PAGE); // one extra row tells the page there is more
     if (status && STATUSES.includes(status)) q = q.eq('status', status);
     if (search) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`, { referencedTable: 'contacts' });
 
-    const { data, error } = await q;
+    const { data: rows, error } = await q;
     if (error) throw error;
+    const hasMore = (rows ?? []).length > RUNS_PAGE;
+    const data = (rows ?? []).slice(0, RUNS_PAGE);
 
     // Message outcome counts per run (migration 056) for the list badges.
     const ids = (data ?? []).map((r) => r.id);
     const counts = new Map<string, { sent: number; delivered: number; read: number; failed: number }>();
     if (ids.length) {
-      const { data: msgs } = await supabase
-        .from('journey_messages')
-        .select('enrollment_id, status, resolved')
-        .eq('account_id', accountId)
-        .in('enrollment_id', ids)
-        .limit(5000);
+      const msgs = await fetchAll((lo, hi) =>
+        supabase
+          .from('journey_messages')
+          .select('enrollment_id, status, resolved')
+          .eq('account_id', accountId)
+          .in('enrollment_id', ids)
+          .order('id')
+          .range(lo, hi)
+      );
       for (const m of (msgs ?? []) as { enrollment_id: string; status: string; resolved: string | null }[]) {
         const c = counts.get(m.enrollment_id) ?? { sent: 0, delivered: 0, read: 0, failed: 0 };
         // A failed message that was later retried / re-sent counts via its follow-up.
@@ -55,6 +65,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
 
     return NextResponse.json({
+      hasMore,
       runs: (data ?? []).map((r) => {
         const c = (Array.isArray(r.contacts) ? r.contacts[0] : r.contacts) as { name?: string; phone?: string } | null;
         return {

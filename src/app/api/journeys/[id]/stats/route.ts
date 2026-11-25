@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 import { UUID_RE } from '@/lib/journeys/api';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -35,13 +36,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       else if (r.event.startsWith('exit:')) n.exits[r.event.slice(5)] = total;
     }
 
-    const { data: enr } = await supabase
-      .from('journey_enrollments')
-      .select('status')
-      .eq('journey_id', id)
-      .limit(10000);
+    // Exact counts per status (reading rows was capped at 1000 by the API).
     const byStatus: Record<string, number> = {};
-    for (const e of enr ?? []) byStatus[e.status] = (byStatus[e.status] ?? 0) + 1;
+    await Promise.all(
+      ['active', 'waiting', 'completed', 'exited', 'failed'].map(async (st) => {
+        const { count } = await supabase.from('journey_enrollments').select('id', { count: 'exact', head: true }).eq('journey_id', id).eq('status', st);
+        if (count) byStatus[st] = count;
+      })
+    );
 
     return NextResponse.json({ nodes, enrollments: byStatus });
   } catch (error) {

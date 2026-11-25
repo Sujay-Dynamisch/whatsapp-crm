@@ -189,6 +189,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (body.priority === 'normal' && !hasMinRole(role, 'admin')) {
         return NextResponse.json({ error: 'Only an admin or owner can remove Priority' }, { status: 403 });
       }
+      // Priority = still waiting for a call. Flagging a request someone
+      // already spoke to (or closed) would show it as both.
+      if (body.priority === 'high' && body.status === undefined) {
+        const { data: current } = await supabase
+          .from('callback_requests')
+          .select('status')
+          .eq('id', id)
+          .eq('account_id', accountId)
+          .maybeSingle();
+        if (!current) return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+        if (current.status === 'called' || current.status === 'done') {
+          return NextResponse.json(
+            { error: 'Already spoke to them — Priority is only for people still waiting for a call' },
+            { status: 409 }
+          );
+        }
+      }
       update.priority = body.priority;
     }
     // The caller attended to it (Called / Done / wrote a note): it leaves the

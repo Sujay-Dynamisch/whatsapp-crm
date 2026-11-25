@@ -561,7 +561,7 @@ export function MessageComposer({
   // ---- Render --------------------------------------------------------
 
   return (
-    <div className="border-t border-border bg-card p-3">
+    <div className="wa-header border-t border-border p-3">
       {translateTo && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <button

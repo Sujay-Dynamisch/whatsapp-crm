@@ -39,6 +39,16 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
+describe('parseGeneration — paid / joined', () => {
+  it('strips [[PAYMENT_CLAIMED]] and flags the claim — without a handoff (the AI keeps replying)', () => {
+    const r = parseGeneration('Thank you! Our team will verify it and contact you shortly. [[PAYMENT_CLAIMED]]')
+    expect(r).toMatchObject({ text: 'Thank you! Our team will verify it and contact you shortly.', handoff: false, paymentClaim: true })
+  })
+  it('a normal reply has no claim', () => {
+    expect(parseGeneration('Hello').paymentClaim).toBeUndefined()
+  })
+})
+
 describe('parseGeneration', () => {
   it('returns text with no handoff', () => {
     expect(parseGeneration('Hello there')).toEqual({

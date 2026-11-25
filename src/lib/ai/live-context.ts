@@ -119,9 +119,29 @@ async function leadSection(db: SupabaseClient, accountId: string, contactId: str
   }
 
   const has = (t: string) => tags.some((x) => x.toLowerCase() === t);
-  if (has('paid')) lines.push('- Payment: PAID — they are already enrolled.');
-  else if (has('payment_link_sent')) lines.push('- Payment: payment link already sent, not paid yet.');
-  if (has('manually_closed') || has('closed_lost')) lines.push('- Status: marked as not proceeding / closed.');
+  // One clear status the reply playbook (defaults.ts) keys off. Amounts are
+  // never given to the AI (pricing rule) — only whether a balance is open.
+  const [{ count: fullyPaid }, { count: claimed }] = await Promise.all([
+    db.from('payment_records').select('id', { count: 'exact', head: true }).eq('contact_id', contactId),
+    db
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('contact_id', contactId)
+      .eq('type', 'payment_click')
+      .like('title', 'Says they paid%')
+      .gte('created_at', new Date(now.getTime() - 7 * 864e5).toISOString()),
+  ]);
+  let status: string;
+  if (has('unsubscribe')) status = 'OPTED OUT — they sent STOP; answer only what they ask, never promote.';
+  else if (has('paid') || (fullyPaid ?? 0) > 0) status = 'CUSTOMER — paid in full, enrolled in the program.';
+  else if (has('customer')) status = 'CUSTOMER — paid an advance; the remaining balance is handled by their caller.';
+  else if ((claimed ?? 0) > 0) status = 'SAID THEY PAID — the team is verifying the payment (not confirmed yet).';
+  else if (has('manually_closed')) status = 'CLOSED — said they are not proceeding (can still come back).';
+  else if (has('closed_lost')) status = 'LOST — went quiet through all follow-ups (can still come back).';
+  else if (run) status = 'ACTIVE LEAD — in the webinar journey (see "Where they are").';
+  else status = 'NOT IN THE JOURNEY — no active webinar booking.';
+  lines.unshift(`- LEAD STATUS: ${status}`);
+  if (!has('paid') && !has('customer') && has('payment_link_sent')) lines.push('- Payment: payment link already sent, not paid yet.');
   if (cb) {
     const at = cb.scheduled_for ? ` They asked to be called at ${fmtDateTime(new Date(cb.scheduled_for))} — this time is saved and their caller will call then.` : ' The team will call them.';
     lines.push(`- Callback: requested a call ${fmtDateTime(new Date(cb.requested_at))} — status "${cb.status}"${cb.priority === 'high' ? ', priority' : ''}.${at}`);

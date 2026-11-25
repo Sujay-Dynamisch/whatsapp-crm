@@ -86,6 +86,43 @@ describe('buildConversationContext — voice notes (migration 049)', () => {
     }
     const out = await buildConversationContext(chain as unknown as SupabaseClient, 'conv-1')
     expect(out).toEqual([{ role: 'user', content: 'hello' }])
-    expect(calls).toEqual(['sender_type, content_text, transcript', 'sender_type, content_text'])
+    expect(calls).toEqual([
+      'sender_type, content_type, content_text, transcript',
+      'sender_type, content_type, content_text',
+    ])
+  })
+})
+
+describe('buildConversationContext — customer images & videos', () => {
+  const fake = (rows: unknown[]) => {
+    const chain = {
+      from: () => chain,
+      select: () => chain,
+      eq: () => chain,
+      in: () => chain,
+      order: () => chain,
+      limit: () => Promise.resolve({ data: [...rows].reverse(), error: null }),
+    }
+    return chain as unknown as SupabaseClient
+  }
+
+  it('shows a described image, an unseen image and a video as text', async () => {
+    const out = await buildConversationContext(
+      fake([
+        { sender_type: 'customer', content_type: 'image', content_text: null, transcript: 'PAYMENT RECEIPT: ₹1,000 to REVIBE, successful' },
+        { sender_type: 'customer', content_type: 'image', content_text: 'see this', transcript: null },
+        { sender_type: 'customer', content_type: 'video', content_text: null, transcript: null },
+        { sender_type: 'agent', content_type: 'image', content_text: null, transcript: null },
+      ]),
+      'conv-1',
+    )
+    expect(out).toEqual([
+      {
+        role: 'user',
+        content: '[The customer sent an image: PAYMENT RECEIPT: ₹1,000 to REVIBE, successful]',
+      },
+      { role: 'user', content: '[The customer sent an image (you cannot see it)]\nsee this' },
+      { role: 'user', content: '[The customer sent a video — you cannot watch videos]' },
+    ])
   })
 })

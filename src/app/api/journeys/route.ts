@@ -20,33 +20,57 @@ export async function GET() {
       .order('updated_at', { ascending: false });
     if (error) throw error;
 
+    // Counted per PERSON, not per run: a callback follow-up or a re-entry
+    // starts a new run for the same contact. A paying lead's run ends
+    // 'completed' (engine PAID_TAG_NAMES), so this matches the Run history
+    // filter exactly. Counted in the database (migration 106); before it is
+    // applied, falls back to reading the runs page by page.
     const ids = (journeys ?? []).map((j) => j.id);
-    const counts: Record<string, Record<string, number>> = {};
-    for (let i = 0; i < ids.length; i += 50) {
-      const { data: rows } = await supabase
-        .from('journey_enrollments')
-        .select('journey_id, status')
-        .in('journey_id', ids.slice(i, i + 50))
-        .limit(10000);
-      for (const r of rows ?? []) {
-        counts[r.journey_id] ??= {};
-        counts[r.journey_id][r.status] = (counts[r.journey_id][r.status] ?? 0) + 1;
+    const stats = new Map<string, { in_progress: number; completed: number; failed: number; total: number }>();
+    const { data: agg, error: aggErr } = ids.length
+      ? await supabase.rpc('journey_people_stats', { p_journey_ids: ids })
+      : { data: [], error: null };
+    if (!aggErr) {
+      for (const r of (agg ?? []) as { journey_id: string; total: number; in_progress: number; completed: number; failed: number }[]) {
+        stats.set(r.journey_id, {
+          in_progress: Number(r.in_progress),
+          completed: Number(r.completed),
+          failed: Number(r.failed),
+          total: Number(r.total),
+        });
+      }
+    } else {
+      for (const id of ids) {
+        const people = new Map<string, Set<string>>();
+        for (let from = 0; ; from += 1000) {
+          const { data: rows, error: runErr } = await supabase
+            .from('journey_enrollments')
+            .select('contact_id, status')
+            .eq('journey_id', id)
+            .order('id')
+            .range(from, from + 999);
+          if (runErr) throw runErr;
+          for (const r of rows ?? []) {
+            const set = people.get(r.contact_id) ?? new Set<string>();
+            set.add(r.status);
+            people.set(r.contact_id, set);
+          }
+          if (!rows || rows.length < 1000) break;
+        }
+        const s = { in_progress: 0, completed: 0, failed: 0, total: people.size };
+        for (const statuses of people.values()) {
+          if (statuses.has('completed')) s.completed++;
+          else if (statuses.has('active') || statuses.has('waiting')) s.in_progress++;
+          else if (statuses.has('failed')) s.failed++;
+        }
+        stats.set(id, s);
       }
     }
-
     return NextResponse.json({
-      journeys: (journeys ?? []).map((j) => {
-        const c = counts[j.id] ?? {};
-        return {
-          ...j,
-          stats: {
-            in_progress: (c.active ?? 0) + (c.waiting ?? 0),
-            completed: c.completed ?? 0,
-            failed: c.failed ?? 0,
-            total: Object.values(c).reduce((a, b) => a + b, 0),
-          },
-        };
-      }),
+      journeys: (journeys ?? []).map((j) => ({
+        ...j,
+        stats: stats.get(j.id) ?? { in_progress: 0, completed: 0, failed: 0, total: 0 },
+      })),
     });
   } catch (error) {
     return toErrorResponse(error);

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { memo, useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useIncrementalList } from "@/hooks/use-incremental-list";
 import { PageGuide } from "@/components/guide/page-guide";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,6 +14,7 @@ import { applyInboxFilter, type InboxFilter } from "@/lib/inbox/inbox-filters";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
 import { Search, ChevronDown, X, Ban } from "lucide-react";
+import { WhatsAppIcon } from "@/components/inbox/whatsapp-icon";
 import { isContactUnsubscribed } from "@/lib/contacts/unsubscribe";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -105,32 +107,75 @@ export function ConversationList({
     onConversationsLoadedRef.current = onConversationsLoaded;
   });
 
+  // Latest list, for merging a delta resync without re-downloading all.
+  const conversationsRef = useRef(conversations);
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+  const lastSyncRef = useRef<{ at: number; full: number } | null>(null);
+
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
+    const logError = (error: { message: string; details?: string; hint?: string; code?: string }) =>
+      // Supabase errors have non-enumerable properties — log fields explicitly
+      console.error("Failed to fetch conversations:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+    const byRecent = (a: Conversation, b: Conversation) =>
+      Date.parse(b.last_message_at ?? "") - Date.parse(a.last_message_at ?? "") || 0;
 
     (async () => {
-      const { data, error } = await supabase
-        .from("conversations")
-        .select(CONVERSATION_SELECT)
-        .order("last_message_at", { ascending: false });
-
-      if (cancelled) return;
-
-      if (error) {
-        // Supabase errors have non-enumerable properties — log fields explicitly
-        console.error("Failed to fetch conversations:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
-        setLoading(false);
+      const startedAt = Date.now();
+      const last = lastSyncRef.current;
+      // Resync (focus / reconnect): only rows changed since the last load
+      // (updated_at moves on every new message / status change). A full
+      // reload at most every 10 min still picks up contact-only edits.
+      if (last && startedAt - last.full < 10 * 60_000) {
+        const { data, error } = await supabase
+          .from("conversations")
+          .select(CONVERSATION_SELECT)
+          .gte("updated_at", new Date(last.at - 60_000).toISOString())
+          .order("last_message_at", { ascending: false })
+          .limit(500);
+        if (cancelled) return;
+        if (error) return logError(error);
+        const changed = normalizeConversations(data ?? []);
+        if (changed.length) {
+          const map = new Map(conversationsRef.current.map((c) => [c.id, c]));
+          for (const c of changed) map.set(c.id, c);
+          onConversationsLoadedRef.current([...map.values()].sort(byRecent));
+        }
+        lastSyncRef.current = { at: startedAt, full: last.full };
         return;
       }
 
-      onConversationsLoadedRef.current(normalizeConversations(data ?? []));
+      // Full load, newest first, in pages: the first page shows at once,
+      // the rest streams in (the API returns at most 1000 rows per request,
+      // so a single query silently dropped older chats).
+      const all: Conversation[] = [];
+      for (let from = 0, size = 300; ; from += size, size = 1000) {
+        const { data, error } = await supabase
+          .from("conversations")
+          .select(CONVERSATION_SELECT)
+          .order("last_message_at", { ascending: false })
+          .order("id")
+          .range(from, from + size - 1);
+        if (cancelled) return;
+        if (error) {
+          logError(error);
+          break;
+        }
+        all.push(...normalizeConversations(data ?? []));
+        onConversationsLoadedRef.current([...all]);
+        setLoading(false);
+        if (!data || data.length < size) break;
+      }
       setLoading(false);
+      lastSyncRef.current = { at: startedAt, full: startedAt };
     })();
 
     return () => {
@@ -215,6 +260,16 @@ export function ConversationList({
     return result;
   }, [conversations, filter, now, userId, search, selectedTagIds, selectedCompany]);
 
+  // Draw rows as the user scrolls (the list can hold thousands of chats).
+  const {
+    visible: visibleConversations,
+    hasMore: hasMoreRows,
+    sentinelRef,
+  } = useIncrementalList(filtered, {
+    step: 50,
+    resetKey: `${filter}|${search}|${selectedTagIds.join(",")}|${selectedCompany ?? ""}`,
+  });
+
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
@@ -248,7 +303,11 @@ export function ConversationList({
     // w-full on mobile so the list occupies the whole viewport when it's
     // the single pane showing; fixed 320px on desktop where it shares the
     // row with the thread + contact sidebar.
-    <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-80">
+    <div className="wa-panel flex h-full w-full flex-col border-r border-border lg:w-80">
+      <div className="flex items-center gap-2 px-4 pt-3">
+        <WhatsAppIcon className="h-6 w-6 text-[#25d366]" />
+        <span className="text-lg font-bold tracking-tight text-[#00a884]">WhatsApp</span>
+      </div>
       {/* Search + Filter */}
       <div className="space-y-2 border-b border-border p-3">
         <div className="flex items-center gap-1.5">
@@ -258,7 +317,7 @@ export function ConversationList({
               value={search}
               onChange={handleSearchChange}
               placeholder={t("searchPlaceholder")}
-              className="border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50"
+              className="wa-header rounded-lg border-transparent pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-[#00a884]/50"
             />
           </div>
           <PageGuide module="inbox" compact />
@@ -435,7 +494,7 @@ export function ConversationList({
           </div>
         ) : (
           <div className="flex flex-col">
-            {filtered.map((conv) => (
+            {visibleConversations.map((conv) => (
               <ConversationItem
                 key={conv.id}
                 conversation={conv}
@@ -447,6 +506,7 @@ export function ConversationList({
                 }
               />
             ))}
+            {hasMoreRows && <div ref={sentinelRef} className="h-8" aria-hidden />}
           </div>
         )}
       </ScrollArea>
@@ -463,7 +523,7 @@ interface ConversationItemProps {
   ownerName?: string | null;
 }
 
-function ConversationItem({
+const ConversationItem = memo(function ConversationItem({
   conversation,
   isActive,
   onSelect,
@@ -490,18 +550,18 @@ function ConversationItem({
     <button
       onClick={handleClick}
       className={cn(
-        "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
-        isActive && "border-l-2 border-primary bg-muted/70",
+        "wa-row flex w-full items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left transition-colors",
+        isActive && "wa-row-active",
         unsubscribed && "bg-red-500/5 hover:bg-red-500/10"
       )}
     >
       {/* Avatar */}
-      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-base font-medium text-foreground">
         {contact?.avatar_url ? (
           <img
             src={contact.avatar_url}
             alt={displayName}
-            className="h-10 w-10 rounded-full object-cover"
+            className="h-12 w-12 rounded-full object-cover"
           />
         ) : (
           initials
@@ -517,7 +577,7 @@ function ConversationItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate text-sm font-medium text-foreground">
+            <span className="truncate text-[15px] text-foreground">
               {displayName}
             </span>
             {unsubscribed && (
@@ -526,10 +586,10 @@ function ConversationItem({
               </span>
             )}
           </div>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
+          <span className={cn("shrink-0 text-[11px]", conversation.unread_count > 0 ? "wa-time-unread font-medium" : "text-muted-foreground")}>{timeAgo}</span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="truncate text-[13px] text-muted-foreground">
             {conversation.last_message_text || t("noMessagesYet")}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -542,7 +602,7 @@ function ConversationItem({
               </span>
             )}
             {conversation.unread_count > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              <span className="wa-unread flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold">
                 {conversation.unread_count}
               </span>
             )}
@@ -558,4 +618,4 @@ function ConversationItem({
       </div>
     </button>
   );
-}
+});

@@ -8,6 +8,7 @@ import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
 import { buildLiveContext } from './live-context'
+import { describeRecentImages } from './vision'
 import {
   engineSendText,
   loadAccountMetaCredentials,
@@ -130,6 +131,8 @@ export async function dispatchInboundToAiReply(
       if (await hasNewerInbound(db, conversationId, inboundMessageId)) return
     }
 
+    // Customer images → a text description the (maybe text-only) model reads.
+    await describeRecentImages(db, config, conversationId)
     const messages = await buildConversationContext(db, conversationId)
     if (messages.length === 0) return
 
@@ -174,7 +177,7 @@ export async function dispatchInboundToAiReply(
       liveContext: await buildLiveContext(db, accountId, contactId),
     })
 
-    const { text, handoff, usage, provider: usedProvider, model: usedModel } = await generateReply({
+    const { text, handoff, paymentClaim, usage, provider: usedProvider, model: usedModel } = await generateReply({
       config,
       systemPrompt,
       messages,
@@ -234,6 +237,7 @@ export async function dispatchInboundToAiReply(
           .eq('id', conversationId)
           .is('assigned_agent_id', null)
       }
+      if (paymentClaim) await notifyPaymentClaim(db, accountId, contactId, conversationId)
       return
     }
 
@@ -274,9 +278,43 @@ export async function dispatchInboundToAiReply(
       text,
       aiGenerated: true,
     })
+    // "I paid / joined": the AI keeps chatting; the caller verifies.
+    if (paymentClaim) await notifyPaymentClaim(db, accountId, contactId, conversationId)
   } catch (err) {
     console.error('[ai auto-reply] dispatch failed:', err)
   }
+}
+
+/**
+ * The lead says they paid / joined: their caller (admins if none) checks
+ * the payment and records it in Payments. At most once a day per lead —
+ * the AI keeps replying, so a second "I paid" must not re-alert.
+ */
+async function notifyPaymentClaim(
+  db: ReturnType<typeof supabaseAdmin>,
+  accountId: string,
+  contactId: string,
+  conversationId: string,
+): Promise<void> {
+  const title = 'Says they paid — verify & record the payment'
+  const { count } = await db
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('contact_id', contactId)
+    .eq('type', 'payment_click')
+    .like('title', 'Says they paid%')
+    .gte('created_at', new Date(Date.now() - 24 * 3600e3).toISOString())
+  if ((count ?? 0) > 0) return
+  const { data: contact } = await db.from('contacts').select('assigned_caller_id').eq('id', contactId).maybeSingle()
+  const { error } = await db.rpc('notify_callback_owner', {
+    p_account_id: accountId,
+    p_contact_id: contactId,
+    p_conversation_id: conversationId,
+    p_caller: (contact?.assigned_caller_id as string | null | undefined) ?? null,
+    p_type: 'payment_click',
+    p_title: title,
+  })
+  if (error) console.warn('[ai auto-reply] payment-claim notification failed:', error.message)
 }
 
 async function hasNewerInbound(

@@ -20,7 +20,7 @@ import { dispatchJourneyInbound, dispatchJourneyTrigger, restartJourneysOnReregi
 import { runJourneyTick, type JourneyDeps, type JourneyRow } from './engine';
 import { validateGraph, type JourneyGraph, type NodeConfigs } from './graph';
 import { isUnsubscribeText } from '@/lib/contacts/unsubscribe';
-import { handleNoAnswer, returnToNurture, runCallbackFollowUps } from '@/lib/callbacks/followups';
+import { handleNoAnswer, returnToNurture, runCallbackFollowUps, startFollowUp } from '@/lib/callbacks/followups';
 
 // ============================================================
 // End-to-end runs of Swapnil Gautam's webinar journey (the graph the
@@ -46,6 +46,7 @@ function fakeDb(): SupabaseClient {
       let single = false;
       let returning = false;
       let limitN = Infinity;
+      let offsetN = 0;
 
       const run = () => {
         if (op === 'insert') {
@@ -77,7 +78,7 @@ function fakeDb(): SupabaseClient {
           return { data: null, error: null };
         }
         if (head) return { data: null, count: hit.length, error: null };
-        const data = hit.slice(0, limitN).map((r) => structuredClone(r));
+        const data = hit.slice(offsetN, offsetN + limitN).map((r) => structuredClone(r));
         if (single) return { data: data[0] ?? null, error: null };
         return { data, error: null };
       };
@@ -99,6 +100,7 @@ function fakeDb(): SupabaseClient {
         is: (c: string, v: unknown) => (preds.push((r) => (r[c] ?? null) === v), b),
         ilike: (c: string, v: string) => (preds.push((r) => String(r[c] ?? '').toLowerCase() === v.toLowerCase()), b),
         limit: (n: number) => ((limitN = n), b),
+        range: (from: number, to: number) => ((offsetN = from), (limitN = to - from + 1), b),
         order: () => b,
         single: () => ((single = true), b),
         maybeSingle: () => ((single = true), b),
@@ -341,9 +343,9 @@ describe('graph', () => {
     }
   });
 
-  it('stops the run on paid / manually_closed (kill switch)', () => {
+  it('stops the run on paid / manually_closed / customer (kill switch)', () => {
     const t = buildJourney(TAG_IDS, 'owner').nodes.find((n) => n.type === 'trigger')!.config as NodeConfigs['trigger'];
-    expect(t.exit_tag_ids).toEqual([TAG_IDS.paid, TAG_IDS.manually_closed]);
+    expect(t.exit_tag_ids).toEqual([TAG_IDS.paid, TAG_IDS.manually_closed, TAG_IDS.customer]);
     expect(t.contact_source).toBe('api');
   });
 });
@@ -699,7 +701,7 @@ describe('payment link → nudges → Stage D', () => {
     const count = sent.length;
     await runUntil('2026-11-30 00:00');
     expect(sent.length).toBe(count);
-    expect(run()).toMatchObject({ status: 'exited', last_error: 'Stopped: contact has the "paid" tag' });
+    expect(run()).toMatchObject({ status: 'completed', last_error: null }); // paid = finished the journey
   });
 });
 
@@ -923,6 +925,39 @@ describe('registering again', () => {
     expect(tables.journey_enrollments).toHaveLength(2);
   });
 
+  it('a customer (paid) registers again 15+ days later → treated as new: funnel tags cleared, fresh run', async () => {
+    await register('2026-11-02 10:00');
+    addTag('c1', TAG_IDS.paid);
+    addTag('c1', TAG_IDS.customer);
+    await runUntil('2026-11-03 12:00');
+    expect(run().status).toBe('completed'); // paid = finished
+    clock = ist('2026-11-18 09:30');
+    expect(await again('reg-3', '2026-11-18 09:29')).toBe(1);
+    expect(hasTag('paid')).toBe(false);
+    expect(hasTag('customer')).toBe(false);
+    expect(run()).toMatchObject({ status: 'waiting' });
+    expect(log().at(-1)).toBe('Wed 18 09:30 sg_registration_confirmed');
+  });
+
+  it('opted out (STOP), then registers again 15+ days later → opt-out cleared, treated as new', async () => {
+    await register('2026-11-02 10:00');
+    addTag('c1', 'tag-unsub');
+    clock = ist('2026-11-20 10:00');
+    expect(await again('reg-4', '2026-11-20 09:59')).toBe(1);
+    expect(hasTag('unsubscribe')).toBe(false);
+    expect(log().at(-1)).toBe('Fri 20 10:00 sg_registration_confirmed');
+  });
+
+  it('a customer registers again within 15 days → still a customer, no restart', async () => {
+    await register('2026-11-02 10:00');
+    addTag('c1', TAG_IDS.paid);
+    addTag('c1', TAG_IDS.customer);
+    await runUntil('2026-11-03 12:00');
+    clock = ist('2026-11-10 09:30');
+    expect(await again('reg-3', '2026-11-10 09:29')).toBe(0);
+    expect(hasTag('customer')).toBe(true);
+  });
+
   it('registers again mid-journey → old run ended, new one started', async () => {
     await register('2026-11-02 10:00');
     await runUntil('2026-11-07 12:00'); // in Stage A
@@ -943,15 +978,19 @@ describe('registering again', () => {
     expect(tables.journey_enrollments).toHaveLength(1);
   });
 
-  it('paid / closed / opted-out leads are not restarted', async () => {
-    for (const tag of [TAG_IDS.paid, TAG_IDS.manually_closed, 'tag-unsub']) {
+  it('paid / closed / opted-out leads are not restarted within 15 days', async () => {
+    for (const [tag, when] of [
+      [TAG_IDS.paid, '2026-11-10'],
+      [TAG_IDS.manually_closed, '2026-11-10'],
+      ['tag-unsub', '2026-11-10'],
+    ] as const) {
       tables.journey_enrollments = [];
       tables.contact_tags = [];
       sent = [];
       await register('2026-11-02 10:00');
       addTag('c1', tag);
-      clock = ist('2026-11-20 10:00');
-      expect(await again(`reg-${tag}`, '2026-11-20 09:59'), tag).toBe(0);
+      clock = ist(`${when} 10:00`);
+      expect(await again(`reg-${tag}`, `${when} 09:59`), tag).toBe(0);
       expect(sent).toHaveLength(1);
     }
   });
@@ -975,6 +1014,12 @@ describe('callback follow-ups', () => {
     Object.assign(r, { status: 'no_answer', no_answer_count: Number(r.no_answer_count) + 1, handled_at: clock.toISOString() });
     return handleNoAnswer(db(), String(r.id), deps);
   };
+  /** "Didn't pick up", then the caller taps "Send callback request message". */
+  const noAnswerAndMessage = async (when: string) => {
+    const out = await noAnswer(when);
+    await startFollowUp(db(), { accountId: 'acct', contactId: String(request().contact_id), kind: 'missed' }, deps);
+    return out;
+  };
   /** Lead registers Mon 10 AM and asks for a callback at the Tue 7 AM check-in. */
   const askForCallback = async () => {
     await register('2026-11-02 10:00');
@@ -983,9 +1028,18 @@ describe('callback follow-ups', () => {
     expect(run()).toMatchObject({ status: 'waiting', current_node_id: expect.stringMatching(/^[cd]_wait$/) }); // still nurtured
   };
 
-  it('1st “No answer” → “we tried calling you”; request stays open for another try', async () => {
+  it('“No answer” alone sends nothing — the caller decides what happens next', async () => {
     await askForCallback();
-    expect(await noAnswer('2026-11-03 12:00')).toMatchObject({ action: 'messaged', count: 1, limit: 2 });
+    await runUntil('2026-11-03 12:00');
+    const before = sent.length;
+    expect(await noAnswer('2026-11-03 12:00')).toMatchObject({ action: 'none', count: 1, limit: 2 });
+    expect(sent.length).toBe(before);
+    expect(request()).toMatchObject({ status: 'no_answer', no_answer_count: 1 });
+  });
+
+  it('“No answer” + “Send callback request message” → “we tried calling you”; request stays open', async () => {
+    await askForCallback();
+    expect(await noAnswerAndMessage('2026-11-03 12:00')).toMatchObject({ action: 'none', count: 1, limit: 2 });
     expect(log().at(-1)).toBe('Tue 03 12:00 sg_callback_missed');
     expect(templates('sg_callback_missed')[0].params).toEqual(['Asha']);
     expect(request()).toMatchObject({ status: 'no_answer', no_answer_count: 1 });
@@ -994,7 +1048,7 @@ describe('callback follow-ups', () => {
 
   it('… lead taps “Call me again” → back to the team, confirmation sent, request still open', async () => {
     await askForCallback();
-    await noAnswer('2026-11-03 12:00');
+    await noAnswerAndMessage('2026-11-03 12:00');
     await reply('Call me again', '2026-11-03 13:00');
     expect(sent.at(-1)!.text).toBe('Thank you, Asha! 🙏 My team will call you shortly.');
     expect(request().status).not.toBe('done');
@@ -1003,7 +1057,7 @@ describe('callback follow-ups', () => {
 
   it('… lead taps “Not now” → asked for a better time, then Stage C nurture at 11 AM, closed-lost on day 15', async () => {
     await askForCallback();
-    await noAnswer('2026-11-03 12:00');
+    await noAnswerAndMessage('2026-11-03 12:00');
     await tap('Not now', '2026-11-03 13:00');
     expect(sent.at(-1)!.text).toBe('No problem, Asha! 😊 When would be a good time for our team to call you?\n\nJust reply with a day and time (for example: tomorrow 5 PM).');
     // Their answer ("tomorrow 5 pm") isn't a menu choice → the AI + callback detector take it.
@@ -1017,14 +1071,14 @@ describe('callback follow-ups', () => {
 
   it('… lead replies “1” → payment link, with the journey’s settings carried over', async () => {
     await askForCallback();
-    await noAnswer('2026-11-03 12:00');
+    await noAnswerAndMessage('2026-11-03 12:00');
     await reply('1', '2026-11-03 13:00');
     expect(sent.at(-1)!.text).toContain(LINKS.pay);
   });
 
   it('… no reply in 24h → the request waits for the team, the lead goes back into nurture', async () => {
     await askForCallback();
-    await noAnswer('2026-11-03 12:00');
+    await noAnswerAndMessage('2026-11-03 12:00');
     const count = sent.length;
     await runUntil('2026-11-05 11:00');
     expect(sent.slice(count).map((m) => m.name)).toEqual(['sg_nurture_coldlead']); // Thu 05 11 AM
@@ -1042,7 +1096,7 @@ describe('callback follow-ups', () => {
 
   it('automatic return OFF (Swapnil): 2nd “No answer” and 48h quiet leave the request waiting', async () => {
     await askForCallback();
-    await noAnswer('2026-11-03 12:00');
+    await noAnswerAndMessage('2026-11-03 12:00');
     expect(await noAnswer('2026-11-04 12:00')).toMatchObject({ action: 'none', count: 2 });
     expect(request()).toMatchObject({ status: 'no_answer' });
     expect(hasTag('callback_requested')).toBe(true);
@@ -1056,7 +1110,7 @@ describe('callback follow-ups', () => {
   it('2nd “No answer” (automatic return on) → request closed, tag removed, owner told, lead back in Stage C', async () => {
     setAutoReturn(true);
     await askForCallback();
-    await noAnswer('2026-11-03 12:00');
+    await noAnswerAndMessage('2026-11-03 12:00');
     expect(await noAnswer('2026-11-04 12:00')).toMatchObject({ action: 'returned', count: 2 });
     expect(request()).toMatchObject({ status: 'done', note: 'Back to nurture (automatic)' });
     expect(hasTag('callback_requested')).toBe(false);
@@ -1100,7 +1154,7 @@ describe('callback follow-ups', () => {
   it('“No answer” then nobody tries again for 48h (automatic return on) → back to nurture automatically', async () => {
     setAutoReturn(true);
     await askForCallback();
-    await noAnswer('2026-11-03 12:00');
+    await noAnswerAndMessage('2026-11-03 12:00');
     await runUntil('2026-11-05 11:59');
     expect((await runCallbackFollowUps(db(), deps)).returned).toBe(0);
     await runUntil('2026-11-05 12:01');
@@ -1129,7 +1183,7 @@ describe('callback follow-ups', () => {
   it('a contact who was never in the journey → nothing sent, request left for the team', async () => {
     clock = ist('2026-11-03 08:00');
     addTag('c2', TAG_IDS.callback_requested);
-    expect(await noAnswer('2026-11-03 12:00')).toMatchObject({ action: 'none', reason: 'not_in_journey' });
+    expect(await noAnswer('2026-11-03 12:00')).toMatchObject({ action: 'none' });
     expect(sent).toEqual([]);
     expect(request().status).toBe('no_answer');
   });
@@ -1443,5 +1497,18 @@ describe('Webinar Schedule safety (098) and no duplicate sends', () => {
     const reminders = templates('sg_webinar_session_reminder');
     expect(reminders.length).toBeGreaterThan(0);
     for (const m of reminders) expect(m.params?.at(-1)).toBe('https://zoom.us/j/new');
+  });
+});
+
+// ============================================================
+// A photo / voice note without text is not a menu answer
+// ============================================================
+describe('media without text', () => {
+  it('a caption-less image at the check-in menu is left for the AI (no FAQ / "reply 1–4")', async () => {
+    await register('2026-11-02 10:00');
+    await runUntil('2026-11-03 08:00'); // check-in menu sent, waiting for a reply
+    const before = sent.length;
+    expect(await dispatchJourneyInbound(db(), { accountId: 'acct', contactId: 'c1', text: null }, deps)).toBe(false);
+    expect(sent.length).toBe(before);
   });
 });

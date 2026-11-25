@@ -11,6 +11,7 @@ import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 import { isScopedCaller, visibleContactIds } from '@/lib/callers/scope';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { listFailed } from '@/lib/failed-messages/service';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 const DAY = 864e5;
 const DAYS = 14;
@@ -39,15 +40,21 @@ export async function GET(request: Request) {
     }));
     const since = new Date(seriesStart).toISOString();
     const [{ data: j }, { data: m }] = await Promise.all([
-      db.from('journey_messages').select('created_at, resolved').eq('account_id', accountId).eq('status', 'failed').gte('created_at', since).limit(20000),
-      db
-        .from('messages')
-        .select('created_at, conversations!inner(account_id)')
-        .eq('conversations.account_id', accountId)
-        .eq('status', 'failed')
-        .in('sender_type', ['agent', 'bot'])
-        .gte('created_at', since)
-        .limit(20000),
+      // Every row — one API request returns at most 1000 (fetchAll pages).
+      fetchAll((lo, hi) =>
+        db.from('journey_messages').select('created_at, resolved').eq('account_id', accountId).eq('status', 'failed').gte('created_at', since).order('id').range(lo, hi)
+      ).then((data) => ({ data })),
+      fetchAll((lo, hi) =>
+        db
+          .from('messages')
+          .select('created_at, conversations!inner(account_id)')
+          .eq('conversations.account_id', accountId)
+          .eq('status', 'failed')
+          .in('sender_type', ['agent', 'bot'])
+          .gte('created_at', since)
+          .order('id')
+          .range(lo, hi)
+      ).then((data) => ({ data })),
     ]);
     for (const r of [...(j ?? []).filter((x) => x.resolved !== 'retried'), ...(m ?? [])]) {
       const i = Math.floor((Date.parse(r.created_at as string) - seriesStart) / DAY);

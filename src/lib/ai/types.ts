@@ -65,6 +65,8 @@ export interface GenerateResult {
   text: string
   /** True when the model asked to hand off to a human (auto-reply mode). */
   handoff: boolean
+  /** The customer said they paid / joined (implies handoff). */
+  paymentClaim?: boolean
   /** Provider token usage for this call, or null when unavailable. */
   usage: AiUsage | null
   /** Which provider/model actually answered (the backup when the primary failed). */
