@@ -152,6 +152,36 @@ export const GUIDES: Record<string, Guide> = {
     tips: ['The Dashboard shows the total value of open deals per stage.'],
   },
 
+  conversions: {
+    title: 'Conversions',
+    tagline: 'Leads who paid and became customers.',
+    steps: [
+      'A lead becomes a customer automatically when a payment is recorded: Mark fully paid, an instalment (advance or full), or the paid tag.',
+      'They also get a green "customer" tag, so you can see it in Contacts and the Inbox.',
+      'Callers see only their own customers. Owners and admins see the whole team.',
+    ],
+    sections: [
+      {
+        title: 'Numbers at the top',
+        items: [
+          { label: 'Customers', tone: 'emerald', text: 'Everyone who has paid so far.' },
+          { label: 'This month', text: 'New customers since the 1st of this month.' },
+          { label: 'Money received', tone: 'primary', text: 'Total paid by all customers (all instalments added up).' },
+          { label: 'Conversion rate', tone: 'sky', text: 'Customers out of all leads (for a caller: out of their own leads).' },
+        ],
+      },
+      {
+        title: 'Owners and admins',
+        items: [
+          { label: 'By caller', text: 'Who converted the most leads, how much money it brought, and each caller\x27s conversion rate.' },
+          { label: 'Edit', text: 'Change the amount, the caller, the date or the note. Your changes are kept when new payments come in.' },
+          { label: 'Delete', tone: 'rose', text: 'Turns the customer back into a lead and removes the "customer" tag. Payments are not touched.' },
+        ],
+      },
+    ],
+    tips: ['A customer saying "payment done" in chat does not convert them — record the payment first (Payments → Mark fully paid).'],
+  },
+
   callbacks: {
     title: 'Callback requests',
     tagline: 'People waiting for your call. Call them, then tap what happened.',
@@ -201,6 +231,8 @@ export const GUIDES: Record<string, Guide> = {
           { label: 'Add note', text: 'Write what was said. Every note is kept in the timeline — older notes are never lost.' },
           { label: 'Reopen', text: 'On Done requests. Moves it back to Waiting and resets the didn\x27t-pick-up count.' },
           { label: 'Send payment link', tone: 'primary', text: 'Sends the payment link on WhatsApp right away, at any stage. It is added to the timeline and the lead is tagged payment_link_sent.' },
+          { label: 'Send callback request message', tone: 'primary', text: 'After a missed call: sends the fixed "We tried calling you" WhatsApp message (the same one Didn\x27t pick up sends), with Call me again / Not now buttons. Call me again brings the lead back as a callback request. The status does not change. Not something you type yourself.' },
+          { label: 'Mark priority', tone: 'amber', text: 'Flag any lead as urgent yourself, even one the customer did not ask to be called on. It moves to the top and into the Priority tab. Marking it Called, Done or adding a note removes it again, the same as an automatic Priority. Anyone can add Priority; only an admin or owner can remove it manually — ask them if a flag needs clearing.' },
           { label: 'Stop calling — send messages instead', text: 'The lead goes back to the automatic follow-up messages and the request is closed.' },
           { label: 'Delete', tone: 'rose', text: 'Admins only. Moves the request to the Trash with its notes and timeline.' },
           { label: 'Trash', text: 'Admins only. Deleted requests — Restore puts one back exactly as it was, or Delete forever.' },
@@ -308,7 +340,8 @@ export const GUIDES: Record<string, Guide> = {
     tagline: 'Leads who got the payment link. Record who paid — their payment reminders stop automatically.',
     steps: [
       'Find the person (search or tabs).',
-      'Click Mark paid and choose Full payment or Advance payment, with the amount.',
+      'Full amount received? Click Mark fully paid (hover it to see what it does).',
+      'Only an advance? Click the lead\x27s card and choose Advance payment, with the amount.',
       'Advance payment? The balance due is shown — add the rest when they pay it.',
     ],
     sections: [

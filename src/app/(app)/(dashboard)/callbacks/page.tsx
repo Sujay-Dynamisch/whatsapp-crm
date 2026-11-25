@@ -15,6 +15,7 @@ import {
   Copy,
   CreditCard,
   Flame,
+  FlameKindling,
   Info,
   Loader2,
   MessageSquare,
@@ -26,6 +27,7 @@ import {
   Repeat,
   RotateCcw,
   Search,
+  Send,
   Sparkles,
   StickyNote,
   Trash2,
@@ -37,6 +39,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Hint } from '@/components/ui/hint';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import { CallbackNoteDialog } from '@/components/callbacks/callback-note-dialog';
@@ -111,6 +114,23 @@ const STATUS_STYLE: Record<Status, string> = {
   called: 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400',
   no_answer: 'border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400',
   done: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+};
+
+/** What each "Show" tab actually means — a non-technical caller can hover to check. */
+const FILTER_HINT: Record<StatusFilter, string> = {
+  open: 'Everything that still needs a call: not called yet, or they did not pick up.',
+  priority: 'Only people who asked for a call themselves. Call these first.',
+  new: 'Nobody has called them yet.',
+  called: 'You called them, but it is not marked done yet.',
+  no_answer: 'You called and they did not answer.',
+  done: 'Finished — nothing more to do here.',
+  all: 'Every request, whatever its status.',
+};
+const DAY_HINT: Record<DayFilter, string> = {
+  today: 'Requests asked for today only.',
+  yesterday: 'Requests asked for yesterday only.',
+  week: 'Requests asked for in the last 7 days.',
+  all: 'Every request ever asked for.',
 };
 
 function dayRange(f: DayFilter): { from?: string; to?: string } {
@@ -241,6 +261,31 @@ export default function CallbacksPage() {
     }
   }
 
+  // Sends the journey's "We tried calling you" message (the same step a
+  // "No answer" sends, with its Call me again / Not now buttons). Fixed —
+  // the caller never types their own message here. Status is unchanged.
+  async function sendMessage(r: CallbackRequest) {
+    const ok = await confirmDialog({
+      title: `Tell ${r.contact_name || r.contact_phone || 'this lead'} you tried calling?`,
+      description: 'Sends the "We tried calling you" WhatsApp message right away — the same one a "Didn\'t pick up" sends, with Call me again / Not now buttons. It is a fixed message, and the request status does not change.',
+      confirmLabel: 'Send callback request message',
+    });
+    if (!ok) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(`/api/callbacks/${r.id}/message`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json?.reason ? t(`reason.${json.reason}`) : json?.error || 'Could not send the message');
+        return;
+      }
+      toast.success('"We tried calling you" message sent on WhatsApp');
+      setDetailsKey((k) => k + 1);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function remove(r: CallbackRequest) {
     const ok = await confirmDialog({
       title: `Delete the callback request of ${r.contact_name || r.contact_phone || 'this lead'}?`,
@@ -290,6 +335,28 @@ export default function CallbacksPage() {
   const [noteFor, setNoteFor] = useState<CallbackRequest | null>(null);
   function editNote(r: CallbackRequest) {
     setNoteFor(r);
+  }
+
+  async function togglePriority(r: CallbackRequest) {
+    const next = r.priority === 'high' ? 'normal' : 'high';
+    setBusyId(r.id);
+    try {
+      const res = await fetch(`/api/callbacks/${r.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority: next }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json?.error || t('updateFailed'));
+        return;
+      }
+      toast.success(next === 'high' ? 'Marked as Priority' : 'Priority removed');
+      await load();
+      setDetailsKey((k) => k + 1);
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function copy(phone: string) {
@@ -352,18 +419,20 @@ export default function CallbacksPage() {
                   {t(`status.${r.status}`)}
                 </span>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-9 shrink-0 rounded-lg text-primary"
-                aria-label={`Open details for ${name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDetailsId(r.id);
-                }}
-              >
-                Details <ChevronRight className="h-4 w-4" aria-hidden />
-              </Button>
+              <Hint text="See this person's full history, tags and notes.">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 shrink-0 rounded-lg text-primary"
+                  aria-label={`Open details for ${name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDetailsId(r.id);
+                  }}
+                >
+                  Details <ChevronRight className="h-4 w-4" aria-hidden />
+                </Button>
+              </Hint>
             </div>
 
             {/* What needs attention — always words, never colour alone */}
@@ -426,17 +495,19 @@ export default function CallbacksPage() {
                 >
                   {r.contact_phone}
                 </a>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void copy(r.contact_phone!);
-                  }}
-                  aria-label={t('copy')}
-                  className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
+                <Hint text="Copy this phone number.">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void copy(r.contact_phone!);
+                    }}
+                    aria-label={t('copy')}
+                    className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </Hint>
               </div>
             )}
             <p className={cn('mt-0.5 text-sm', overdue ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-muted-foreground')}>
@@ -472,19 +543,23 @@ export default function CallbacksPage() {
         <div className="mt-4 space-y-3 border-t border-border pt-4" onClick={(e) => e.stopPropagation()}>
           <div className="flex flex-wrap gap-2">
             {r.contact_phone && (
-              <a
-                href={`tel:${r.contact_phone}`}
-                className={cn(buttonVariants(), 'h-11 flex-1 rounded-xl bg-emerald-600 px-5 text-base text-white hover:bg-emerald-700 sm:flex-none')}
-              >
-                <PhoneOutgoing className="h-4 w-4" aria-hidden />
-                {t('call')} {r.contact_name ? r.contact_name.split(' ')[0] : ''}
-              </a>
+              <Hint text="Opens your phone's dialler to call this number.">
+                <a
+                  href={`tel:${r.contact_phone}`}
+                  className={cn(buttonVariants(), 'h-11 flex-1 rounded-xl bg-emerald-600 px-5 text-base text-white hover:bg-emerald-700 sm:flex-none')}
+                >
+                  <PhoneOutgoing className="h-4 w-4" aria-hidden />
+                  {t('call')} {r.contact_name ? r.contact_name.split(' ')[0] : ''}
+                </a>
+              </Hint>
             )}
             {r.conversation_id && (
-              <Link href={`/inbox?c=${r.conversation_id}`} className={cn(buttonVariants({ variant: 'outline' }), 'h-11 flex-1 rounded-xl sm:flex-none')}>
-                <MessageSquare className="h-4 w-4" aria-hidden />
-                {t('openChat')}
-              </Link>
+              <Hint text="See and reply to their WhatsApp messages in the Inbox.">
+                <Link href={`/inbox?c=${r.conversation_id}`} className={cn(buttonVariants({ variant: 'outline' }), 'h-11 flex-1 rounded-xl sm:flex-none')}>
+                  <MessageSquare className="h-4 w-4" aria-hidden />
+                  {t('openChat')}
+                </Link>
+              </Hint>
             )}
           </div>
 
@@ -494,56 +569,97 @@ export default function CallbacksPage() {
                 <>
                   <span className="w-full text-xs font-medium text-muted-foreground sm:w-auto">After the call:</span>
                   {r.status !== 'called' && (
-                    <Button variant="outline" disabled={busy} className={OUTCOME_BTN} onClick={() => void update(r, { status: 'called' }, t('markedCalled'))}>
-                      <PhoneCall className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden />
-                      {t('markCalled')}
-                    </Button>
+                    <Hint text="You talked to them on the phone. Takes this off Priority, but keeps it on your list until you mark it done.">
+                      <Button variant="outline" disabled={busy} className={OUTCOME_BTN} onClick={() => void update(r, { status: 'called' }, t('markedCalled'))}>
+                        <PhoneCall className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden />
+                        {t('markCalled')}
+                      </Button>
+                    </Hint>
                   )}
                   {/* Every "No answer" counts as an attempt (2nd → back to nurture). */}
-                  <Button variant="outline" disabled={busy} className={OUTCOME_BTN} onClick={() => void update(r, { status: 'no_answer' }, t('markedNoAnswer'))}>
-                    <PhoneMissed className="h-4 w-4 text-rose-600 dark:text-rose-400" aria-hidden />
-                    {(r.no_answer_count ?? 0) > 0 ? t('markNoAnswerAgain') : t('markNoAnswer')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    className={cn(OUTCOME_BTN, 'border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400')}
-                    onClick={() => void update(r, { status: 'done' }, t('markedDone'))}
-                  >
-                    {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
-                    {t('markDone')}
-                  </Button>
+                  <Hint text="They did not answer. We text them automatically — after too many missed calls, automatic messages take over instead of calls.">
+                    <Button variant="outline" disabled={busy} className={OUTCOME_BTN} onClick={() => void update(r, { status: 'no_answer' }, t('markedNoAnswer'))}>
+                      <PhoneMissed className="h-4 w-4 text-rose-600 dark:text-rose-400" aria-hidden />
+                      {(r.no_answer_count ?? 0) > 0 ? t('markNoAnswerAgain') : t('markNoAnswer')}
+                    </Button>
+                  </Hint>
+                  <Hint text="Marks this finished and removes it from your call list.">
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      className={cn(OUTCOME_BTN, 'border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400')}
+                      onClick={() => void update(r, { status: 'done' }, t('markedDone'))}
+                    >
+                      {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
+                      {t('markDone')}
+                    </Button>
+                  </Hint>
                 </>
               ) : (
-                <Button variant="outline" disabled={busy} className={OUTCOME_BTN} onClick={() => void update(r, { status: 'new' }, t('reopened'))}>
-                  <RotateCcw className="h-4 w-4" aria-hidden />
-                  {t('reopen')}
-                </Button>
+                <Hint text="Put this back on your call list as waiting.">
+                  <Button variant="outline" disabled={busy} className={OUTCOME_BTN} onClick={() => void update(r, { status: 'new' }, t('reopened'))}>
+                    <RotateCcw className="h-4 w-4" aria-hidden />
+                    {t('reopen')}
+                  </Button>
+                </Hint>
               )}
-              <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void editNote(r)}>
-                <StickyNote className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden />
-                {r.note ? t('editNote') : t('addNote')}
-              </Button>
-              <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void sendPaymentLink(r)}>
-                <CreditCard className="h-4 w-4 text-primary" aria-hidden />
-                Send payment link
-              </Button>
-              {open && (
-                <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void backToNurture(r)}>
-                  <Repeat className="h-4 w-4" aria-hidden />
-                  {t('backToNurture')}
+              <Hint text="Write down what was said. This also takes it off the Priority list.">
+                <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void editNote(r)}>
+                  <StickyNote className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden />
+                  {r.note ? t('editNote') : t('addNote')}
                 </Button>
+              </Hint>
+              <Hint text="Sends the payment link to this person on WhatsApp right now.">
+                <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void sendPaymentLink(r)}>
+                  <CreditCard className="h-4 w-4 text-primary" aria-hidden />
+                  Send payment link
+                </Button>
+              </Hint>
+              <Hint text="Sends the fixed 'We tried calling you' WhatsApp message (with Call me again / Not now buttons) — use it after a missed call. Does not change the status.">
+                <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void sendMessage(r)}>
+                  <Send className="h-4 w-4 text-primary" aria-hidden />
+                  Send callback request message
+                </Button>
+              </Hint>
+              {open && (!priority || canManageMembers) && (
+                <Hint
+                  text={
+                    priority
+                      ? 'Takes this off the Priority list.'
+                      : 'Flag this as urgent so it shows at the top and in Priority, even if the customer did not ask for a call themselves.'
+                  }
+                >
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    className={cn(OUTCOME_BTN, priority && 'border border-amber-500/50 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400')}
+                    onClick={() => void togglePriority(r)}
+                  >
+                    <FlameKindling className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden />
+                    {priority ? 'Remove priority' : 'Mark priority'}
+                  </Button>
+                </Hint>
+              )}
+              {open && (
+                <Hint text="Stop calling this lead. Automatic WhatsApp messages will follow up instead.">
+                  <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void backToNurture(r)}>
+                    <Repeat className="h-4 w-4" aria-hidden />
+                    {t('backToNurture')}
+                  </Button>
+                </Hint>
               )}
               {canManageMembers && (
-                <Button
-                  variant="ghost"
-                  disabled={busy}
-                  className={cn(OUTCOME_BTN, 'ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive')}
-                  onClick={() => void remove(r)}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden />
-                  Delete
-                </Button>
+                <Hint text="Permanently removes this request (moves to Trash — admins only).">
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    className={cn(OUTCOME_BTN, 'ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive')}
+                    onClick={() => void remove(r)}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    Delete
+                  </Button>
+                </Hint>
               )}
             </div>
           )}
@@ -564,10 +680,12 @@ export default function CallbacksPage() {
         </div>
         <div className="flex items-center gap-2">
           {canManageMembers && <TrashButton kind="callback" onRestored={() => void load()} />}
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-            {t('refresh')}
-          </Button>
+          <Hint text="Reload the latest requests from the server.">
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+              {t('refresh')}
+            </Button>
+          </Hint>
         </div>
       </div>
 
@@ -628,43 +746,46 @@ export default function CallbacksPage() {
             className="h-11 rounded-xl pr-10 pl-10 text-base sm:text-sm"
           />
           {query && (
-            <button
-              type="button"
-              onClick={() => setQuery('')}
-              aria-label={t('clearSearch')}
-              className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <Hint text="Clear the search box.">
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label={t('clearSearch')}
+                className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </Hint>
           )}
         </div>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          {[
-            { items: STATUS_FILTERS, value: statusFilter, set: setStatusFilter, key: 'filter', label: 'Show' },
-            { items: DAY_FILTERS, value: dayFilter, set: setDayFilter, key: 'day', label: 'When' },
-          ].map((g) => (
+          {([
+            { items: STATUS_FILTERS, value: statusFilter, set: setStatusFilter, key: 'filter' as const, label: 'Show', hints: FILTER_HINT },
+            { items: DAY_FILTERS, value: dayFilter, set: setDayFilter, key: 'day' as const, label: 'When', hints: DAY_HINT },
+          ]).map((g) => (
             <div key={g.key} className="flex min-w-0 items-center gap-2">
               <span className="w-11 shrink-0 text-xs font-medium text-muted-foreground lg:w-auto">{g.label}</span>
               <div role="group" aria-label={g.label} className="flex min-w-0 gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1">
                 {g.items.map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    aria-pressed={g.value === f}
-                    onClick={() => (g.set as (v: string) => void)(f)}
-                    className={cn(
-                      'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none',
-                      g.value === f ? 'bg-background text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
-                    )}
-                  >
-                    {loading && g.value === f && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-                    {t(`${g.key}.${f}`)}
-                    {f === 'priority' && (data?.stats.priority ?? 0) > 0 && (
-                      <span className="rounded-full bg-amber-500 px-1.5 text-xs leading-5 font-semibold text-white tabular-nums">
-                        {data?.stats.priority}
-                      </span>
-                    )}
-                  </button>
+                  <Hint key={f} text={(g.hints as Record<string, string>)[f]}>
+                    <button
+                      type="button"
+                      aria-pressed={g.value === f}
+                      onClick={() => (g.set as (v: string) => void)(f)}
+                      className={cn(
+                        'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none',
+                        g.value === f ? 'bg-background text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                      )}
+                    >
+                      {loading && g.value === f && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+                      {t(`${g.key}.${f}`)}
+                      {f === 'priority' && (data?.stats.priority ?? 0) > 0 && (
+                        <span className="rounded-full bg-amber-500 px-1.5 text-xs leading-5 font-semibold text-white tabular-nums">
+                          {data?.stats.priority}
+                        </span>
+                      )}
+                    </button>
+                  </Hint>
                 ))}
               </div>
             </div>
@@ -716,9 +837,11 @@ export default function CallbacksPage() {
               <ul className="space-y-3">{rest.slice(0, visibleN).map((r) => <li key={r.id}>{renderCard(r, false)}</li>)}</ul>
               {rest.length > visibleN && (
                 <div className="mt-4 flex justify-center">
-                  <Button variant="outline" className="h-11 rounded-xl px-6" onClick={() => setPage({ key: filterKey, n: visibleN + PAGE_SIZE })}>
-                    Show more ({rest.length - visibleN} left)
-                  </Button>
+                  <Hint text={`Load the next ${Math.min(PAGE_SIZE, rest.length - visibleN)} requests.`}>
+                    <Button variant="outline" className="h-11 rounded-xl px-6" onClick={() => setPage({ key: filterKey, n: visibleN + PAGE_SIZE })}>
+                      Show more ({rest.length - visibleN} left)
+                    </Button>
+                  </Hint>
                 </div>
               )}
             </section>

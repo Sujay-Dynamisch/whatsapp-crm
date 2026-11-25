@@ -90,7 +90,7 @@ export async function middleware(request: NextRequest) {
   const protectedPaths = [
     '/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/flows', '/agents',
     '/notifications', '/settings', '/admin', '/journeys', '/button-clicks', '/callbacks', '/payments',
-    '/failed-messages', '/carousels', '/callers', '/webinars',
+    '/failed-messages', '/carousels', '/callers', '/webinars', '/conversions',
   ]
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()

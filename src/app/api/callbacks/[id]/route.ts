@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 
 import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/account';
+import { hasMinRole } from '@/lib/auth/roles';
 import { UUID_RE } from '@/lib/journeys/api';
 import { handleNoAnswer } from '@/lib/callbacks/followups';
 import { accountPaymentLink, generalTemplateApproved, logCallbackEvent } from '@/lib/callbacks/timeline';
@@ -137,10 +138,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { supabase, accountId, userId } = await requireRole('agent');
+    const { supabase, accountId, userId, role } = await requireRole('agent');
     const { id } = await params;
     if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
-    const body = (await request.json().catch(() => ({}))) as { status?: string; note?: string };
+    const body = (await request.json().catch(() => ({}))) as { status?: string; note?: string; priority?: string };
 
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (body.status !== undefined) {
@@ -174,8 +175,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       update.note_by = update.note ? userId : null;
       update.note_at = update.note ? new Date().toISOString() : null;
     }
+    // Manual Priority toggle from the card — any agent can flag a lead as
+    // urgent (independent of the auto-detected 'high' from the customer's
+    // own "call me" request, 086/101). Taking it back off manually is an
+    // admin/owner call only — a caller who no longer thinks it's urgent
+    // asks an admin, rather than quietly dropping someone else's flag.
+    // (The automatic reset below, once the request is actually attended
+    // to, is unaffected and open to everyone.)
+    if (body.priority !== undefined) {
+      if (!['normal', 'high'].includes(body.priority)) {
+        return NextResponse.json({ error: 'Invalid priority' }, { status: 400 });
+      }
+      if (body.priority === 'normal' && !hasMinRole(role, 'admin')) {
+        return NextResponse.json({ error: 'Only an admin or owner can remove Priority' }, { status: 403 });
+      }
+      update.priority = body.priority;
+    }
     // The caller attended to it (Called / Done / wrote a note): it leaves the
-    // Priority queue. A fresh ask from the customer re-flags it (086/101).
+    // Priority queue regardless of the above. A fresh ask from the customer
+    // re-flags it (086/101).
     if (body.status === 'called' || body.status === 'done' || update.note) {
       update.priority = 'normal';
     }
@@ -185,7 +203,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .update(update)
       .eq('id', id)
       .eq('account_id', accountId)
-      .select('id, contact_id, status, note, handled_at, handled_by, no_answer_count')
+      .select('id, contact_id, status, note, priority, handled_at, handled_by, no_answer_count')
       .maybeSingle();
     if (error) {
       // Re-opening while the contact already has another open request.

@@ -26,6 +26,8 @@ import { TrashButton } from '@/components/trash/trash-sheet';
 
 import { useAuth } from '@/hooks/use-auth';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Hint } from '@/components/ui/hint';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -415,15 +417,25 @@ export default function PaymentsPage() {
 
                 <div className="mt-4 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                   {canSendMessages && l.status !== 'paid' && (
-                    <Button
-                      size="sm"
-                      className="bg-emerald-600 text-white hover:bg-emerald-600/90"
-                      disabled={busy}
-                      onClick={() => openMarkPaid(l)}
-                    >
-                      <BadgeCheck className="h-3.5 w-3.5" />
-                      {t('markPaid')}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 text-white hover:bg-emerald-600/90"
+                            disabled={busy}
+                            aria-describedby={`mark-paid-hint-${l.contact_id}`}
+                            onClick={() => openMarkPaid(l)}
+                          >
+                            <BadgeCheck className="h-3.5 w-3.5" />
+                            {t('markPaid')}
+                          </Button>
+                        }
+                      />
+                      <TooltipContent id={`mark-paid-hint-${l.contact_id}`} className="max-w-xs text-left leading-snug">
+                        {t('markPaidHint')}
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                   {l.contact_phone && (
                     <a href={`tel:${l.contact_phone}`} className={buttonVariants({ size: 'sm', variant: 'outline' })}>
@@ -432,10 +444,12 @@ export default function PaymentsPage() {
                     </a>
                   )}
                   {canSendMessages && l.status === 'paid' && (
-                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => void markNotPaid(l)}>
-                      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
-                      {t('markNotPaid')}
-                    </Button>
+                    <Hint text="Undo Mark fully paid: removes the “paid” tag and payment record, and restarts their payment reminders.">
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => void markNotPaid(l)}>
+                        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
+                        {t('markNotPaid')}
+                      </Button>
+                    </Hint>
                   )}
                   {l.status === 'closed' && (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
