@@ -30,8 +30,9 @@ function client() {
   };
 }
 
+const auth = vi.hoisted(() => ({ role: 'agent' as 'agent' | 'admin' }));
 vi.mock('@/lib/auth/account', () => ({
-  requireRole: async () => ({ supabase: client(), accountId: ACCOUNT, userId: 'agent-1' }),
+  requireRole: async () => ({ supabase: client(), accountId: ACCOUNT, userId: 'agent-1', role: auth.role }),
   toErrorResponse: (e: unknown) => {
     throw e;
   },
@@ -54,6 +55,7 @@ beforeEach(() => {
   rows = [{ id: ID, account_id: ACCOUNT, contact_id: 'c1', status: 'new', no_answer_count: 0, note: null, reminded_at: null }];
   followups.handleNoAnswer.mockClear();
   followups.returnToNurture.mockClear();
+  auth.role = 'agent';
 });
 
 describe('PATCH /api/callbacks/[id] — No answer', () => {
@@ -86,6 +88,40 @@ describe('PATCH /api/callbacks/[id] — No answer', () => {
     const res = await patch({ status: 'no_answer' });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ request: { status: 'no_answer' }, followup: null });
+  });
+});
+
+describe('PATCH /api/callbacks/[id] — manual Priority toggle', () => {
+  it('any agent can mark a request as Priority', async () => {
+    const res = await patch({ priority: 'high' });
+    expect(await res.json()).toMatchObject({ request: { priority: 'high' } });
+    expect(rows[0].priority).toBe('high');
+  });
+
+  it('an agent cannot remove Priority — an admin must do it', async () => {
+    rows[0].priority = 'high';
+    const res = await patch({ priority: 'normal' });
+    expect(res.status).toBe(403);
+    expect(rows[0].priority).toBe('high');
+  });
+
+  it('an admin can remove Priority', async () => {
+    rows[0].priority = 'high';
+    auth.role = 'admin';
+    const res = await patch({ priority: 'normal' });
+    expect(await res.json()).toMatchObject({ request: { priority: 'normal' } });
+    expect(rows[0].priority).toBe('normal');
+  });
+
+  it('rejects an invalid value', async () => {
+    const res = await patch({ priority: 'urgent' });
+    expect(res.status).toBe(400);
+    expect(rows[0].priority).toBeUndefined();
+  });
+
+  it('being attended to (Called) still wins even if Priority is sent in the same request', async () => {
+    const res = await patch({ status: 'called', priority: 'high' });
+    expect(await res.json()).toMatchObject({ request: { status: 'called', priority: 'normal' } });
   });
 });
 

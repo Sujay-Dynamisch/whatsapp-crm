@@ -25,6 +25,7 @@ const pageTitles: Record<string, string> = {
   "/notifications": "notifications",
   "/callbacks": "callbacks",
   "/payments": "payments",
+  "/conversions": "conversions",
   "/webinars": "webinars",
   "/failed-messages": "failedMessages",
   "/contacts": "contacts",

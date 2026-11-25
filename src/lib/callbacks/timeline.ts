@@ -9,6 +9,11 @@
 //   customer-requested link (payment_link_state), so the journey's
 //   automatic link stays at most once, and the lead gets the
 //   payment_link_sent tag.
+//
+// "Send message" (104) does NOT live here — it reuses startFollowUp
+// (src/lib/callbacks/followups.ts) with kind 'missed', the exact "we
+// tried calling you" journey step a 2nd "No answer" already triggers
+// automatically. No separate template/message is invented for it.
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -147,3 +152,4 @@ export async function sendCallbackPaymentLink(
   });
   return { via };
 }
+

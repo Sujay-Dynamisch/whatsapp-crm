@@ -9,6 +9,7 @@ import { Eye, Loader2, PhoneCall, StickyNote } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Hint } from '@/components/ui/hint';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
@@ -109,14 +110,15 @@ export function CallbackNoteDialog({
             <p className="text-xs font-medium text-muted-foreground">Quick add</p>
             <div className="flex flex-wrap gap-1.5">
               {QUICK.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => addQuick(q)}
-                  className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground transition-colors hover:border-primary/50 hover:bg-primary/5"
-                >
-                  {q}
-                </button>
+                <Hint key={q} text="Add this phrase to your note.">
+                  <button
+                    type="button"
+                    onClick={() => addQuick(q)}
+                    className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground transition-colors hover:border-primary/50 hover:bg-primary/5"
+                  >
+                    {q}
+                  </button>
+                </Hint>
               ))}
             </div>
           </div>
@@ -129,17 +131,21 @@ export function CallbackNoteDialog({
 
         <DialogFooter>
           {initial && (
-            <Button variant="ghost" className="mr-auto text-destructive hover:text-destructive" disabled={saving} onClick={() => setText('')}>
-              Clear note
-            </Button>
+            <Hint text="Erase everything typed above.">
+              <Button variant="ghost" className="mr-auto text-destructive hover:text-destructive" disabled={saving} onClick={() => setText('')}>
+                Clear note
+              </Button>
+            </Hint>
           )}
           <Button variant="outline" disabled={saving} onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={saving || !changed} onClick={() => void save()}>
-            {saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}
-            Save note
-          </Button>
+          <Hint text="Save this note. It also takes the request off the Priority list.">
+            <Button disabled={saving || !changed} onClick={() => void save()}>
+              {saving && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+              Save note
+            </Button>
+          </Hint>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Check, CircleDollarSign, Loader2, Pencil, Plus, Trash2, Wallet, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
@@ -249,18 +250,19 @@ export function PaymentLedgerSheet({
               <h3 className="text-sm font-semibold text-foreground">Price & payment type</h3>
               <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
                 {(['full', 'advance'] as const).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    disabled={!canEdit}
-                    onClick={() => setPlan(p)}
-                    className={cn(
-                      'rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60',
-                      plan === p ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    {p === 'full' ? 'Full payment' : 'Advance payment'}
-                  </button>
+                  <Hint key={p} text={p === 'full' ? 'The customer pays the whole price in one go.' : 'The customer pays part now and the rest later, in instalments.'}>
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => setPlan(p)}
+                      className={cn(
+                        'rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60',
+                        plan === p ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {p === 'full' ? 'Full payment' : 'Advance payment'}
+                    </button>
+                  </Hint>
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -341,38 +343,42 @@ export function PaymentLedgerSheet({
                           </div>
                           {canEdit && (
                             <div className="flex shrink-0 gap-1">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-8"
-                                aria-label="Edit payment"
-                                disabled={busy}
-                                onClick={() => {
-                                  setEditing(p.id);
-                                  setEditDraft({ amount: String(p.amount), method: p.method ?? 'upi', paid_on: p.paid_on, note: p.note ?? '' });
-                                }}
-                              >
-                                <Pencil className="size-3.5" />
-                              </Button>
-                              {canDelete && (
+                              <Hint text="Change the amount, method, date or note of this payment.">
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="size-8 text-destructive hover:text-destructive"
-                                  aria-label="Delete payment"
+                                  className="size-8"
+                                  aria-label="Edit payment"
                                   disabled={busy}
-                                  onClick={async () => {
-                                    const ok = await confirmDialog({
-                                      title: `Delete the ${money(p.amount)} payment?`,
-                                      description: 'It moves to the Trash and the balance is recalculated. An admin can restore it from the Trash.',
-                                      confirmLabel: 'Move to Trash',
-                                      destructive: true,
-                                    });
-                                    if (ok) await call(`${base}/${p.id}`, 'DELETE', undefined, 'Moved to Trash');
+                                  onClick={() => {
+                                    setEditing(p.id);
+                                    setEditDraft({ amount: String(p.amount), method: p.method ?? 'upi', paid_on: p.paid_on, note: p.note ?? '' });
                                   }}
                                 >
-                                  <Trash2 className="size-3.5" />
+                                  <Pencil className="size-3.5" />
                                 </Button>
+                              </Hint>
+                              {canDelete && (
+                                <Hint text="Remove this payment. The balance due is recalculated.">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="size-8 text-destructive hover:text-destructive"
+                                    aria-label="Delete payment"
+                                    disabled={busy}
+                                    onClick={async () => {
+                                      const ok = await confirmDialog({
+                                        title: `Delete the ${money(p.amount)} payment?`,
+                                        description: 'It moves to the Trash and the balance is recalculated. An admin can restore it from the Trash.',
+                                        confirmLabel: 'Move to Trash',
+                                        destructive: true,
+                                      });
+                                      if (ok) await call(`${base}/${p.id}`, 'DELETE', undefined, 'Moved to Trash');
+                                    }}
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </Button>
+                                </Hint>
                               )}
                             </div>
                           )}

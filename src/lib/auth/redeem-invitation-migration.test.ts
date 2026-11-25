@@ -37,6 +37,8 @@ const tablesWithoutDomainData = new Set([
   // 098: webinar move jobs + change history (no customer data).
   "webinar_moves",
   "webinar_changes",
+  // 104: conversions exist only alongside contacts (guarded via contacts).
+  "conversions",
 ]);
 
 function accountScopedTables(): Set<string> {

@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 
 type Status = 'new' | 'called' | 'no_answer' | 'done';
@@ -167,14 +168,16 @@ export function CallbackDetailsSheet({
                         <a href={`tel:${phone}`} className="font-semibold tracking-wide text-foreground tabular-nums hover:text-primary">
                           {phone}
                         </a>
-                        <button
-                          type="button"
-                          aria-label="Copy number"
-                          className="rounded-md p-1 hover:bg-muted"
-                          onClick={() => void navigator.clipboard.writeText(phone).then(() => toast.success('Number copied'))}
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </button>
+                        <Hint text="Copy this phone number.">
+                          <button
+                            type="button"
+                            aria-label="Copy number"
+                            className="rounded-md p-1 hover:bg-muted"
+                            onClick={() => void navigator.clipboard.writeText(phone).then(() => toast.success('Number copied'))}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        </Hint>
                       </>
                     ) : (
                       'No phone number'
@@ -196,27 +199,37 @@ export function CallbackDetailsSheet({
               {/* Actions */}
               <div className="flex flex-wrap gap-2">
                 {phone && (
-                  <a href={`tel:${phone}`} className={buttonVariants({ size: 'sm' })}>
-                    <PhoneOutgoing className="h-3.5 w-3.5" /> Call
-                  </a>
+                  <Hint text="Opens your phone's dialler to call this number.">
+                    <a href={`tel:${phone}`} className={buttonVariants({ size: 'sm' })}>
+                      <PhoneOutgoing className="h-3.5 w-3.5" /> Call
+                    </a>
+                  </Hint>
                 )}
                 {r.request.conversation_id && (
-                  <Link href={`/inbox?c=${r.request.conversation_id}`} className={buttonVariants({ size: 'sm', variant: 'outline' })}>
-                    <MessageSquare className="h-3.5 w-3.5" /> Open chat
-                  </Link>
+                  <Hint text="See and reply to their WhatsApp messages in the Inbox.">
+                    <Link href={`/inbox?c=${r.request.conversation_id}`} className={buttonVariants({ size: 'sm', variant: 'outline' })}>
+                      <MessageSquare className="h-3.5 w-3.5" /> Open chat
+                    </Link>
+                  </Hint>
                 )}
                 {canAct && (
                   <>
-                    <Button size="sm" variant="outline" disabled={busy || !pay?.available} onClick={onPaymentLink}>
-                      <CreditCard className="h-3.5 w-3.5" /> Send payment link
-                    </Button>
-                    <Button size="sm" variant="outline" disabled={busy} onClick={onNote}>
-                      <StickyNote className="h-3.5 w-3.5" /> Add note
-                    </Button>
-                    {r.request.status === 'done' && (
-                      <Button size="sm" variant="ghost" disabled={busy} onClick={onReopen}>
-                        <RotateCcw className="h-3.5 w-3.5" /> Reopen
+                    <Hint text="Sends the payment link to this person on WhatsApp right now.">
+                      <Button size="sm" variant="outline" disabled={busy || !pay?.available} onClick={onPaymentLink}>
+                        <CreditCard className="h-3.5 w-3.5" /> Send payment link
                       </Button>
+                    </Hint>
+                    <Hint text="Write down what was said. This also takes it off the Priority list.">
+                      <Button size="sm" variant="outline" disabled={busy} onClick={onNote}>
+                        <StickyNote className="h-3.5 w-3.5" /> Add note
+                      </Button>
+                    </Hint>
+                    {r.request.status === 'done' && (
+                      <Hint text="Put this back on the call list as waiting.">
+                        <Button size="sm" variant="ghost" disabled={busy} onClick={onReopen}>
+                          <RotateCcw className="h-3.5 w-3.5" /> Reopen
+                        </Button>
+                      </Hint>
                     )}
                   </>
                 )}
