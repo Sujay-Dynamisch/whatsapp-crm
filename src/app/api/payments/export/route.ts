@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { loadTracking } from '@/lib/payments/tracking';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 const METHOD: Record<string, string> = { upi: 'UPI', card: 'Card', netbanking: 'Net banking', cash: 'Cash', other: 'Other' };
 
@@ -26,15 +27,19 @@ export async function GET() {
     if (!tracking) return NextResponse.json({ error: 'not_enabled' }, { status: 404 });
     const db = supabaseAdmin();
 
-    const [{ data: plans }, { data: inst }, { data: records }] = await Promise.all([
-      db.from('payment_plans').select('contact_id, total_price, plan').eq('account_id', accountId).limit(20000),
-      db
-        .from('payment_installments')
-        .select('contact_id, amount, method, paid_on, note, created_by, updated_by, created_at')
-        .eq('account_id', accountId)
-        .order('paid_on', { ascending: true })
-        .limit(50000),
-      db.from('payment_records').select('contact_id').eq('account_id', accountId).limit(20000),
+    // Every row — one API request returns at most 1000 (fetchAll pages).
+    const [plans, inst, records] = await Promise.all([
+      fetchAll((from, to) => db.from('payment_plans').select('contact_id, total_price, plan').eq('account_id', accountId).order('contact_id').range(from, to)),
+      fetchAll((from, to) =>
+        db
+          .from('payment_installments')
+          .select('contact_id, amount, method, paid_on, note, created_by, updated_by, created_at')
+          .eq('account_id', accountId)
+          .order('paid_on', { ascending: true })
+          .order('id')
+          .range(from, to)
+      ),
+      fetchAll((from, to) => db.from('payment_records').select('contact_id').eq('account_id', accountId).order('contact_id').range(from, to)),
     ]);
 
     const contactIds = [...new Set([...(plans ?? []), ...(inst ?? [])].map((r) => r.contact_id as string))];

@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
+import { useIncrementalList } from '@/hooks/use-incremental-list';
 
 type Status = 'pending' | 'paid' | 'closed';
 type Filter = Status | 'all';
@@ -89,6 +90,8 @@ export default function PaymentsPage() {
   const t = useTranslations('Payments');
   const { canSendMessages, canManageMembers } = useAuth();
   const [data, setData] = useState<Data | null>(null);
+  // Draw rows as the user scrolls (the list can hold thousands of leads).
+  const { visible: leadRowsVisible, hasMore: leadRowsMore, sentinelRef: leadRowsSentinel } = useIncrementalList(data?.leads ?? [], { step: 40 });
   const [notEnabled, setNotEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('pending');
@@ -323,7 +326,7 @@ export default function PaymentsPage() {
         </div>
       ) : (
         <ul className={cn('grid gap-3 transition-opacity xl:grid-cols-2', loading && 'pointer-events-none opacity-50')}>
-          {data.leads.map((l) => {
+          {leadRowsVisible.map((l) => {
             const name = nameOf(l);
             const busy = busyId === l.contact_id;
             return (
@@ -461,6 +464,7 @@ export default function PaymentsPage() {
               </li>
             );
           })}
+          {leadRowsMore && <li ref={leadRowsSentinel} className="h-8 list-none" aria-hidden />}
         </ul>
       )}
 

@@ -145,7 +145,8 @@ export default function WebinarsPage() {
   const moving = (data?.moves ?? []).some((m) => m.status === 'pending' || m.status === 'running');
   useEffect(() => {
     if (!moving) return;
-    const t = window.setInterval(() => void load(), 5000);
+    // Only while the tab is visible — no background load.
+    const t = window.setInterval(() => document.visibilityState === 'visible' && void load(), 5000);
     return () => window.clearInterval(t);
   }, [moving, load]);
 

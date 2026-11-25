@@ -34,6 +34,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { confirmDialog, promptDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useIncrementalList } from '@/hooks/use-incremental-list';
 
 type Status = 'open' | 'resolved' | 'all';
 type DayFilter = 'today' | 'yesterday' | 'week' | 'date';
@@ -252,6 +253,8 @@ export default function FailedMessagesPage() {
   }
 
   const items = useMemo(() => data?.items ?? [], [data]);
+  // Draw rows as the user scrolls (thousands of failures possible).
+  const { visible: itemRowsVisible, hasMore: itemRowsMore, sentinelRef: itemRowsSentinel } = useIncrementalList(items, { step: 40 });
   const openItems = items.filter((i) => !i.resolved);
   const allSelected = openItems.length > 0 && openItems.every((i) => selected.has(i.key));
   const toggle = (key: string) =>
@@ -449,7 +452,7 @@ export default function FailedMessagesPage() {
             </div>
           ) : (
             <ul className={cn('space-y-2 transition-opacity', loading && 'opacity-60')}>
-              {items.map((i) => {
+              {itemRowsVisible.map((i) => {
                 const name = i.contact_name || i.contact_phone || t('unknown');
                 const isBusy = busy.has(i.key);
                 return (
@@ -561,6 +564,7 @@ export default function FailedMessagesPage() {
                   </li>
                 );
               })}
+              {itemRowsMore && <li ref={itemRowsSentinel} className="h-8 list-none" aria-hidden />}
             </ul>
           )}
         </>

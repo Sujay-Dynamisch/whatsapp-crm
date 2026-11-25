@@ -228,7 +228,8 @@ function foldEvents(events: RunEvent[]): StepRow[] {
     else if (e.event === 'send_failed') {
       row.warn = true;
       row.detail = e.detail;
-    } else if (e.event === 'exited') {
+    } else if (e.event === 'exited' || e.event === 'completed') {
+      // 'completed' = stopped because the lead paid (engine PAID_TAG_NAMES).
       row.stopped = true;
       row.detail = e.detail;
     }
@@ -272,19 +273,44 @@ export function RunsSheet({
     return () => clearTimeout(id);
   }, [query]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const fetchPage = useCallback(
+    async (offset: number) => {
       const qs = new URLSearchParams();
       if (filter !== 'all') qs.set('status', filter);
       if (search) qs.set('q', search);
+      if (offset) qs.set('offset', String(offset));
       const res = await fetch(`/api/journeys/${journeyId}/runs${qs.size ? `?${qs}` : ''}`);
       const data = await res.json().catch(() => ({}));
-      setRuns(res.ok ? data.runs : []);
+      return res.ok ? { runs: data.runs as RunRow[], hasMore: Boolean(data.hasMore) } : { runs: [] as RunRow[], hasMore: false };
+    },
+    [journeyId, filter, search]
+  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const page = await fetchPage(0);
+      setRuns(page.runs);
+      setHasMore(page.hasMore);
     } finally {
       setLoading(false);
     }
-  }, [journeyId, filter, search]);
+  }, [fetchPage]);
+  /** Next 50 runs (the list is paged — a journey can hold thousands). */
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const page = await fetchPage(runs?.length ?? 0);
+      setRuns((prev) => {
+        const seen = new Set((prev ?? []).map((r) => r.id));
+        return [...(prev ?? []), ...page.runs.filter((r) => !seen.has(r.id))];
+      });
+      setHasMore(page.hasMore);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [fetchPage, runs?.length]);
 
   /** Delete a run with its step and message log (admins). */
   async function deleteRun(run: RunRow) {
@@ -468,6 +494,13 @@ export function RunsSheet({
                     </li>
                   ))}
                 </ul>
+              )}
+              {!loading && runs && runs.length > 0 && hasMore && (
+                <div className="flex justify-center pt-3">
+                  <Button variant="outline" size="sm" disabled={loadingMore} onClick={() => void loadMore()}>
+                    {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Load more'}
+                  </Button>
+                </div>
               )}
             </>
           ) : (

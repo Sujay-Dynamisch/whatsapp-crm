@@ -23,7 +23,7 @@
 import type { JourneyGraph, JourneyNode, JourneyNodeType, NodeConfigs } from '../../src/lib/journeys/graph';
 
 export const JOURNEY_NAME = 'Webinar Funnel — Swapnil Gautam';
-export const TAGS = ['webinar_registered', 'payment_link_sent', 'callback_requested', 'paid', 'manually_closed', 'closed_lost'] as const;
+export const TAGS = ['webinar_registered', 'payment_link_sent', 'callback_requested', 'paid', 'manually_closed', 'closed_lost', 'customer'] as const;
 export type TagIds = Record<(typeof TAGS)[number], string>;
 
 /** Nurture sends go out at this IST hour. */
@@ -189,7 +189,8 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
   add('trigger', 'trigger', 'Contact added (API)', {
     trigger_type: 'contact_created',
     contact_source: 'api',
-    exit_tag_ids: [tag.paid, tag.manually_closed],
+    // 'customer' = any payment (advance too): a buyer gets no more sales messages.
+    exit_tag_ids: [tag.paid, tag.manually_closed, tag.customer],
     // Callback follow-ups (Callbacks page): "No answer" → cb_missed; 2nd
     // "No answer", "Back to nurture" or 48h without action → Stage C.
     callback_missed_node: 'cb_missed',

@@ -65,7 +65,7 @@ export async function ensureTag(db: SupabaseClient, accountId: string, userId: s
  */
 export async function stopRunsExitingOnTag(
   db: SupabaseClient,
-  args: { accountId: string; contactId: string; tagId: string; reason: string; now: Date }
+  args: { accountId: string; contactId: string; tagId: string; reason: string; now: Date; completed?: boolean }
 ): Promise<number> {
   const { data: runs } = await db
     .from('journey_enrollments')
@@ -84,6 +84,7 @@ export async function stopRunsExitingOnTag(
       accountId: args.accountId,
       reason: args.reason,
       now: args.now,
+      completed: args.completed,
     });
     if (outcome === 'stopped') stopped++;
   }

@@ -49,6 +49,7 @@ import {
 import { isUnsubscribeText } from '@/lib/contacts/unsubscribe';
 import { accountHasFeature } from '@/lib/features-server';
 import { resolveTemplateRow, templateContentText } from '@/lib/whatsapp/template-body';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 export interface JourneyRow {
   id: string;
@@ -417,16 +418,17 @@ export async function advanceEnrollment(
   // one of the journey's exit tags (e.g. paid / closed) — no more steps.
   const stop = await stopReason(db, journey, e, resumeSlot === 'replied' ? context.reply?.text : null);
   if (stop) {
-    await logEvent(db, e, node?.id ?? e.current_node_id ?? 'trigger', 'exited', stop);
+    const converted = stop.startsWith(CONVERTED_PREFIX);
+    await logEvent(db, e, node?.id ?? e.current_node_id ?? 'trigger', converted ? 'completed' : 'exited', stop);
     await patchEnrollment(db, e.id, {
-      status: 'exited',
+      status: converted ? 'completed' : 'exited',
       locked_at: null,
       wait_kind: null,
-      last_error: stop,
+      last_error: converted ? null : stop,
       context,
       completed_at: deps.now().toISOString(),
     });
-    return 'exited';
+    return converted ? 'completed' : 'exited';
   }
   if (!node) return fail(e.current_node_id ?? 'unknown', 'The step this contact was on no longer exists');
 
@@ -528,6 +530,10 @@ interface Runtime {
 }
 
 /** Why this run must stop before its next step, or null. Never throws. */
+/** Exit tags that mean the lead paid: their run ends 'completed'. */
+export const PAID_TAG_NAMES = new Set(['paid', 'customer']);
+const CONVERTED_PREFIX = 'Completed — paid: ';
+
 async function stopReason(
   db: SupabaseClient,
   journey: JourneyRow,
@@ -542,7 +548,19 @@ async function stopReason(
       const tag = Array.isArray(row.tags) ? row.tags[0] : row.tags;
       const name = tag?.name?.trim() ?? '';
       if (name.toLowerCase() === 'unsubscribe') return 'Contact opted out (unsubscribe tag)';
-      if (exitIds.includes(row.tag_id)) return `Stopped: contact has the "${name || row.tag_id}" tag`;
+    }
+    // A paying lead (conversion, migration 104) finished the journey: the
+    // run ends 'completed', not 'exited', so every page counts it the same.
+    const rows = (data ?? []) as { tag_id: string; tags?: { name?: string } | { name?: string }[] | null }[];
+    const nameOf = (row: (typeof rows)[number]) => (Array.isArray(row.tags) ? row.tags[0] : row.tags)?.name?.trim() ?? '';
+    const isCustomer = rows.some((row) => PAID_TAG_NAMES.has(nameOf(row).toLowerCase()));
+    for (const row of rows) {
+      const name = nameOf(row);
+      if (exitIds.includes(row.tag_id)) {
+        return isCustomer
+          ? `${CONVERTED_PREFIX}contact has the "${name}" tag`
+          : `Stopped: contact has the "${name || row.tag_id}" tag`;
+      }
     }
   } catch {
     // A failed lookup must not stop a healthy run.
@@ -1104,14 +1122,19 @@ async function bookedRuns(db: SupabaseClient, accountId: string, startIso: strin
       .filter((n) => n.type === 'wait' && String((n.config as { until?: string }).until ?? '').includes('nodes.schedule.'))
       .map((n) => n.id);
     if (!waits.length) continue;
-    const { data: runs } = await db
-      .from('journey_enrollments')
-      .select('*')
-      .eq('journey_id', journey.id)
-      .eq('status', 'waiting')
-      .in('current_node_id', waits)
-      .eq('context->nodes->schedule->>start_iso', startIso);
-    out.push({ journey, runs: (runs ?? []) as EnrollmentRow[], entry });
+    // Every booked run — a session can hold more than the API's 1000-row page.
+    const runs = await fetchAll((lo, hi) =>
+      db
+        .from('journey_enrollments')
+        .select('*')
+        .eq('journey_id', journey.id)
+        .eq('status', 'waiting')
+        .in('current_node_id', waits)
+        .eq('context->nodes->schedule->>start_iso', startIso)
+        .order('id')
+        .range(lo, hi)
+    );
+    out.push({ journey, runs: runs as EnrollmentRow[], entry });
   }
   return out;
 }
@@ -1204,13 +1227,17 @@ export async function orphanBookedIsos(db: SupabaseClient, accountId: string, no
       .filter((n) => n.type === 'wait' && String((n.config as { until?: string }).until ?? '').includes('nodes.schedule.'))
       .map((n) => n.id);
     if (!waits.length) continue;
-    const { data: runs } = await db
-      .from('journey_enrollments')
-      .select('context')
-      .eq('journey_id', journey.id)
-      .eq('status', 'waiting')
-      .in('current_node_id', waits)
-      .limit(5000);
+    // Every waiting run (one API request returns at most 1000).
+    const runs = await fetchAll((lo, hi) =>
+      db
+        .from('journey_enrollments')
+        .select('context')
+        .eq('journey_id', journey.id)
+        .eq('status', 'waiting')
+        .in('current_node_id', waits)
+        .order('id')
+        .range(lo, hi)
+    );
     for (const r of runs ?? []) {
       const iso = String(((r.context as RunContext | null)?.nodes?.schedule as { start_iso?: string } | undefined)?.start_iso ?? '');
       // Only sessions still ahead; IST ISO strings compare chronologically.
@@ -1360,7 +1387,7 @@ export type StopOutcome = 'stopped' | 'not_found' | 'busy' | 'finished';
  */
 export async function stopEnrollment(
   db: SupabaseClient,
-  args: { enrollmentId: string; journeyId: string; accountId: string; reason: string; now: Date }
+  args: { enrollmentId: string; journeyId: string; accountId: string; reason: string; now: Date; completed?: boolean }
 ): Promise<StopOutcome> {
   const { data: row } = await db
     .from('journey_enrollments')
@@ -1376,17 +1403,18 @@ export async function stopEnrollment(
   const { data: claimed } = await db
     .from('journey_enrollments')
     .update({
-      status: 'exited',
+      // A paying lead finished the journey (see PAID_TAG_NAMES).
+      status: args.completed ? 'completed' : 'exited',
       wait_kind: null,
       locked_at: null,
-      last_error: args.reason.slice(0, 1000),
+      last_error: args.completed ? null : args.reason.slice(0, 1000),
       completed_at: args.now.toISOString(),
     })
     .eq('id', row.id)
     .eq('status', 'waiting')
     .select('id');
   if (!claimed?.length) return 'busy';
-  await logEvent(db, { id: row.id as string, journey_id: row.journey_id as string }, (row.current_node_id as string) ?? 'trigger', 'exited', args.reason);
+  await logEvent(db, { id: row.id as string, journey_id: row.journey_id as string }, (row.current_node_id as string) ?? 'trigger', args.completed ? 'completed' : 'exited', args.reason);
   return 'stopped';
 }
 

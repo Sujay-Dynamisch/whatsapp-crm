@@ -5,7 +5,7 @@ import {
   type ChatMessage,
   type GenerateResult,
 } from './types'
-import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults'
+import { HANDOFF_SENTINEL, PAYMENT_CLAIM_SENTINEL, aiRequestTimeoutMs } from './defaults'
 import { generateOpenAi } from './providers/openai'
 import { generateAnthropic } from './providers/anthropic'
 import { generateOpenAiCompatible } from './providers/openai-compatible'
@@ -96,8 +96,10 @@ export function parseGeneration(
   raw: string,
   usage: AiUsage | null = null,
 ): GenerateResult {
+  const paymentClaim = raw.includes(PAYMENT_CLAIM_SENTINEL)
+  // A payment claim is NOT a handoff: the AI keeps replying (the caller is alerted).
   let handoff = raw.includes(HANDOFF_SENTINEL)
-  let text = raw.split(HANDOFF_SENTINEL).join('').trim()
+  let text = raw.split(PAYMENT_CLAIM_SENTINEL).join('').split(HANDOFF_SENTINEL).join('').trim()
   // Prompts written for n8n-style parsers make the model answer as
   // `{"intent": …, "reply": "…", "requires_human": …}`. Never send that
   // JSON to a customer — unwrap the reply and honour requires_human.
@@ -107,7 +109,7 @@ export function parseGeneration(
     handoff = handoff || structured.requiresHuman
   }
   // Models write Markdown (**bold**); WhatsApp uses *bold*.
-  return { text: toWhatsAppFormat(text), handoff, usage }
+  return { text: toWhatsAppFormat(text), handoff, ...(paymentClaim ? { paymentClaim } : {}), usage }
 }
 
 function parseStructuredReply(

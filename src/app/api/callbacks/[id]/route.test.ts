@@ -119,6 +119,13 @@ describe('PATCH /api/callbacks/[id] — manual Priority toggle', () => {
     expect(rows[0].priority).toBeUndefined();
   });
 
+  it('cannot mark Priority on a request someone already spoke to', async () => {
+    rows[0].status = 'called';
+    const res = await patch({ priority: 'high' });
+    expect(res.status).toBe(409);
+    expect(rows[0].priority).toBeUndefined();
+  });
+
   it('being attended to (Called) still wins even if Priority is sent in the same request', async () => {
     const res = await patch({ status: 'called', priority: 'high' });
     expect(await res.json()).toMatchObject({ request: { status: 'called', priority: 'normal' } });

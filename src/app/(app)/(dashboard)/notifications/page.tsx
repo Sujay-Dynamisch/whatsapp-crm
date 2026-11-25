@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { useIncrementalList } from '@/hooks/use-incremental-list';
 
 // Icon per notification type.
 // New types are a one-line add.
@@ -142,6 +143,8 @@ export default function NotificationsPage() {
   );
 
   const unreadIds = notifications?.filter((n) => !n.read_at).map((n) => n.id) ?? [];
+  // Draw rows as the user scrolls.
+  const { visible: notifRowsVisible, hasMore: notifRowsMore, sentinelRef: notifRowsSentinel } = useIncrementalList(notifications ?? [], { step: 40 });
 
   const markAllRead = useCallback(async () => {
     if (unreadIds.length === 0 || !accountId) return;
@@ -223,7 +226,7 @@ export default function NotificationsPage() {
         </div>
       ) : (
         <ul className="space-y-2">
-          {notifications.map((n) => {
+          {notifRowsVisible.map((n) => {
             const Icon = TYPE_ICON[n.type] ?? Bell;
             const isUnread = !n.read_at;
             return (
@@ -284,6 +287,7 @@ export default function NotificationsPage() {
               </li>
             );
           })}
+          {notifRowsMore && <li ref={notifRowsSentinel} className="h-8 list-none" aria-hidden />}
         </ul>
       )}
     </div>

@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 
 import { toErrorResponse } from '@/lib/auth/account';
 import { isAccountMember, releasedContacts, requireCallersAccess } from '@/lib/callers/server';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 export async function GET() {
   try {
@@ -16,20 +17,29 @@ export async function GET() {
     const [{ data: members }, { data: callers }, { data: openCb }, { data: owned }, { data: openEng }] = await Promise.all([
       admin.from('profiles').select('user_id, full_name, email, account_role').eq('account_id', accountId),
       admin.from('callers').select('user_id, status, lead_eligible, created_at').eq('account_id', accountId),
-      admin
-        .from('callback_requests')
-        .select('contact_id, assigned_caller_id, priority, requested_at')
-        .eq('account_id', accountId)
-        .neq('status', 'done')
-        .limit(10000),
-      admin.from('contacts').select('assigned_caller_id').eq('account_id', accountId).not('assigned_caller_id', 'is', null).limit(50000),
-      admin
-        .from('engagements')
-        .select('contact_id, accepted_at')
-        .eq('account_id', accountId)
-        .eq('status', 'open')
-        .is('assigned_caller_id', null)
-        .limit(1000),
+      // Every row — one API request returns at most 1000 (fetchAll pages).
+      fetchAll((lo, hi) =>
+        admin
+          .from('callback_requests')
+          .select('contact_id, assigned_caller_id, priority, requested_at')
+          .eq('account_id', accountId)
+          .neq('status', 'done')
+          .order('id')
+          .range(lo, hi)
+      ).then((data) => ({ data })),
+      fetchAll((lo, hi) =>
+        admin.from('contacts').select('assigned_caller_id').eq('account_id', accountId).not('assigned_caller_id', 'is', null).order('id').range(lo, hi)
+      ).then((data) => ({ data })),
+      fetchAll((lo, hi) =>
+        admin
+          .from('engagements')
+          .select('contact_id, accepted_at')
+          .eq('account_id', accountId)
+          .eq('status', 'open')
+          .is('assigned_caller_id', null)
+          .order('id')
+          .range(lo, hi)
+      ).then((data) => ({ data })),
     ]);
 
     const leads = new Map<string, number>();

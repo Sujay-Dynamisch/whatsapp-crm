@@ -19,7 +19,6 @@ import type {
   InteractiveMessagePayload,
 } from "@/types";
 import {
-  MessageSquare,
   ChevronDown,
   UserPlus,
   Check,
@@ -65,6 +64,7 @@ import {
 } from "@/lib/whatsapp/template-message-view";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
 import { resolveAssignmentResult } from "@/lib/inbox/assignment";
+import { WhatsAppIcon } from "@/components/inbox/whatsapp-icon";
 import {
   businessReactionOn,
   withBusinessReaction,
@@ -171,8 +171,7 @@ const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string 
  * Defined once at module scope so the two render paths can't drift —
  * if we ever switch the asset, both spots update together.
  */
-const DOODLE_BG_CLASSES =
-  "bg-background bg-[url('/inbox-doodle.svg')] bg-repeat";
+const DOODLE_BG_CLASSES = "wa-chat-bg";
 
 export function MessageThread({
   conversation,
@@ -983,8 +982,8 @@ export function MessageThread({
   if (!conversation || !contact) {
     return (
       <div className={cn("flex flex-1 flex-col items-center justify-center", DOODLE_BG_CLASSES)}>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-          <MessageSquare className="h-8 w-8 text-muted-foreground" />
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#25d366] shadow-lg shadow-[#25d366]/30">
+          <WhatsAppIcon className="h-11 w-11 text-white" />
         </div>
         <h3 className="mt-4 text-sm font-medium text-muted-foreground">
           {t("selectConversation")}
@@ -1024,7 +1023,7 @@ export function MessageThread({
     <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
       {/* Header — solid card surface sits on top of the doodle so the
           name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-4">
+      <div className="wa-header flex items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
@@ -1038,8 +1037,11 @@ export function MessageThread({
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+          <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
             {displayName.charAt(0).toUpperCase()}
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#25d366] ring-2 ring-[var(--wa-header)]" title="WhatsApp">
+              <WhatsAppIcon className="h-2.5 w-2.5 text-white" />
+            </span>
           </div>
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
@@ -1247,7 +1249,7 @@ export function MessageThread({
               <div key={group.date}>
                 {/* Date separator */}
                 <div className="mb-4 flex items-center justify-center">
-                  <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-medium text-muted-foreground">
+                  <span className="wa-date-chip rounded-lg px-3 py-1 text-[11px] font-medium uppercase tracking-wide">
                     {formatDateSeparator(group.date, t)}
                   </span>
                 </div>

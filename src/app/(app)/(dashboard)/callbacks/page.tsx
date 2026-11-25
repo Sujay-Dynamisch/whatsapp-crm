@@ -75,6 +75,8 @@ interface CallbackRequest {
 
 interface Data {
   requests: CallbackRequest[];
+  /** Matching requests on the server (the list is paged). */
+  total?: number | null;
   stats: { open: number; priority?: number; today: number; handled_today: number };
   daily: { date: string; count: number }[];
 }
@@ -196,6 +198,34 @@ export default function CallbacksPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Next page from the server (the API sends 60 at a time).
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadMore = useCallback(async () => {
+    if (!data) return;
+    setLoadingMore(true);
+    try {
+      const qs = new URLSearchParams({ offset: String(data.requests.length) });
+      if (statusFilter !== 'all') qs.set('status', statusFilter);
+      const { from, to } = dayRange(dayFilter);
+      if (from) qs.set('from', from);
+      if (to) qs.set('to', to);
+      if (search) qs.set('q', search);
+      const res = await fetch(`/api/callbacks?${qs}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json?.error || t('loadFailed'));
+        return;
+      }
+      setData((d) => {
+        if (!d) return d;
+        const seen = new Set(d.requests.map((r) => r.id));
+        return { ...d, requests: [...d.requests, ...(json.requests ?? []).filter((r: { id: string }) => !seen.has(r.id))] };
+      });
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [data, statusFilter, dayFilter, search, t]);
 
   // New requests / updates from teammates show up without a refresh.
   useEffect(() => {
@@ -378,6 +408,8 @@ export default function CallbacksPage() {
   // "Call next": the top open request (the API sorts Priority first, then oldest).
   const nextUp = !search && statusFilter !== 'done' ? (data?.requests.find((r) => r.status !== 'done') ?? null) : null;
   const rest = (data?.requests ?? []).filter((r) => r.id !== nextUp?.id);
+  // All matching requests on the server (the list loads them page by page).
+  const restTotal = Math.max(rest.length, (data?.total ?? rest.length) - (nextUp ? 1 : 0));
 
   function renderCard(r: CallbackRequest, hero: boolean) {
     const name = r.contact_name || r.contact_phone || t('unknown');
@@ -621,7 +653,7 @@ export default function CallbacksPage() {
                   Send callback request message
                 </Button>
               </Hint>
-              {open && (!priority || canManageMembers) && (
+              {open && r.status !== 'called' && (!priority || canManageMembers) && (
                 <Hint
                   text={
                     priority
@@ -832,14 +864,23 @@ export default function CallbacksPage() {
             <section aria-labelledby="call-list">
               <h2 id="call-list" className="mb-2 text-sm font-semibold text-foreground">
                 {nextUp ? 'After that' : t(`filter.${statusFilter}`)}{' '}
-                <span className="font-normal text-muted-foreground">({rest.length})</span>
+                <span className="font-normal text-muted-foreground">({restTotal})</span>
               </h2>
               <ul className="space-y-3">{rest.slice(0, visibleN).map((r) => <li key={r.id}>{renderCard(r, false)}</li>)}</ul>
-              {rest.length > visibleN && (
+              {restTotal > visibleN && (
                 <div className="mt-4 flex justify-center">
-                  <Hint text={`Load the next ${Math.min(PAGE_SIZE, rest.length - visibleN)} requests.`}>
-                    <Button variant="outline" className="h-11 rounded-xl px-6" onClick={() => setPage({ key: filterKey, n: visibleN + PAGE_SIZE })}>
-                      Show more ({rest.length - visibleN} left)
+                  <Hint text={`Load the next ${Math.min(PAGE_SIZE, restTotal - visibleN)} requests.`}>
+                    <Button
+                      variant="outline"
+                      className="h-11 rounded-xl px-6"
+                      disabled={loadingMore}
+                      onClick={() => {
+                        // Out of loaded rows → fetch the next page from the server first.
+                        if (visibleN + PAGE_SIZE > rest.length && rest.length < restTotal) void loadMore();
+                        setPage({ key: filterKey, n: visibleN + PAGE_SIZE });
+                      }}
+                    >
+                      {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : `Show more (${restTotal - visibleN} left)`}
                     </Button>
                   </Hint>
                 </div>

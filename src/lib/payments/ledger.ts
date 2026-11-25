@@ -82,6 +82,7 @@ export async function reconcileLedger(
         tagId: paidTagId,
         reason: `Fully paid — recorded by ${args.who}`,
         now: new Date(),
+        completed: true,
       });
     }
   } else if (record) {
@@ -89,6 +90,22 @@ export async function reconcileLedger(
     await db.from('payment_records').delete().eq('contact_id', args.contactId);
     const paidTagId = (await tagIdsByName(db, args.accountId, [args.tracking.paid_tag])).get(args.tracking.paid_tag.toLowerCase());
     if (paidTagId) await db.from('contact_tags').delete().eq('contact_id', args.contactId).eq('tag_id', paidTagId);
+  }
+  // Any payment (an advance too) makes them a customer (the 'customer' tag,
+  // migration 104): stop sales journeys that exit on it now, not at their
+  // next wake-up.
+  if (ledger.paid > 0) {
+    const customerTagId = (await tagIdsByName(db, args.accountId, ['customer'])).get('customer');
+    if (customerTagId) {
+      await stopRunsExitingOnTag(db, {
+        accountId: args.accountId,
+        contactId: args.contactId,
+        tagId: customerTagId,
+        reason: `Paid an advance — recorded by ${args.who}`,
+        now: new Date(),
+        completed: true,
+      });
+    }
   }
   return ledger;
 }

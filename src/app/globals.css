@@ -436,3 +436,97 @@ body {
    elements still below the fold, then revealed. */
 .lp-reveal { transition: opacity .7s ease-out, transform .7s ease-out, filter .7s ease-out; }
 .lp-reveal.lp-reveal-hidden { opacity: 0; transform: translateY(24px); filter: blur(2px); }
+
+/* ------------------------------------------------------------------
+   Inbox — WhatsApp-style surfaces (scoped: only the inbox uses these).
+   Outgoing / incoming bubbles redefine the theme tokens locally so every
+   child that uses primary / muted (links, chips, ticks) follows along.
+   ------------------------------------------------------------------ */
+:root {
+  --wa-panel: #ffffff;
+  --wa-header: #f0f2f5;
+  --wa-chat: #efeae2;
+  --wa-out: #d9fdd3;
+  --wa-in: #ffffff;
+  --wa-text: #111b21;
+  --wa-sub: #667781;
+  --wa-green: #00a884;
+  --wa-unread: #25d366;
+  --wa-row-hover: #f5f6f6;
+  --wa-row-active: #f0f2f5;
+  --wa-chip: #ffffff;
+  --wa-tick-read: #53bdeb;
+  --wa-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+}
+[data-mode="dark"] {
+  --wa-panel: #111b21;
+  --wa-header: #202c33;
+  --wa-chat: #0b141a;
+  --wa-out: #005c4b;
+  --wa-in: #202c33;
+  --wa-text: #e9edef;
+  --wa-sub: #8696a0;
+  --wa-row-hover: #202c33;
+  --wa-row-active: #2a3942;
+  --wa-chip: #182229;
+  --wa-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.5);
+}
+.wa-panel { background-color: var(--wa-panel); }
+.wa-header { background-color: var(--wa-header); }
+.wa-chat-bg {
+  background-color: var(--wa-chat);
+  background-image: url('/inbox-chat-bg.webp');
+  /* Small, tiled doodles like WhatsApp (cover made them look zoomed in). */
+  background-size: 520px auto;
+  background-position: top left;
+  background-repeat: repeat;
+}
+[data-mode="dark"] .wa-chat-bg {
+  background-image: url('/inbox-chat-bg-dark.webp');
+}
+.wa-row:hover { background-color: var(--wa-row-hover); }
+.wa-row-active, .wa-row-active:hover { background-color: var(--wa-row-active); }
+.wa-unread { background-color: var(--wa-unread); color: #111b21; }
+.wa-time-unread { color: var(--wa-green); }
+.wa-date-chip {
+  background-color: var(--wa-chip);
+  color: var(--wa-sub);
+  box-shadow: var(--wa-shadow);
+}
+.wa-tick-read { color: var(--wa-tick-read); }
+.wa-bubble-out,
+.wa-bubble-in {
+  box-shadow: var(--wa-shadow);
+  --muted-foreground: var(--wa-sub);
+}
+.wa-bubble-out {
+  --primary: var(--wa-out);
+  --primary-foreground: var(--wa-text);
+  background-color: var(--wa-out);
+  color: var(--wa-text);
+}
+.wa-bubble-in {
+  --muted: var(--wa-in);
+  --foreground: var(--wa-text);
+  background-color: var(--wa-in);
+  color: var(--wa-text);
+}
+/* Bubble tails (top corner, like WhatsApp). */
+.wa-bubble-out::before,
+.wa-bubble-in::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 13px;
+}
+.wa-bubble-out::before {
+  right: -7px;
+  background-color: var(--wa-out);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+.wa-bubble-in::before {
+  left: -7px;
+  background-color: var(--wa-in);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}

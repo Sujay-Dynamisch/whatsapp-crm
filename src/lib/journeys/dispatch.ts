@@ -178,6 +178,11 @@ export interface ReregistrationInput {
  * executing a step right now is left alone; the next sync retries.
  * Never throws.
  */
+/** A re-registration this long after their last journey started = a new lead. */
+const FRESH_AFTER_MS = 15 * 24 * 3600e3;
+/** Funnel state cleared for a returning lead (plus each journey's exit tags). */
+const FUNNEL_RESET_TAGS = new Set(['paid', 'customer', 'manually_closed', 'closed_lost', 'payment_link_sent', 'callback_requested']);
+
 export async function restartJourneysOnReregistration(
   db: SupabaseClient,
   input: ReregistrationInput,
@@ -201,11 +206,37 @@ export async function restartJourneysOnReregistration(
 
     const { data: tagRows } = await db.from('contact_tags').select('tag_id, tags(name)').eq('contact_id', input.contactId);
     const tags = (tagRows ?? []) as { tag_id: string; tags?: { name?: string } | { name?: string }[] | null }[];
-    const optedOut = tags.some((r) => {
-      const t = Array.isArray(r.tags) ? r.tags[0] : r.tags;
-      return (t?.name ?? '').trim().toLowerCase() === 'unsubscribe';
-    });
-    if (optedOut) return 0;
+    const tagName = (r: (typeof tags)[number]) => ((Array.isArray(r.tags) ? r.tags[0] : r.tags)?.name ?? '').trim().toLowerCase();
+    const optOut = tags.find((r) => tagName(r) === 'unsubscribe');
+
+    // Back 15+ days after their last journey started (paid, closed, lost or
+    // opted out since) and registered again on the website = a fresh opt-in:
+    // a new lead. Clear the funnel tags — and STOP / unsubscribe — so the
+    // journey starts over. Within 15 days an opt-out still blocks.
+    const { data: lastRun } = await db
+      .from('journey_enrollments')
+      .select('entered_at')
+      .eq('contact_id', input.contactId)
+      .order('entered_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    // A customer who was never in the journey: count from when they paid.
+    const { data: conv } = await db.from('conversions').select('converted_at').eq('contact_id', input.contactId).maybeSingle();
+    const since = Math.max(Date.parse(String(lastRun?.entered_at ?? '')) || 0, Date.parse(String(conv?.converted_at ?? '')) || 0);
+    const fresh = !since || registeredAt - since >= FRESH_AFTER_MS;
+    if (optOut && !fresh) return 0;
+    if (fresh) {
+      const exitIds = new Set(
+        matching.flatMap((j) => (findTrigger(j.graph)?.config as TriggerConfig | undefined)?.exit_tag_ids ?? [])
+      );
+      const reset = tags
+        .filter((r) => exitIds.has(r.tag_id) || FUNNEL_RESET_TAGS.has(tagName(r)) || r === optOut)
+        .map((r) => r.tag_id);
+      if (reset.length) {
+        await db.from('contact_tags').delete().eq('contact_id', input.contactId).in('tag_id', reset);
+        tags.splice(0, tags.length, ...tags.filter((r) => !reset.includes(r.tag_id)));
+      }
+    }
 
     let started = 0;
     for (const journey of matching) {
@@ -301,9 +332,15 @@ export async function dispatchJourneyInbound(
       }
     );
     let handled = fellBack.size > 0;
-    handled =
-      (await resumeOnReply(db, args.accountId, args.contactId, deps, { text, button: args.buttonText ?? null }, fellBack)) > 0 ||
-      handled;
+    // No text and no button (a photo / video / voice note without caption,
+    // e.g. a payment screenshot): not an answer to a menu — leave it for
+    // the AI instead of resuming a "wait for reply" step with "" (which
+    // fell through to the FAQ menu / "Please reply with 1–4").
+    if (text.trim() || args.buttonText) {
+      handled =
+        (await resumeOnReply(db, args.accountId, args.contactId, deps, { text, button: args.buttonText ?? null }, fellBack)) > 0 ||
+        handled;
+    }
     // A button tapped right after another (e.g. two check-in buttons back
     // to back): the run is still busy with the first tap. Wait for it to
     // park, then hand it this tap; if it has moved past the menu, resume

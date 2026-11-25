@@ -11,6 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ForbiddenError, getCurrentAccount, type AccountContext } from '@/lib/auth/account';
 import { atLeast, callersLevel, parseAccess, type AccessLevel } from '@/lib/auth/permissions';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 export async function requireCallersAccess(level: AccessLevel): Promise<AccountContext & { admin: SupabaseClient }> {
   const ctx = await getCurrentAccount();
@@ -85,12 +86,9 @@ export async function reassignContact(
 
 /** Move all of a caller's open work to Admin Unassigned (deactivation / removal). */
 export async function releaseCallerWork(db: SupabaseClient, accountId: string, callerId: string, actorId: string): Promise<number> {
-  const { data: owned } = await db
-    .from('contacts')
-    .select('id')
-    .eq('account_id', accountId)
-    .eq('assigned_caller_id', callerId)
-    .limit(5000);
+  const owned = await fetchAll((lo, hi) =>
+    db.from('contacts').select('id').eq('account_id', accountId).eq('assigned_caller_id', callerId).order('id').range(lo, hi)
+  );
   for (const c of owned ?? []) {
     await reassignContact(db, {
       accountId,
@@ -118,13 +116,16 @@ export async function releaseCallerWork(db: SupabaseClient, accountId: string, c
  * engagement or callback. contactId → when they were released.
  */
 export async function releasedContacts(db: SupabaseClient, accountId: string): Promise<Map<string, string>> {
-  const { data: rows } = await db
-    .from('caller_assignment_history')
-    .select('contact_id, to_caller_id, created_at')
-    .eq('account_id', accountId)
-    .gte('created_at', new Date(Date.now() - 90 * 864e5).toISOString())
-    .order('created_at', { ascending: false })
-    .limit(5000);
+  const rows = await fetchAll((lo, hi) =>
+    db
+      .from('caller_assignment_history')
+      .select('contact_id, to_caller_id, created_at')
+      .eq('account_id', accountId)
+      .gte('created_at', new Date(Date.now() - 90 * 864e5).toISOString())
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(lo, hi)
+  );
   const latest = new Map<string, { to: string | null; at: string }>();
   for (const r of rows ?? []) {
     const id = r.contact_id as string | null;

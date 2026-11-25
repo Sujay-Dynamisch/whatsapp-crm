@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useIncrementalList } from '@/hooks/use-incremental-list';
 
 type Range = 'month' | '30d' | 'all';
 interface Conversion {
@@ -50,6 +51,8 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export default function ConversionsPage() {
   const [data, setData] = useState<Data | null>(null);
+  // Draw rows as the user scrolls.
+  const { visible: convRowsVisible, hasMore: convRowsMore, sentinelRef: convRowsSentinel } = useIncrementalList(data?.conversions ?? [], { step: 40 });
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState<Range>('all');
   const [query, setQuery] = useState('');
@@ -226,7 +229,7 @@ export default function ConversionsPage() {
         </div>
       ) : (
         <ul className={cn('space-y-3 transition-opacity', loading && 'opacity-60')} aria-busy={loading}>
-          {data.conversions.map((c) => (
+          {convRowsVisible.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" aria-hidden>
                 <BadgeCheck className="h-5 w-5" />
@@ -263,6 +266,7 @@ export default function ConversionsPage() {
               )}
             </li>
           ))}
+          {convRowsMore && <li ref={convRowsSentinel} className="h-8 list-none" aria-hidden />}
         </ul>
       )}
 
