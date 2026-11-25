@@ -42,6 +42,8 @@ export async function GET(request: Request) {
         .order('requested_at', { ascending: false })
         .limit(300);
       if (status === 'open') q = q.neq('status', 'done');
+      // Customer asked for a call and nobody has attended to it yet.
+      else if (status === 'priority') q = q.neq('status', 'done').eq('priority', 'high');
       else if (status && STATUSES.includes(status)) q = q.eq('status', status);
       if (from && !Number.isNaN(Date.parse(from))) q = q.gte('requested_at', from);
       if (to && !Number.isNaN(Date.parse(to))) q = q.lt('requested_at', to);
@@ -59,7 +61,7 @@ export async function GET(request: Request) {
     const now = Date.now();
     const todayStart = localDayStart(now, tz);
     const seriesStart = todayStart - (DAYS - 1) * DAY_MS;
-    const [{ data: recent }, { count: open }] = await Promise.all([
+    const [{ data: recent }, { count: open }, { count: priority }] = await Promise.all([
       supabase
         .from('callback_requests')
         .select('requested_at, handled_at, status')
@@ -71,6 +73,12 @@ export async function GET(request: Request) {
         .select('id', { count: 'exact', head: true })
         .eq('account_id', accountId)
         .neq('status', 'done'),
+      supabase
+        .from('callback_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('account_id', accountId)
+        .neq('status', 'done')
+        .eq('priority', 'high'),
     ]);
     const daily = Array.from({ length: DAYS }, (_, i) => ({
       date: new Date(seriesStart + i * DAY_MS - tz * 60_000).toISOString().slice(0, 10),
@@ -112,7 +120,7 @@ export async function GET(request: Request) {
           note_by_name: r.note_by ? callerNames.get(r.note_by as string) ?? null : null,
         };
       }),
-      stats: { open: open ?? 0, today, handled_today: handledToday ?? 0 },
+      stats: { open: open ?? 0, priority: priority ?? 0, today, handled_today: handledToday ?? 0 },
       daily,
     });
   } catch (error) {

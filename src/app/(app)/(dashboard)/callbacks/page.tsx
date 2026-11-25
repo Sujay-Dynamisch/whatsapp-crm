@@ -7,13 +7,18 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import {
+  AlarmClock,
+  CalendarClock,
   CheckCircle2,
   ChevronRight,
   Clock,
   Copy,
   CreditCard,
+  Flame,
+  Info,
   Loader2,
   MessageSquare,
+  PartyPopper,
   PhoneCall,
   PhoneMissed,
   PhoneOutgoing,
@@ -21,8 +26,10 @@ import {
   Repeat,
   RotateCcw,
   Search,
+  Sparkles,
   StickyNote,
   Trash2,
+  UserRound,
   X,
 } from 'lucide-react';
 
@@ -36,7 +43,7 @@ import { CallbackNoteDialog } from '@/components/callbacks/callback-note-dialog'
 import { CallbackDetailsSheet } from '@/components/callbacks/callback-details-sheet';
 import { TrashButton } from '@/components/trash/trash-sheet';
 type Status = 'new' | 'called' | 'no_answer' | 'done';
-type StatusFilter = 'open' | Status | 'all';
+type StatusFilter = 'open' | 'priority' | Status | 'all';
 type DayFilter = 'today' | 'yesterday' | 'week' | 'all';
 
 interface CallbackRequest {
@@ -65,7 +72,7 @@ interface CallbackRequest {
 
 interface Data {
   requests: CallbackRequest[];
-  stats: { open: number; today: number; handled_today: number };
+  stats: { open: number; priority?: number; today: number; handled_today: number };
   daily: { date: string; count: number }[];
 }
 
@@ -77,10 +84,20 @@ interface NoAnswerFollowUp {
   limit: number;
 }
 
-const STATUS_FILTERS: StatusFilter[] = ['open', 'new', 'called', 'no_answer', 'done', 'all'];
+const STATUS_FILTERS: StatusFilter[] = ['open', 'priority', 'new', 'called', 'no_answer', 'done', 'all'];
 const DAY_FILTERS: DayFilter[] = ['today', 'yesterday', 'week', 'all'];
 /** A new request older than this is highlighted as overdue. */
 const OVERDUE_MS = 2 * 3600_000;
+const PAGE_SIZE = 10;
+/** Big, easy-to-tap outcome buttons. */
+const OUTCOME_BTN = 'h-10 rounded-xl px-3.5 text-sm';
+
+const STATUS_ICON: Record<Status, typeof Clock> = {
+  new: Clock,
+  called: PhoneCall,
+  no_answer: PhoneMissed,
+  done: CheckCircle2,
+};
 
 const STATUS_BAR: Record<Status, string> = {
   new: 'bg-amber-500',
@@ -287,6 +304,254 @@ export default function CallbacksPage() {
   const maxDaily = useMemo(() => Math.max(1, ...(data?.daily ?? []).map((d) => d.count)), [data]);
   const now = Date.now();
 
+  // Show 10 at a time; resets when the filters change.
+  const filterKey = `${statusFilter}|${dayFilter}|${search}`;
+  const [page, setPage] = useState({ key: filterKey, n: PAGE_SIZE });
+  const visibleN = page.key === filterKey ? page.n : PAGE_SIZE;
+  // "Call next": the top open request (the API sorts Priority first, then oldest).
+  const nextUp = !search && statusFilter !== 'done' ? (data?.requests.find((r) => r.status !== 'done') ?? null) : null;
+  const rest = (data?.requests ?? []).filter((r) => r.id !== nextUp?.id);
+
+  function renderCard(r: CallbackRequest, hero: boolean) {
+    const name = r.contact_name || r.contact_phone || t('unknown');
+    const overdue = r.status === 'new' && now - Date.parse(r.requested_at) > OVERDUE_MS;
+    const busy = busyId === r.id;
+    const open = r.status !== 'done';
+    const priority = r.priority === 'high' && open;
+    const callDue = !!r.scheduled_for && Date.parse(r.scheduled_for) <= now;
+    const chip = 'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium';
+    const StatusIcon = STATUS_ICON[r.status];
+    return (
+      <article
+        aria-label={name}
+        onClick={() => setDetailsId(r.id)}
+        className={cn(
+          'relative cursor-pointer overflow-hidden rounded-2xl border bg-card transition-shadow hover:shadow-md',
+          hero ? 'border-primary/50 p-5 shadow-sm ring-4 ring-primary/10 sm:p-6' : 'p-4',
+          !hero && (overdue ? 'border-rose-500/50' : priority ? 'border-amber-500/60' : 'border-border'),
+          busy && 'opacity-60'
+        )}
+      >
+        <span className={cn('absolute inset-y-0 left-0 w-1.5', STATUS_BAR[r.status])} aria-hidden />
+        <div className="flex items-start gap-3 pl-1.5">
+          <div
+            className={cn(
+              'flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-violet-500 font-semibold text-white shadow-sm',
+              hero ? 'h-14 w-14 text-base' : 'h-12 w-12 text-sm'
+            )}
+            aria-hidden
+          >
+            {initials(name) || <PhoneCall className="h-5 w-5" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className={cn('truncate font-semibold text-foreground', hero ? 'text-xl' : 'text-base')}>{name}</p>
+                <span className={cn('mt-1 border', chip, STATUS_STYLE[r.status])}>
+                  <StatusIcon className="h-3.5 w-3.5" aria-hidden />
+                  {t(`status.${r.status}`)}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 shrink-0 rounded-lg text-primary"
+                aria-label={`Open details for ${name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDetailsId(r.id);
+                }}
+              >
+                Details <ChevronRight className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
+
+            {/* What needs attention — always words, never colour alone */}
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {priority && (
+                <span className={cn(chip, 'bg-amber-500 text-white')}>
+                  <Flame className="h-3.5 w-3.5" aria-hidden /> Customer asked for a call
+                </span>
+              )}
+              {overdue && (
+                <span className={cn(chip, 'bg-rose-500/15 text-rose-700 dark:text-rose-300')}>
+                  <AlarmClock className="h-3.5 w-3.5" aria-hidden /> Waiting 2+ hours
+                </span>
+              )}
+              {r.scheduled_for && open && (
+                <span
+                  className={cn(chip, callDue ? 'bg-rose-500 text-white' : 'bg-sky-500/15 text-sky-700 dark:text-sky-300')}
+                  title="The time the customer asked to be called"
+                >
+                  <CalendarClock className="h-3.5 w-3.5" aria-hidden />
+                  Call at {format(new Date(r.scheduled_for), 'h:mm a, EEE d MMM')}
+                  {callDue ? ' — now' : ''}
+                </span>
+              )}
+              {r.source_kind === 'engagement' && r.priority !== 'high' && (
+                <span className={cn(chip, 'border border-border text-muted-foreground')}>
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden /> New lead
+                </span>
+              )}
+              {r.source_kind === 'ai_inbox_text' && (
+                <span className={cn(chip, 'border border-violet-500/40 text-violet-700 dark:text-violet-300')}>
+                  <MessageSquare className="h-3.5 w-3.5" aria-hidden /> Asked in chat
+                  {r.ai_meta?.requested_time ? ` · ${r.ai_meta.requested_time}` : ''}
+                </span>
+              )}
+              {r.source_kind === 'ai_review' && open && (
+                <span className={cn(chip, 'border border-amber-500/50 text-amber-800 dark:text-amber-300')}>
+                  <Info className="h-3.5 w-3.5" aria-hidden /> Check the chat first
+                  {typeof r.ai_meta?.confidence === 'number' ? ` · ${Math.round(r.ai_meta.confidence * 100)}% sure` : ''}
+                </span>
+              )}
+              {(r.no_answer_count ?? 0) > 0 && (
+                <span className={cn(chip, 'border border-rose-500/30 text-rose-700 dark:text-rose-300')}>
+                  <PhoneMissed className="h-3.5 w-3.5" aria-hidden /> {t('noAnswerTimes', { count: r.no_answer_count ?? 0 })}
+                </span>
+              )}
+              {r.caller_name && (
+                <span className={cn(chip, 'border border-border text-muted-foreground')}>
+                  <UserRound className="h-3.5 w-3.5" aria-hidden /> {r.caller_name}
+                </span>
+              )}
+            </div>
+
+            {r.contact_phone && (
+              <div className="mt-2 flex items-center gap-1">
+                <a
+                  href={`tel:${r.contact_phone}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn('rounded-md font-semibold tracking-wide text-foreground tabular-nums hover:text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none', hero ? 'text-2xl' : 'text-lg')}
+                >
+                  {r.contact_phone}
+                </a>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void copy(r.contact_phone!);
+                  }}
+                  aria-label={t('copy')}
+                  className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            <p className={cn('mt-0.5 text-sm', overdue ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-muted-foreground')}>
+              {t('requested', {
+                when: formatDistanceToNow(new Date(r.requested_at), { addSuffix: true }),
+                time: format(new Date(r.requested_at), 'MMM d, h:mm a'),
+              })}
+            </p>
+            {r.source && (
+              <p className="mt-2.5 flex max-w-full items-start gap-1.5 rounded-xl bg-muted px-3 py-2 text-sm text-muted-foreground">
+                <span className="shrink-0">{t('said')}</span>
+                <span className="font-medium break-words text-foreground">“{r.source}”</span>
+              </p>
+            )}
+            {r.note && (
+              <div className="mt-2.5 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2">
+                <p className="flex items-start gap-1.5 text-sm text-foreground">
+                  <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+                  <span className="break-words">{r.note}</span>
+                </p>
+                {(r.note_by_name || r.note_at) && (
+                  <p className="mt-1 pl-5.5 text-xs text-muted-foreground">
+                    {r.note_by_name ? `— ${r.note_by_name}` : ''}
+                    {r.note_at ? `${r.note_by_name ? ' · ' : ''}${formatDistanceToNow(new Date(r.note_at), { addSuffix: true })}` : ''}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Actions: call first, then "what happened?", the rest under More */}
+        <div className="mt-4 space-y-3 border-t border-border pt-4" onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-wrap gap-2">
+            {r.contact_phone && (
+              <a
+                href={`tel:${r.contact_phone}`}
+                className={cn(buttonVariants(), 'h-11 flex-1 rounded-xl bg-emerald-600 px-5 text-base text-white hover:bg-emerald-700 sm:flex-none')}
+              >
+                <PhoneOutgoing className="h-4 w-4" aria-hidden />
+                {t('call')} {r.contact_name ? r.contact_name.split(' ')[0] : ''}
+              </a>
+            )}
+            {r.conversation_id && (
+              <Link href={`/inbox?c=${r.conversation_id}`} className={cn(buttonVariants({ variant: 'outline' }), 'h-11 flex-1 rounded-xl sm:flex-none')}>
+                <MessageSquare className="h-4 w-4" aria-hidden />
+                {t('openChat')}
+              </Link>
+            )}
+          </div>
+
+          {canSendMessages && (
+            <div className="flex flex-wrap items-center gap-2">
+              {open ? (
+                <>
+                  <span className="w-full text-xs font-medium text-muted-foreground sm:w-auto">After the call:</span>
+                  {r.status !== 'called' && (
+                    <Button variant="outline" disabled={busy} className={OUTCOME_BTN} onClick={() => void update(r, { status: 'called' }, t('markedCalled'))}>
+                      <PhoneCall className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden />
+                      {t('markCalled')}
+                    </Button>
+                  )}
+                  {/* Every "No answer" counts as an attempt (2nd → back to nurture). */}
+                  <Button variant="outline" disabled={busy} className={OUTCOME_BTN} onClick={() => void update(r, { status: 'no_answer' }, t('markedNoAnswer'))}>
+                    <PhoneMissed className="h-4 w-4 text-rose-600 dark:text-rose-400" aria-hidden />
+                    {(r.no_answer_count ?? 0) > 0 ? t('markNoAnswerAgain') : t('markNoAnswer')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    className={cn(OUTCOME_BTN, 'border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400')}
+                    onClick={() => void update(r, { status: 'done' }, t('markedDone'))}
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
+                    {t('markDone')}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" disabled={busy} className={OUTCOME_BTN} onClick={() => void update(r, { status: 'new' }, t('reopened'))}>
+                  <RotateCcw className="h-4 w-4" aria-hidden />
+                  {t('reopen')}
+                </Button>
+              )}
+              <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void editNote(r)}>
+                <StickyNote className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden />
+                {r.note ? t('editNote') : t('addNote')}
+              </Button>
+              <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void sendPaymentLink(r)}>
+                <CreditCard className="h-4 w-4 text-primary" aria-hidden />
+                Send payment link
+              </Button>
+              {open && (
+                <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void backToNurture(r)}>
+                  <Repeat className="h-4 w-4" aria-hidden />
+                  {t('backToNurture')}
+                </Button>
+              )}
+              {canManageMembers && (
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  className={cn(OUTCOME_BTN, 'ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive')}
+                  onClick={() => void remove(r)}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden />
+                  Delete
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </article>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -306,24 +571,25 @@ export default function CallbacksPage() {
         </div>
       </div>
 
-      {/* Headline numbers + 14-day trend, one strip */}
-      <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-border bg-card lg:grid-cols-[1fr_1fr_1fr_1.4fr]">
+      {/* Headline numbers (+ 14-day trend for owners/admins) */}
+      <div className={cn('grid gap-3', canManageMembers ? 'sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_1.4fr]' : 'grid-cols-3')}>
         {[
-          { label: t('statWaiting'), value: data?.stats.open, icon: Clock, tone: 'text-amber-500 bg-amber-500/10' },
-          { label: t('statToday'), value: data?.stats.today, icon: PhoneCall, tone: 'text-primary bg-primary/10' },
-          { label: t('statHandledToday'), value: data?.stats.handled_today, icon: CheckCircle2, tone: 'text-emerald-500 bg-emerald-500/10' },
-        ].map((s, i) => (
-          <div key={s.label} className={cn('flex items-center gap-3 px-4 py-3', i > 0 && 'border-l border-border')}>
-            <span className={cn('hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex', s.tone)}>
-              <s.icon className="h-4 w-4" />
+          { label: t('statWaiting'), value: data?.stats.open, icon: Clock, tone: 'text-amber-600 bg-amber-500/15 dark:text-amber-400' },
+          { label: t('statToday'), value: data?.stats.today, icon: PhoneCall, tone: 'text-primary bg-primary/15' },
+          { label: t('statHandledToday'), value: data?.stats.handled_today, icon: CheckCircle2, tone: 'text-emerald-600 bg-emerald-500/15 dark:text-emerald-400' },
+        ].map((s) => (
+          <div key={s.label} className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5">
+            <span className={cn('hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:flex', s.tone)} aria-hidden>
+              <s.icon className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-xl leading-tight font-bold tabular-nums text-foreground">{s.value ?? '—'}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{s.label}</p>
+              <p className="text-2xl leading-tight font-bold tabular-nums text-foreground">{s.value ?? '—'}</p>
+              <p className="text-xs leading-snug text-muted-foreground">{s.label}</p>
             </div>
           </div>
         ))}
-        <div className="col-span-3 flex items-center gap-3 border-t border-border px-4 py-3 lg:col-span-1 lg:border-t-0 lg:border-l">
+        {canManageMembers && (
+        <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 sm:col-span-3 lg:col-span-1">
           <div className="shrink-0">
             <p className="text-xl leading-tight font-bold tabular-nums text-foreground">
               {(data?.daily ?? []).reduce((n, d) => n + d.count, 0)}
@@ -347,284 +613,116 @@ export default function CallbacksPage() {
             ))}
           </div>
         </div>
+        )}
       </div>
 
-      {/* Toolbar: search · status · day */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full sm:w-64">
-          <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+      {/* Toolbar: search · who to show · when */}
+      <div className="space-y-3 rounded-2xl border border-border bg-card p-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('searchPlaceholder')}
-            className="h-8 rounded-full pr-8 pl-8 text-sm"
+            aria-label={t('searchPlaceholder')}
+            className="h-11 rounded-xl pr-10 pl-10 text-base sm:text-sm"
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery('')}
               aria-label={t('clearSearch')}
-              className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-4 w-4" />
             </button>
           )}
         </div>
-        {[
-          { items: STATUS_FILTERS, value: statusFilter, set: setStatusFilter, key: 'filter' },
-          { items: DAY_FILTERS, value: dayFilter, set: setDayFilter, key: 'day' },
-        ].map((g, gi) => (
-          <div
-            key={g.key}
-            className={cn('flex max-w-full gap-0.5 overflow-x-auto rounded-full border border-border bg-muted/40 p-0.5', gi === 1 && 'lg:ml-auto')}
-          >
-            {g.items.map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => (g.set as (v: string) => void)(f)}
-                className={cn(
-                  'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                  g.value === f ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {loading && g.value === f && <Loader2 className="h-3 w-3 animate-spin" />}
-                {t(`${g.key}.${f}`)}
-              </button>
-            ))}
-          </div>
-        ))}
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          {[
+            { items: STATUS_FILTERS, value: statusFilter, set: setStatusFilter, key: 'filter', label: 'Show' },
+            { items: DAY_FILTERS, value: dayFilter, set: setDayFilter, key: 'day', label: 'When' },
+          ].map((g) => (
+            <div key={g.key} className="flex min-w-0 items-center gap-2">
+              <span className="w-11 shrink-0 text-xs font-medium text-muted-foreground lg:w-auto">{g.label}</span>
+              <div role="group" aria-label={g.label} className="flex min-w-0 gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1">
+                {g.items.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    aria-pressed={g.value === f}
+                    onClick={() => (g.set as (v: string) => void)(f)}
+                    className={cn(
+                      'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none',
+                      g.value === f ? 'bg-background text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                    )}
+                  >
+                    {loading && g.value === f && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+                    {t(`${g.key}.${f}`)}
+                    {f === 'priority' && (data?.stats.priority ?? 0) > 0 && (
+                      <span className="rounded-full bg-amber-500 px-1.5 text-xs leading-5 font-semibold text-white tabular-nums">
+                        {data?.stats.priority}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* List */}
-      {data === null ? (
-        <div className="flex h-48 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        </div>
-      ) : loading && data.requests.length === 0 ? (
-        <div className="flex h-48 items-center justify-center">
+      {/* Call next + list */}
+      {data === null || (loading && data.requests.length === 0) ? (
+        <div className="flex h-48 items-center justify-center" role="status" aria-label={t('loading')}>
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
       ) : data.requests.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-10 text-center">
-          <PhoneCall className="mx-auto h-8 w-8 text-muted-foreground" />
-          <p className="mt-3 font-medium text-foreground">{search ? t('noResults') : t('emptyTitle')}</p>
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+            <PartyPopper className="h-7 w-7" aria-hidden />
+          </span>
+          <p className="mt-3 text-lg font-semibold text-foreground">{search ? t('noResults') : t('emptyTitle')}</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{t('emptyHint')}</p>
         </div>
       ) : (
-        <div className="relative">
-        {loading && (
-          <div className="absolute inset-x-0 top-2 z-10 flex justify-center">
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-popover px-3 py-1 text-xs text-muted-foreground shadow-md">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-              {t('loading')}
-            </span>
-          </div>
-        )}
-        <ul className={cn('grid gap-3 transition-opacity xl:grid-cols-2', loading && 'pointer-events-none opacity-50')}>
-          {data.requests.map((r) => {
-            const name = r.contact_name || r.contact_phone || t('unknown');
-            const overdue = r.status === 'new' && now - Date.parse(r.requested_at) > OVERDUE_MS;
-            const busy = busyId === r.id;
-            return (
-              <li
-                key={r.id}
-                role="button"
-                tabIndex={0}
-                aria-label={`Open details for ${name}`}
-                onClick={() => setDetailsId(r.id)}
-                onKeyDown={(e) => {
-                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                    e.preventDefault();
-                    setDetailsId(r.id);
-                  }
-                }}
-                className={cn(
-                  'group relative cursor-pointer overflow-hidden rounded-2xl border bg-card p-4 pl-5 transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none',
-                  overdue ? 'border-rose-500/50' : r.priority === 'high' && r.status !== 'done' ? 'border-amber-500/60' : 'border-border hover:border-primary/40',
-                  busy && 'opacity-60'
-                )}
-              >
-                <span className={cn('absolute inset-y-0 left-0 w-1', STATUS_BAR[r.status])} aria-hidden />
-                <span className="absolute top-4 right-4 hidden items-center gap-0.5 text-[11px] font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100 sm:inline-flex">
-                  View details <ChevronRight className="h-3.5 w-3.5" />
+        <div className={cn('relative space-y-5 transition-opacity', loading && 'pointer-events-none opacity-60')} aria-busy={loading}>
+          {loading && (
+            <div className="absolute inset-x-0 top-2 z-10 flex justify-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-popover px-3 py-1 text-xs text-muted-foreground shadow-md">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden />
+                {t('loading')}
+              </span>
+            </div>
+          )}
+          {nextUp && (
+            <section aria-labelledby="call-next">
+              <h2 id="call-next" className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+                <span className="relative flex h-2.5 w-2.5" aria-hidden>
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
                 </span>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-violet-500 text-sm font-semibold text-white shadow-sm">
-                    {initials(name) || <PhoneCall className="h-4 w-4" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-semibold text-foreground">{name}</p>
-                      <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium', STATUS_STYLE[r.status])}>
-                        {t(`status.${r.status}`)}
-                      </span>
-                      {r.priority === 'high' && r.status !== 'done' && (
-                        <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-semibold text-white">Priority</span>
-                      )}
-                      {r.source_kind === 'engagement' && r.priority !== 'high' && (
-                        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">New lead</span>
-                      )}
-                      {r.source_kind === 'ai_inbox_text' && (
-                        <span className="rounded-full border border-violet-500/40 px-2 py-0.5 text-[11px] text-violet-700 dark:text-violet-300">
-                          Typed request{r.ai_meta?.requested_time ? ` · ${r.ai_meta.requested_time}` : ''}
-                        </span>
-                      )}
-                      {r.source_kind === 'ai_review' && r.status !== 'done' && (
-                        <span className="rounded-full border border-amber-500/50 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
-                          Needs review{typeof r.ai_meta?.confidence === 'number' ? ` · ${Math.round(r.ai_meta.confidence * 100)}%` : ''}
-                        </span>
-                      )}
-                      {r.scheduled_for && r.status !== 'done' && (
-                        <span
-                          className={cn(
-                            'rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                            Date.parse(r.scheduled_for) <= now ? 'bg-rose-500 text-white' : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
-                          )}
-                          title="The time the customer asked to be called"
-                        >
-                          📅 Call at {format(new Date(r.scheduled_for), 'h:mm a, EEE d MMM')}
-                          {Date.parse(r.scheduled_for) <= now ? ' — now' : ''}
-                        </span>
-                      )}
-                      {r.caller_name && (
-                        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">{r.caller_name}</span>
-                      )}
-                      {(r.no_answer_count ?? 0) > 0 && (
-                        <span className="rounded-full border border-rose-500/30 px-2 py-0.5 text-[11px] text-rose-600 dark:text-rose-400">
-                          {t('noAnswerTimes', { count: r.no_answer_count ?? 0 })}
-                        </span>
-                      )}
-                    </div>
-                    {r.contact_phone && (
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <a
-                          href={`tel:${r.contact_phone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-lg font-semibold tracking-wide text-foreground tabular-nums hover:text-primary"
-                        >
-                          {r.contact_phone}
-                        </a>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void copy(r.contact_phone!);
-                          }}
-                          aria-label={t('copy')}
-                          className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
-                    <p className={cn('mt-1 text-xs', overdue ? 'font-medium text-rose-500' : 'text-muted-foreground')}>
-                      {overdue && '⚠ '}
-                      {t('requested', {
-                        when: formatDistanceToNow(new Date(r.requested_at), { addSuffix: true }),
-                        time: format(new Date(r.requested_at), 'MMM d, h:mm a'),
-                      })}
-                    </p>
-                    {r.source && (
-                      <p className="mt-2 inline-flex max-w-full items-center gap-1 rounded-lg bg-muted px-2 py-1 text-xs text-muted-foreground">
-                        <span className="shrink-0">{t('said')}</span>
-                        <span className="truncate font-medium text-foreground">“{r.source}”</span>
-                      </p>
-                    )}
-                    {r.note && (
-                      <div className="mt-2.5 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2">
-                        <p className="flex items-start gap-1.5 text-sm text-foreground">
-                          <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                          <span className="break-words">{r.note}</span>
-                        </p>
-                        {(r.note_by_name || r.note_at) && (
-                          <p className="mt-1 pl-5 text-[11px] text-muted-foreground">
-                            {r.note_by_name ? `— ${r.note_by_name}` : ''}
-                            {r.note_at ? `${r.note_by_name ? ' · ' : ''}${formatDistanceToNow(new Date(r.note_at), { addSuffix: true })}` : ''}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                Call next
+              </h2>
+              {renderCard(nextUp, true)}
+            </section>
+          )}
+          {rest.length > 0 && (
+            <section aria-labelledby="call-list">
+              <h2 id="call-list" className="mb-2 text-sm font-semibold text-foreground">
+                {nextUp ? 'After that' : t(`filter.${statusFilter}`)}{' '}
+                <span className="font-normal text-muted-foreground">({rest.length})</span>
+              </h2>
+              <ul className="space-y-3">{rest.slice(0, visibleN).map((r) => <li key={r.id}>{renderCard(r, false)}</li>)}</ul>
+              {rest.length > visibleN && (
+                <div className="mt-4 flex justify-center">
+                  <Button variant="outline" className="h-11 rounded-xl px-6" onClick={() => setPage({ key: filterKey, n: visibleN + PAGE_SIZE })}>
+                    Show more ({rest.length - visibleN} left)
+                  </Button>
                 </div>
-
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3" onClick={(e) => e.stopPropagation()}>
-                  {r.contact_phone && (
-                    <a href={`tel:${r.contact_phone}`} className={buttonVariants({ size: 'sm' })}>
-                      <PhoneOutgoing className="h-3.5 w-3.5" />
-                      {t('call')}
-                    </a>
-                  )}
-                  {r.conversation_id && (
-                    <Link href={`/inbox?c=${r.conversation_id}`} className={buttonVariants({ size: 'sm', variant: 'outline' })}>
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      {t('openChat')}
-                    </Link>
-                  )}
-                  {canSendMessages && (
-                    <>
-                      {r.status !== 'done' ? (
-                        <>
-                          {r.status !== 'called' && (
-                            <Button size="sm" variant="outline" disabled={busy} onClick={() => void update(r, { status: 'called' }, t('markedCalled'))}>
-                              <PhoneCall className="h-3.5 w-3.5" />
-                              {t('markCalled')}
-                            </Button>
-                          )}
-                          {/* Every "No answer" counts as an attempt (2nd → back to nurture). */}
-                          <Button size="sm" variant="outline" disabled={busy} onClick={() => void update(r, { status: 'no_answer' }, t('markedNoAnswer'))}>
-                            <PhoneMissed className="h-3.5 w-3.5" />
-                            {(r.no_answer_count ?? 0) > 0 ? t('markNoAnswerAgain') : t('markNoAnswer')}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busy}
-                            className="border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400"
-                            onClick={() => void update(r, { status: 'done' }, t('markedDone'))}
-                          >
-                            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                            {t('markDone')}
-                          </Button>
-                          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void backToNurture(r)}>
-                            <Repeat className="h-3.5 w-3.5" />
-                            {t('backToNurture')}
-                          </Button>
-                        </>
-                      ) : (
-                        /* Done only — Called / No answer are already in Waiting. */
-                        <Button size="sm" variant="ghost" disabled={busy} onClick={() => void update(r, { status: 'new' }, t('reopened'))}>
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          {t('reopen')}
-                        </Button>
-                      )}
-                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => void sendPaymentLink(r)}>
-                        <CreditCard className="h-3.5 w-3.5" />
-                        Send payment link
-                      </Button>
-                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => void editNote(r)}>
-                        <StickyNote className="h-3.5 w-3.5" />
-                        {r.note ? t('editNote') : t('addNote')}
-                      </Button>
-                      {canManageMembers && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={busy}
-                          aria-label="Delete request"
-                          className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => void remove(r)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+              )}
+            </section>
+          )}
         </div>
       )}
       {(() => {
