@@ -2634,6 +2634,7 @@
     },
     "filter": {
       "open": "Aguardando",
+      "priority": "🔥 Prioridade",
       "new": "Novos",
       "called": "Ligados",
       "no_answer": "Sem resposta",

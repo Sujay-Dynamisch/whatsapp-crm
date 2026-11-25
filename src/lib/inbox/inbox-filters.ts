@@ -57,9 +57,10 @@ export function applyInboxFilter(
       return conversations.filter((c) => isWindowClosing(c, now)).sort(byOldestInbound);
     case "unassigned":
       // Nobody on the chat AND the lead has no caller (086) — a lead given
-      // to a caller by round-robin is not "unassigned".
+      // to a caller by round-robin is not "unassigned". Only chats where the
+      // customer has written: bot-only chats (lead sync, journeys) need no one.
       return conversations.filter(
-        (c) => c.status === "open" && !c.assigned_agent_id && !c.contact?.assigned_caller_id,
+        (c) => c.status === "open" && !c.assigned_agent_id && !c.contact?.assigned_caller_id && !!c.last_inbound_at,
       );
     case "my_leads":
       // Chats assigned to me, or whose lead is mine as their caller.

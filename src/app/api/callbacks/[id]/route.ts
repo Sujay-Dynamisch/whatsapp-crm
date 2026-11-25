@@ -174,6 +174,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       update.note_by = update.note ? userId : null;
       update.note_at = update.note ? new Date().toISOString() : null;
     }
+    // The caller attended to it (Called / Done / wrote a note): it leaves the
+    // Priority queue. A fresh ask from the customer re-flags it (086/101).
+    if (body.status === 'called' || body.status === 'done' || update.note) {
+      update.priority = 'normal';
+    }
 
     const { data: row, error } = await supabase
       .from('callback_requests')

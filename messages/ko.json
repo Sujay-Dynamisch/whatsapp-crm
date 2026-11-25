@@ -2634,6 +2634,7 @@
     },
     "filter": {
       "open": "대기 중",
+      "priority": "🔥 우선순위",
       "new": "신규",
       "called": "통화함",
       "no_answer": "부재중",
