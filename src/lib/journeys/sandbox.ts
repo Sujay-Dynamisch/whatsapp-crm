@@ -41,8 +41,15 @@ const DEFAULT_MEMORY_BYTES = 32 * 1024 * 1024;
 const STACK_BYTES = 1024 * 1024;
 const MAX_OUTPUT_CHARS = 256 * 1024;
 const MAX_LOGS = 50;
-/** Extra time a worker gets for startup before it is killed. */
+/** Extra time a worker gets, once started, before it is killed. */
 const WORKER_GRACE_MS = 1_500;
+/**
+ * Time a worker may take to start (load QuickJS). A slow start is NOT the
+ * user's code being slow: many steps starting at once on a fresh cloud
+ * instance used to hit the run limit here and fail with "Code took too
+ * long". Past this, the step runs in-process instead.
+ */
+const WORKER_STARTUP_MS = 8_000;
 
 /** The script QuickJS evaluates: user code wrapped as a function body. */
 function buildSource(code: string, input: Record<string, unknown>): string {
@@ -95,6 +102,7 @@ const { parentPort, workerData } = require('node:worker_threads');
     parentPort.postMessage({ kind: 'unavailable', message: String(e && e.message || e) });
     return;
   }
+  parentPort.postMessage({ kind: 'ready' });
   try {
     const QuickJS = await core.newQuickJSWASMModuleFromVariant(variant);
     const runtime = QuickJS.newRuntime();
@@ -122,6 +130,7 @@ const { parentPort, workerData } = require('node:worker_threads');
 `;
 
 type WorkerReply = { kind: 'ok'; out: string } | { kind: 'error'; message: string } | { kind: 'unavailable'; message: string };
+type WorkerMessage = WorkerReply | { kind: 'ready' };
 
 function runInWorker(source: string, timeoutMs: number, memoryBytes: number): Promise<WorkerReply> {
   return new Promise((resolve, reject) => {
@@ -147,11 +156,20 @@ function runInWorker(source: string, timeoutMs: number, memoryBytes: number): Pr
       void worker.terminate();
       fn();
     };
-    const timer = setTimeout(
-      () => finish(() => reject(new Error('Code took too long and was stopped'))),
-      timeoutMs + WORKER_GRACE_MS
+    // Startup first: too slow to start → run in-process (not a code failure).
+    let timer = setTimeout(
+      () => finish(() => resolve({ kind: 'unavailable', message: `worker did not start within ${WORKER_STARTUP_MS} ms` })),
+      WORKER_STARTUP_MS
     );
-    worker.once('message', (msg: WorkerReply) => finish(() => resolve(msg)));
+    worker.on('message', (msg: WorkerMessage) => {
+      if (msg.kind === 'ready') {
+        // Started: now the code's own time limit applies.
+        clearTimeout(timer);
+        timer = setTimeout(() => finish(() => reject(new Error('Code took too long and was stopped'))), timeoutMs + WORKER_GRACE_MS);
+        return;
+      }
+      finish(() => resolve(msg));
+    });
     worker.once('error', (err: Error) => finish(() => reject(friendly(err.message))));
     worker.once('exit', (code) =>
       finish(() => reject(new Error(code === 0 ? 'Code ended without a result' : 'Code ran out of memory and was stopped')))
@@ -210,7 +228,7 @@ export async function runUserCode(
     const reply = await runInWorker(source, timeoutMs, memoryBytes);
     if (reply.kind === 'ok') return parseOutput(reply.out);
     if (reply.kind === 'error') throw friendly(reply.message);
-    workerUnavailable = true;
+    if (!reply.message.startsWith('worker did not start')) workerUnavailable = true;
     console.warn('[journeys/sandbox] worker unavailable, running code in-process:', reply.message);
   }
   return parseOutput(await runInProcess(source, timeoutMs, memoryBytes));
