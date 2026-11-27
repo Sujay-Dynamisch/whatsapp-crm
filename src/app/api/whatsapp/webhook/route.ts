@@ -22,6 +22,7 @@ import { readCappedBody } from '@/lib/whatsapp/webhook-body'
 import { resumeAwaitingReply, runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { clearNotOnWhatsApp } from '@/lib/contacts/not-on-whatsapp'
 import { recordButtonClick, requestCallbackFromTap } from '@/lib/whatsapp/button-clicks'
 import { detectCallbackIntent } from '@/lib/callbacks/intent'
 import { refreshQuality } from '@/lib/smart-sending/quality'
@@ -915,6 +916,10 @@ async function processMessage(
       accessToken,
     })
   )
+
+  // They just wrote to us on WhatsApp → the number IS on WhatsApp: lift a
+  // "not_on_whatsapp" mark (src/lib/contacts/not-on-whatsapp.ts).
+  await clearNotOnWhatsApp(supabaseAdmin(), accountId, contactRecord.id);
 
   // Journeys (migration 050): any customer message resumes their "wait
   // for reply" steps; a button tap can also start a journey. Never throws.

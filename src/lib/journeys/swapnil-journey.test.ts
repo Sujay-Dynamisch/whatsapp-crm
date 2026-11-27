@@ -1465,6 +1465,64 @@ describe('Webinar Schedule safety (098) and no duplicate sends', () => {
     expect(templates('sg_webinar_session_changed')[0].params?.slice(1, 3)).toEqual(['Mon, 2 Nov 2026', '9:00 PM IST']);
   });
 
+  it('rule 2: after the 2 PM cut-off with the next day scheduled → the next day', async () => {
+    tables.webinar_sessions = [session('2026-11-02 20:00'), session('2026-11-03 20:00')];
+    await register('2026-11-02 15:00');
+    expect(sent.at(-1)!.params?.slice(1, 3)).toEqual(['Tue, 3 Nov 2026', '8:00 PM IST']);
+  });
+
+  it('rule 3: after the cut-off with NO next session → today’s session (still 30+ min away)', async () => {
+    tables.webinar_sessions = [session('2026-11-02 20:00')];
+    await register('2026-11-02 15:00');
+    expect(sent.at(-1)!.params?.slice(1, 3)).toEqual(['Mon, 2 Nov 2026', '8:00 PM IST']);
+  });
+
+  it('rule 4: today’s session too close / over and no next one → queued silently, booked + confirmed once the admin adds a session', async () => {
+    tables.webinar_sessions = [session('2026-11-02 20:00')];
+    await register('2026-11-02 19:45');
+    expect(sent).toEqual([]); // no registration message yet
+    await runUntil('2026-11-03 09:00');
+    expect(sent).toEqual([]);
+    expect(run()).toMatchObject({ status: 'waiting', current_node_id: 'wait_session' });
+    tables.webinar_sessions.push(session('2026-11-03 20:00')); // admin adds Tuesday
+    await runUntil('2026-11-03 09:20');
+    expect(log()).toEqual([expect.stringMatching(/^Tue 03 09:(0\d|1[0-5]) sg_registration_confirmed$/)]); // within 15 min of the session being added
+    expect(sent.at(-1)!.params?.slice(1, 3)).toEqual(['Tue, 3 Nov 2026', '8:00 PM IST']);
+  });
+
+  it('a re-time before the cut-off never moves leads to an EARLIER day (Sat 3 PM → Sat 8 PM keeps Saturday)', async () => {
+    // Fri 6 Nov 8 PM and Sat 7 Nov 3 PM scheduled; registered Fri 2:30 PM → past Friday's cut-off → Sat 3 PM.
+    tables.webinar_sessions = [session('2026-11-06 20:00'), session('2026-11-07 15:00')];
+    await register('2026-11-06 14:30');
+    expect(sent.at(-1)!.params?.slice(1, 3)).toEqual(['Sat, 7 Nov 2026', '3:00 PM IST']);
+    await runUntil('2026-11-06 15:34');
+    tables.webinar_sessions[1].starts_at = ist('2026-11-07 20:00').toISOString(); // admin re-time
+    const { moveBookedRuns } = await import('./engine');
+    expect((await moveBookedRuns(db(), 'acct', '2026-11-07T15:00:00+05:30', deps)).moved).toBe(1);
+    // Not Friday 8 PM (earlier than they were booked) — Saturday at the new time.
+    expect(templates('sg_webinar_session_changed').at(-1)!.params?.slice(1, 3)).toEqual(['Sat, 7 Nov 2026', '8:00 PM IST']);
+  });
+
+  it('admin picks "the next scheduled session" on a re-time → a later day, not the re-timed one', async () => {
+    tables.webinar_sessions = [session('2026-11-06 20:00'), session('2026-11-07 15:00'), session('2026-11-08 15:00')];
+    await register('2026-11-06 14:30'); // → Sat 7 Nov 3 PM
+    await runUntil('2026-11-06 15:34');
+    tables.webinar_sessions[1].starts_at = ist('2026-11-07 20:00').toISOString();
+    const { moveBookedRuns } = await import('./engine');
+    await moveBookedRuns(db(), 'acct', '2026-11-07T15:00:00+05:30', deps, undefined, 'next');
+    expect(templates('sg_webinar_session_changed').at(-1)!.params?.slice(1, 3)).toEqual(['Sun, 8 Nov 2026', '3:00 PM IST']);
+    expect(run().context).toMatchObject({ vars: { move_target: '' } }); // cleared after use
+  });
+
+  it('admin picks a specific session → exactly that one', async () => {
+    tables.webinar_sessions = [session('2026-11-02 20:00'), session('2026-11-03 20:00'), session('2026-11-05 20:00')];
+    await register('2026-11-02 10:00'); // → Mon 8 PM
+    tables.webinar_sessions[0].status = 'cancelled';
+    const { moveBookedRuns } = await import('./engine');
+    await moveBookedRuns(db(), 'acct', '2026-11-02T20:00:00+05:30', deps, undefined, '2026-11-05T20:00:00+05:30');
+    expect(templates('sg_webinar_session_changed').at(-1)!.params?.slice(1, 3)).toEqual(['Thu, 5 Nov 2026', '8:00 PM IST']);
+  });
+
   it('the background move job moves booked leads and records its progress', async () => {
     tables.webinar_sessions = [session('2026-11-02 20:00', { status: 'cancelled' }), session('2026-11-04 20:00')];
     // Booked before the cancel (Monday was scheduled then).
@@ -1510,5 +1568,19 @@ describe('media without text', () => {
     const before = sent.length;
     expect(await dispatchJourneyInbound(db(), { accountId: 'acct', contactId: 'c1', text: null }, deps)).toBe(false);
     expect(sent.length).toBe(before);
+  });
+});
+
+// ============================================================
+// Numbers that are not on WhatsApp (131026) — journey stops
+// ============================================================
+describe('not on WhatsApp', () => {
+  it('a lead marked not_on_whatsapp gets no more journey messages (stops like STOP)', async () => {
+    await register('2026-11-02 10:00');
+    const before = sent.length;
+    addTag('c1', 'not_on_whatsapp');
+    await runUntil('2026-11-10 12:00');
+    expect(sent.length).toBe(before);
+    expect(run()).toMatchObject({ status: 'exited', last_error: 'Number not on WhatsApp' });
   });
 });

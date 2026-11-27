@@ -78,6 +78,8 @@ function makeDb(rpcResult: { data: unknown; error: unknown }) {
           select: () => chain,
           eq: () => chain,
           ilike: () => chain,
+          // getUnsubscribedContactIds: unsubscribe + not_on_whatsapp tags
+          or: () => Promise.resolve({ data: [], error: null }),
           maybeSingle: () => Promise.resolve({ data: null, error: null }),
         };
         return chain;

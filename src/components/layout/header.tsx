@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, PhoneCall, Settings as SettingsIcon, User } from "lucide-react";
+import { LogOut, Menu, PhoneCall, Settings as SettingsIcon, User, CalendarPlus } from "lucide-react";
 import { useOpenCallbacks } from "@/hooks/use-open-callbacks";
 import {
   Avatar,
@@ -50,6 +50,7 @@ interface HeaderProps {
 }
 
 import { useTranslations } from "next-intl";
+import { useWebinarGap } from "@/hooks/use-webinar-gap";
 
 export function Header({ onOpenSidebar }: HeaderProps) {
   const t = useTranslations("Header");
@@ -60,6 +61,8 @@ export function Header({ onOpenSidebar }: HeaderProps) {
   // the caller's own (RLS), or the whole account for owners/admins.
   const showPriority = hasFeature("caller_management") && hasFeature("callbacks") && can("callbacks");
   const priority = useOpenCallbacks(showPriority, { priorityOnly: true });
+  // Webinar Schedule: "add the next session" warning (admins — webinars access).
+  const gap = useWebinarGap(hasFeature("webinar_schedule") && can("webinars"));
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??
@@ -97,6 +100,23 @@ export function Header({ onOpenSidebar }: HeaderProps) {
             </span>
             <PhoneCall className="size-3.5" />
             {priority > 0 ? `${priority} priority callback${priority === 1 ? "" : "s"}` : "No priority callbacks"}
+          </Link>
+        )}
+        {/* Admins: the next webinar session isn't scheduled yet / leads are waiting for one. */}
+        {gap && (gap.nextDayMissing || gap.queued > 0) && (
+          <Link
+            href="/webinars"
+            title="Leads registering now need a session to be booked into"
+            className="ml-2 flex shrink-0 items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-500/90"
+          >
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-white/80" />
+              <span className="relative inline-flex size-2 rounded-full bg-white" />
+            </span>
+            <CalendarPlus className="size-3.5" />
+            {gap.queued > 0
+              ? `${gap.queued} waiting — add the next session`
+              : `Add the session for ${gap.nextDayLabel}`}
           </Link>
         )}
       </div>

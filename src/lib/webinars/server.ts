@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ForbiddenError, getCurrentAccount, type AccountContext } from '@/lib/auth/account';
 import { atLeast, callersLevel, parseAccess, type AccessLevel } from '@/lib/auth/permissions';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
+import { toIstIso } from '@/lib/journeys/webinar';
 
 export async function requireWebinarAccess(level: AccessLevel): Promise<AccountContext & { admin: SupabaseClient }> {
   const ctx = await getCurrentAccount();
@@ -120,4 +121,57 @@ export function sessionLabel(startsAt: string): string {
     minute: '2-digit',
     timeZone: 'Asia/Kolkata',
   });
+}
+
+/**
+ * Where an admin's change sends the session's booked leads — shared by the
+ * preview (POST) and the change (PATCH) so what the confirmation says is
+ * what the move job does (engine moveBookedRuns → journey schedule step).
+ *   'same'  re-time only: this session at its new time (default for a re-time)
+ *   'next'  the next scheduled session on a later day (default for a cancel)
+ *   <uuid>  that exact upcoming session
+ * `target` is what the move job stores (migration 107): null = this session
+ * at the new time, 'next', or the chosen session's IST ISO start.
+ */
+export async function resolveMoveTarget(
+  db: SupabaseClient,
+  accountId: string,
+  session: { id: string; starts_at: string },
+  action: 'cancel' | 'time',
+  moveTo: unknown,
+  newStartUtc: string | null
+): Promise<{ target: string | null; goesTo: string | null; error: string | null }> {
+  const choice = typeof moveTo === 'string' && moveTo ? moveTo : action === 'time' ? 'same' : 'next';
+  const soonest = Date.now() + 30 * 60_000;
+  if (choice === 'same') {
+    if (action !== 'time' || !newStartUtc) return { target: null, goesTo: null, error: 'Pick where to move the booked leads.' };
+    return { target: null, goesTo: sessionLabel(newStartUtc), error: null };
+  }
+  if (choice === 'next') {
+    // A later day than the one they were booked for (IST).
+    const IST = 5.5 * 3600e3;
+    const dayAfter = Math.floor((Date.parse(session.starts_at) + IST) / 864e5) * 864e5 + 864e5 - IST;
+    const { data } = await db
+      .from('webinar_sessions')
+      .select('id, starts_at')
+      .eq('account_id', accountId)
+      .eq('status', 'scheduled')
+      .neq('id', session.id)
+      .gte('starts_at', new Date(Math.max(dayAfter, soonest)).toISOString())
+      .order('starts_at', { ascending: true })
+      .limit(1);
+    const next = data?.[0] as { starts_at: string } | undefined;
+    if (!next) return { target: null, goesTo: null, error: 'There is no later session scheduled. Add the next session first.' };
+    return { target: 'next', goesTo: sessionLabel(next.starts_at), error: null };
+  }
+  const { data: picked } = await db
+    .from('webinar_sessions')
+    .select('id, starts_at, status')
+    .eq('id', choice)
+    .eq('account_id', accountId)
+    .maybeSingle();
+  if (!picked || picked.status !== 'scheduled' || picked.id === session.id || Date.parse(picked.starts_at as string) < soonest) {
+    return { target: null, goesTo: null, error: 'Pick a scheduled session at least 30 minutes from now.' };
+  }
+  return { target: toIstIso(picked.starts_at as string), goesTo: sessionLabel(picked.starts_at as string), error: null };
 }

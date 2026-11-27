@@ -169,6 +169,7 @@ const PATH_RULES: { prefix: string; area: Area; exact?: boolean }[] = [
   { prefix: '/api/ai', area: 'ai_agents' },
   { prefix: '/api/language-settings', area: 'settings' },
   { prefix: '/api/callbacks', area: 'callbacks' },
+  { prefix: '/api/not-on-whatsapp', area: 'callbacks' },
   { prefix: '/api/payments', area: 'payments' },
   { prefix: '/api/conversions', area: 'payments' },
   { prefix: '/api/callers', area: 'callers' },

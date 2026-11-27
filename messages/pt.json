@@ -2693,6 +2693,7 @@
       "not_in_journey": "Nunca esteve em uma jornada, então nenhuma mensagem foi enviada.",
       "not_configured": "A jornada não tem etapa de acompanhamento de retorno.",
       "opted_out": "Cancelou (STOP) — nenhuma mensagem enviada.",
+      "not_on_whatsapp": "Not on WhatsApp — no message sent. Call them and ask for their WhatsApp number.",
       "closed": "Marcado como pago/fechado — nenhuma mensagem enviada.",
       "busy": "A jornada está ocupada agora — tente de novo em um minuto.",
       "start_failed": "Não foi possível reiniciar a jornada — tente de novo."

@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
+import { NOT_ON_WHATSAPP_TAG } from '@/lib/contacts/not-on-whatsapp';
 
 const STATUSES = ['new', 'called', 'no_answer', 'done'];
 const DAYS = 14;
@@ -30,6 +31,16 @@ async function withNames(supabase: Awaited<ReturnType<typeof getCurrentAccount>>
     const { data: profs } = await supabase.from('profiles').select('user_id, full_name').in('user_id', callerIds);
     for (const p of profs ?? []) callerNames.set(p.user_id as string, (p.full_name as string) || '');
   }
+  // Numbers not on WhatsApp (not-on-whatsapp.ts): the card says "call only".
+  const noWa = new Set<string>();
+  const contactIds = [...new Set(rows.map((r) => r.contact_id as string).filter(Boolean))];
+  if (contactIds.length) {
+    const { data: tag } = await supabase.from('tags').select('id').ilike('name', NOT_ON_WHATSAPP_TAG).limit(1).maybeSingle();
+    if (tag) {
+      const { data: links } = await supabase.from('contact_tags').select('contact_id').eq('tag_id', tag.id).in('contact_id', contactIds);
+      for (const l of links ?? []) noWa.add(l.contact_id as string);
+    }
+  }
   return rows.map((r) => {
     const c = (Array.isArray(r.contacts) ? r.contacts[0] : r.contacts) as { name?: string; phone?: string } | null;
     return {
@@ -37,6 +48,7 @@ async function withNames(supabase: Awaited<ReturnType<typeof getCurrentAccount>>
       contacts: undefined,
       contact_name: c?.name ?? null,
       contact_phone: c?.phone ?? null,
+      not_on_whatsapp: noWa.has(r.contact_id as string),
       caller_name: r.assigned_caller_id ? callerNames.get(r.assigned_caller_id) ?? null : null,
       note_by_name: r.note_by ? callerNames.get(r.note_by) ?? null : null,
     };

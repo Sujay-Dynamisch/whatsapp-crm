@@ -264,6 +264,7 @@ export function ContactDetailView({
     setSavingTags(false);
   }
 
+  const notOnWhatsapp = allTags.some((t) => contactTagIds.includes(t.id) && t.name.toLowerCase() === 'not_on_whatsapp');
   const isUnsubscribed = Boolean(
     allTags.find(
       (t) => contactTagIds.includes(t.id) && t.name.toLowerCase() === 'unsubscribe'
@@ -451,6 +452,12 @@ export function ContactDetailView({
                       <span className="inline-flex items-center gap-1 rounded bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-400 border border-red-500/30">
                         <Ban className="size-3" />
                         Unsubscribed
+                      </span>
+                    )}
+                    {notOnWhatsapp && (
+                      <span title="WhatsApp messages can't reach this number — call them" className="inline-flex items-center gap-1 rounded bg-slate-500/20 px-2 py-0.5 text-[10px] font-bold text-slate-300 border border-slate-500/30">
+                        <Ban className="size-3" />
+                        Not on WhatsApp — call only
                       </span>
                     )}
                   </div>

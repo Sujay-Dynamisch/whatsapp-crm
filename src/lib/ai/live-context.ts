@@ -48,6 +48,8 @@ async function scheduleSection(db: SupabaseClient, accountId: string, now: Date,
 }
 
 const STAGE_HINTS: [RegExp, string][] = [
+  // Queued: no session could be booked yet (journey 'wait_session').
+  [/^(wait_session|queue_mark|is_queued)$/, 'registered, WAITING for the next webinar session to be scheduled — no date yet: never give a date or link; say the team will share the next session shortly and offer a callback'],
   [/^(wait_msg|t2_|t1_|tag_registered|wait_checkin|schedule|is_moved|t6_|clear_moved)/, 'registered, waiting for their webinar session'],
   [/^(reply_menu|menu|t3_|mark_menu|revive)/, 'webinar done — was sent the post-webinar check-in menu'],
   [/^(pay_|reply_pay|tag_paylink)/, 'got the payment link, deciding'],

@@ -41,6 +41,7 @@ import {
 import { runWindowKeepalive } from '@/lib/conversations/window-keepalive';
 import { ENGINE_VERSION, runJourneyTick, runWebinarMoves } from '@/lib/journeys/engine';
 import { liveJourneyDeps } from '@/lib/journeys/dispatch';
+import { runWebinarGapAlerts } from '@/lib/webinars/gap';
 import { runCallbackFollowUps } from '@/lib/callbacks/followups';
 import { runScheduledResends } from '@/lib/failed-messages/service';
 import { TICK_HEARTBEAT, recordHeartbeat, runDailySummaries } from '@/lib/health/health';
@@ -218,6 +219,11 @@ export async function journeyTick(req: Req, res: Res): Promise<void> {
     const webinarMoves = await runWebinarMoves(s.db, liveJourneyDeps).catch((err) => ({
       error: err instanceof Error ? err.message : String(err),
     }));
+    // Webinar Schedule: remind admins (1 PM / 2 PM IST, and while leads are
+    // queued) to add the next session when it is missing.
+    const webinarGapAlerts = await runWebinarGapAlerts(s.db).catch((err) => ({
+      error: err instanceof Error ? err.message : String(err),
+    }));
     const report = await runJourneyTick(s.db, liveJourneyDeps);
     // Callback reminders (4h) and the 48h "No answer" → nurture rule.
     const callbacks = await runCallbackFollowUps(s.db, liveJourneyDeps).catch((err) => ({
@@ -232,7 +238,7 @@ export async function journeyTick(req: Req, res: Res): Promise<void> {
     }));
     // Last: proves this tick ran end to end (the app warns after 10 min without).
     await recordHeartbeat(s.db, TICK_HEARTBEAT, { claimed: report.claimed, errors: report.errors.length, engine: ENGINE_VERSION });
-    console.log(JSON.stringify({ fn: 'journeyTick', ...report, webinarMoves, leadSync, callbacks, resends, health }));
+    console.log(JSON.stringify({ fn: 'journeyTick', ...report, webinarMoves, webinarGapAlerts, leadSync, callbacks, resends, health }));
     res.status(200).json(report);
   } catch (err) {
     console.error('[journeyTick]', err);
