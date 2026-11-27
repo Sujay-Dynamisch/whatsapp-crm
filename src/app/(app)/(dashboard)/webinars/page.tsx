@@ -63,6 +63,7 @@ interface PageData {
   low: boolean;
   readiness?: Readiness;
   orphans?: number;
+  gap?: { nextDayMissing: boolean; nextDayLabel: string; queued: number } | null;
   moves?: MoveJob[];
   changes?: Change[];
 }
@@ -150,12 +151,63 @@ export default function WebinarsPage() {
     return () => window.clearInterval(t);
   }, [moving, load]);
 
+  /**
+   * Leads are booked: the admin picks where they go — this session at its
+   * new time (re-time only), the next scheduled session, or a specific one.
+   * Returns the choice (`move_to`), or null when the dialog was closed.
+   */
+  const pickDestination = async (s: Session, action: 'cancel' | 'time'): Promise<string | null> => {
+    const soonest = Date.now() + 30 * 60_000;
+    const others = (data?.sessions ?? []).filter(
+      (x) => x.id !== s.id && x.status === 'scheduled' && Date.parse(x.starts_at) >= soonest
+    );
+    let choice = action === 'time' ? 'same' : 'next';
+    const ok = await confirmDialog({
+      title: 'Where should the booked leads go?',
+      description: (
+        <span className="block space-y-2">
+          <span className="block">Their reminders are re-timed and each gets one &ldquo;session changed&rdquo; message.</span>
+          <select
+            className={SELECT}
+            defaultValue={choice}
+            onChange={(e) => {
+              choice = e.target.value;
+            }}
+          >
+            {action === 'time' && <option value="same">This session, at the new time</option>}
+            <option value="next">The next scheduled session (a later day)</option>
+            {others.map((x) => (
+              <option key={x.id} value={x.id}>
+                {fmtDate(istDate(x.start_iso))}, {fmtTime(istTime(x.start_iso))}
+              </option>
+            ))}
+          </select>
+        </span>
+      ),
+      confirmLabel: 'Continue',
+    });
+    return ok ? choice : null;
+  };
+
   /** Impact preview → a clear refusal, or a confirmation that spells out the effect. */
-  const confirmImpact = async (s: Session, action: 'cancel' | 'time', title: string, confirmLabel: string, extra?: { date: string; time: string }) => {
-    const p = await api<Preview>(`/api/webinars/${s.id}`, { method: 'POST', body: JSON.stringify({ action, ...extra }) });
+  const confirmImpact = async (
+    s: Session,
+    action: 'cancel' | 'time',
+    title: string,
+    confirmLabel: string,
+    extra?: { date: string; time: string }
+  ): Promise<{ ok: boolean; moveTo?: string }> => {
+    // Open the destination picker at once from the booked count the page
+    // already has (no server round-trip first), then ONE preview with the choice.
+    let moveTo: string | undefined;
+    if (s.booked > 0) {
+      moveTo = (await pickDestination(s, action)) ?? undefined;
+      if (!moveTo) return { ok: false };
+    }
+    const p = await api<Preview>(`/api/webinars/${s.id}`, { method: 'POST', body: JSON.stringify({ action, ...extra, move_to: moveTo }) });
     if (p.blocked) {
       await confirmDialog({ title: 'This change is not allowed', description: p.blocked, confirmLabel: 'OK' });
-      return false;
+      return { ok: false };
     }
     const lines =
       p.booked === 0
@@ -169,7 +221,7 @@ export default function WebinarsPage() {
               : 'No "session changed" message can be sent — the template is not approved yet.',
             ...p.warnings,
           ];
-    return confirmDialog({
+    const ok = await confirmDialog({
       title,
       description: (
         <span className="block space-y-2">
@@ -183,6 +235,7 @@ export default function WebinarsPage() {
       confirmLabel,
       destructive: action === 'cancel',
     });
+    return { ok, moveTo };
   };
 
   // IST dates that already have a scheduled session, and the first free
@@ -233,25 +286,29 @@ export default function WebinarsPage() {
     });
 
   const cancel = async (s: Session) => {
+    let cancelMoveTo: string | undefined;
     try {
-      const ok = await confirmImpact(s, 'cancel', `Cancel ${fmtDate(istDate(s.start_iso))}, ${fmtTime(istTime(s.start_iso))}?`, 'Cancel session');
-      if (!ok) return;
+      const c = await confirmImpact(s, 'cancel', `Cancel ${fmtDate(istDate(s.start_iso))}, ${fmtTime(istTime(s.start_iso))}?`, 'Cancel session');
+      if (!c.ok) return;
+      cancelMoveTo = c.moveTo;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not check this change');
       return;
     }
     await run(`c-${s.id}`, async () => {
-      const r = await api<{ booked: number; jobId: string | null }>(`/api/webinars/${s.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
+      const r = await api<{ booked: number; jobId: string | null }>(`/api/webinars/${s.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled', move_to: cancelMoveTo }) });
       toast.success(r.jobId ? `Session cancelled — moving ${r.booked} lead${r.booked === 1 ? '' : 's'} (see progress below)` : 'Session cancelled');
     });
   };
 
   const saveEdit = async (s: Session) => {
     const timeChanged = edit.date !== istDate(s.start_iso) || edit.time !== istTime(s.start_iso);
+    let editMoveTo: string | undefined;
     if (timeChanged) {
       try {
-        const ok = await confirmImpact(s, 'time', 'Change the session time?', 'Change time', { date: edit.date, time: edit.time });
-        if (!ok) return;
+        const c = await confirmImpact(s, 'time', 'Change the session time?', 'Change time', { date: edit.date, time: edit.time });
+        if (!c.ok) return;
+        editMoveTo = c.moveTo;
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Could not check this change');
         return;
@@ -260,7 +317,7 @@ export default function WebinarsPage() {
     await run(`e-${s.id}`, async () => {
       const r = await api<{ booked: number; jobId: string | null; linkSynced: number }>(`/api/webinars/${s.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ date: edit.date, time: edit.time, link: edit.link }),
+        body: JSON.stringify({ date: edit.date, time: edit.time, link: edit.link, move_to: editMoveTo }),
       });
       setEditing(null);
       toast.success(
@@ -330,6 +387,17 @@ export default function WebinarsPage() {
         <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>{data.readiness.warnings.join(' ')}</span>
+        </div>
+      )}
+      {data.gap && (data.gap.nextDayMissing || data.gap.queued > 0) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-700 dark:text-red-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>
+            {data.gap.queued > 0
+              ? `${data.gap.queued} lead${data.gap.queued === 1 ? ' is' : 's are'} waiting for the next session — they get their registration message as soon as you add one. `
+              : ''}
+            {data.gap.nextDayMissing ? `No session is scheduled for ${data.gap.nextDayLabel} — add it below.` : ''}
+          </span>
         </div>
       )}
       {canEdit && (data.orphans ?? 0) > 0 && (

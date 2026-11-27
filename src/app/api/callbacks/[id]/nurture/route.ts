@@ -17,6 +17,7 @@ const WHY: Record<FollowUpReason, string> = {
   not_in_journey: 'This lead has never been in a journey with a nurture to go back to',
   not_configured: 'Their journey has no nurture step set for callbacks',
   opted_out: 'This lead opted out (STOP) — no more messages',
+  not_on_whatsapp: 'This number is not on WhatsApp — call them instead',
   closed: 'This lead is marked paid / closed',
   busy: 'Their journey is running a step right now — try again in a minute',
   start_failed: 'Could not restart their journey — try again',

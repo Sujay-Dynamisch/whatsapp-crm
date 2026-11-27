@@ -2693,6 +2693,7 @@
       "not_in_journey": "They were never in a journey, so no message was sent.",
       "not_configured": "Their journey has no callback follow-up step.",
       "opted_out": "They opted out (STOP) — no message sent.",
+      "not_on_whatsapp": "Not on WhatsApp — no message sent. Call them and ask for their WhatsApp number.",
       "closed": "They're marked paid / closed — no message sent.",
       "busy": "Their journey is busy right now — try again in a minute.",
       "start_failed": "Could not restart their journey — try again."

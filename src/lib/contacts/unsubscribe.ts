@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Contact, Tag } from '@/types';
 import { addContactTagIfAbsent, removeContactTag } from './tag-write';
+import { NOT_ON_WHATSAPP_TAG } from './not-on-whatsapp';
 
 export const UNSUBSCRIBE_TAG_NAME = 'unsubscribe';
 
@@ -131,19 +132,26 @@ export async function getUnsubscribedContactIds(
   db: SupabaseClient,
   accountId: string
 ): Promise<Set<string>> {
-  const { data: tag } = await db
+  // Also numbers that are not on WhatsApp (not-on-whatsapp.ts): a message
+  // to them can never arrive, so every bulk sender skips them too.
+  const { data: tags } = await db
     .from('tags')
     .select('id')
     .eq('account_id', accountId)
-    .ilike('name', UNSUBSCRIBE_TAG_NAME)
-    .maybeSingle();
+    .or(`name.ilike.${UNSUBSCRIBE_TAG_NAME},name.ilike.${NOT_ON_WHATSAPP_TAG}`);
 
-  if (!tag) return new Set();
+  if (!tags?.length) return new Set();
 
-  const { data: rows } = await db
-    .from('contact_tags')
-    .select('contact_id')
-    .eq('tag_id', tag.id);
-
-  return new Set((rows ?? []).map((r) => r.contact_id));
+  const out = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const { data: rows } = await db
+      .from('contact_tags')
+      .select('contact_id')
+      .in('tag_id', tags.map((t) => t.id))
+      .order('contact_id')
+      .range(from, from + 999);
+    for (const r of rows ?? []) out.add(r.contact_id);
+    if (!rows || rows.length < 1000) break;
+  }
+  return out;
 }

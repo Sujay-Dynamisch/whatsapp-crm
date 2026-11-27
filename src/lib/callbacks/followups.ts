@@ -22,6 +22,7 @@ import { accountHasFeature } from '@/lib/features-server';
 import { enrollContact, type JourneyDeps, type JourneyRow } from '@/lib/journeys/engine';
 import { findTrigger, type TriggerConfig } from '@/lib/journeys/graph';
 import { carriedContext } from '@/lib/journeys/restart';
+import { NOT_ON_WHATSAPP_TAG } from '@/lib/contacts/not-on-whatsapp';
 
 export const CALLBACK_TAG = 'callback_requested';
 /** A request still "New" this long gets a reminder. */
@@ -35,6 +36,7 @@ export type FollowUpReason =
   | 'not_in_journey' // the lead never ran a journey with callback follow-ups
   | 'not_configured' // that journey has no step for this follow-up
   | 'opted_out'
+  | 'not_on_whatsapp' // number has no WhatsApp (not-on-whatsapp.ts) — phone only
   | 'closed' // paid / closed (one of the journey's exit tags)
   | 'busy' // their run is executing a step right now — try again
   | 'start_failed';
@@ -96,6 +98,7 @@ async function blocked(db: SupabaseClient, journey: JourneyRow, contactId: strin
   for (const row of (data ?? []) as { tag_id: string; tags?: { name?: string } | { name?: string }[] | null }[]) {
     const t = Array.isArray(row.tags) ? row.tags[0] : row.tags;
     if ((t?.name ?? '').trim().toLowerCase() === 'unsubscribe') return 'opted_out';
+    if ((t?.name ?? '').trim().toLowerCase() === NOT_ON_WHATSAPP_TAG) return 'not_on_whatsapp';
     if (exit.includes(row.tag_id)) return 'closed';
   }
   return null;

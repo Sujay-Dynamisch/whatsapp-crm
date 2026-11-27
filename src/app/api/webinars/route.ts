@@ -12,6 +12,7 @@ import { toErrorResponse } from '@/lib/auth/account';
 import { bookedImpact, countBookedRuns, orphanBookedIsos } from '@/lib/journeys/engine';
 import { loadWebinarRules, toIstIso } from '@/lib/journeys/webinar';
 import { DATE_RE, TIME_RE, istToUtc, isWeekendDate, logWebinarChange, requireWebinarAccess, webinarReadiness } from '@/lib/webinars/server';
+import { webinarGap } from '@/lib/webinars/gap';
 
 export async function GET() {
   try {
@@ -59,6 +60,8 @@ export async function GET() {
       low: upcomingCount < 3,
       readiness: await webinarReadiness(admin, accountId),
       orphans,
+      // "Add the next session" state (shared with the header warning / admin reminders).
+      gap: await webinarGap(admin, accountId).catch(() => null),
       moves: moves ?? [],
       changes: (changes ?? []).map((c) => ({ ...c, actor: nameOf.get(c.actor_id as string) ?? null })),
     });

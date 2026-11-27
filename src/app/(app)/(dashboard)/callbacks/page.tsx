@@ -22,6 +22,7 @@ import {
   PartyPopper,
   PhoneCall,
   PhoneMissed,
+  PhoneOff,
   PhoneOutgoing,
   RefreshCw,
   Repeat,
@@ -45,6 +46,7 @@ import { cn } from '@/lib/utils';
 import { CallbackNoteDialog } from '@/components/callbacks/callback-note-dialog';
 import { CallbackDetailsSheet } from '@/components/callbacks/callback-details-sheet';
 import { TrashButton } from '@/components/trash/trash-sheet';
+import { NotOnWhatsappPanel } from '@/components/callbacks/not-on-whatsapp-panel';
 type Status = 'new' | 'called' | 'no_answer' | 'done';
 type StatusFilter = 'open' | 'priority' | Status | 'all';
 type DayFilter = 'today' | 'yesterday' | 'week' | 'all';
@@ -71,6 +73,8 @@ interface CallbackRequest {
   scheduled_for?: string | null;
   contact_name: string | null;
   contact_phone: string | null;
+  /** Number has no WhatsApp — phone only (not-on-whatsapp.ts). */
+  not_on_whatsapp?: boolean;
 }
 
 interface Data {
@@ -81,7 +85,7 @@ interface Data {
   daily: { date: string; count: number }[];
 }
 
-type FollowUpReason = 'not_in_journey' | 'not_configured' | 'opted_out' | 'closed' | 'busy' | 'start_failed';
+type FollowUpReason = 'not_in_journey' | 'not_configured' | 'opted_out' | 'not_on_whatsapp' | 'closed' | 'busy' | 'start_failed';
 interface NoAnswerFollowUp {
   action: 'messaged' | 'returned' | 'none';
   reason?: FollowUpReason;
@@ -161,6 +165,8 @@ export default function CallbacksPage() {
   const { canSendMessages, canManageMembers } = useAuth();
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<'requests' | 'nowa'>('requests');
+  const [nowaCount, setNowaCount] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
   const [dayFilter, setDayFilter] = useState<DayFilter>('all');
   const [query, setQuery] = useState('');
@@ -401,6 +407,17 @@ export default function CallbacksPage() {
   const maxDaily = useMemo(() => Math.max(1, ...(data?.daily ?? []).map((d) => d.count)), [data]);
   const now = Date.now();
 
+  useEffect(() => {
+    let live = true;
+    fetch('/api/not-on-whatsapp')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => live && j && setNowaCount((j.leads ?? []).length))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
   // Show 10 at a time; resets when the filters change.
   const filterKey = `${statusFilter}|${dayFilter}|${search}`;
   const [page, setPage] = useState({ key: filterKey, n: PAGE_SIZE });
@@ -450,6 +467,14 @@ export default function CallbacksPage() {
                   <StatusIcon className="h-3.5 w-3.5" aria-hidden />
                   {t(`status.${r.status}`)}
                 </span>
+                {r.not_on_whatsapp && (
+                  <Hint text="WhatsApp messages can't reach this number. Call them and ask for their WhatsApp number (see the Not on WhatsApp tab).">
+                    <span className={cn('mt-1 ml-1.5 border border-slate-500/40 bg-slate-500/10 text-slate-600 dark:text-slate-300', chip)}>
+                      <PhoneOff className="h-3.5 w-3.5" aria-hidden />
+                      Not on WhatsApp — call only
+                    </span>
+                  </Hint>
+                )}
               </div>
               <Hint text="See this person's full history, tags and notes.">
                 <Button
@@ -585,7 +610,7 @@ export default function CallbacksPage() {
                 </a>
               </Hint>
             )}
-            {r.conversation_id && (
+            {r.conversation_id && !r.not_on_whatsapp && (
               <Hint text="See and reply to their WhatsApp messages in the Inbox.">
                 <Link href={`/inbox?c=${r.conversation_id}`} className={cn(buttonVariants({ variant: 'outline' }), 'h-11 flex-1 rounded-xl sm:flex-none')}>
                   <MessageSquare className="h-4 w-4" aria-hidden />
@@ -641,6 +666,7 @@ export default function CallbacksPage() {
                   {r.note ? t('editNote') : t('addNote')}
                 </Button>
               </Hint>
+              {!r.not_on_whatsapp && (<>
               <Hint text="Sends the payment link to this person on WhatsApp right now.">
                 <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void sendPaymentLink(r)}>
                   <CreditCard className="h-4 w-4 text-primary" aria-hidden />
@@ -653,6 +679,7 @@ export default function CallbacksPage() {
                   Send callback request message
                 </Button>
               </Hint>
+              </>)}
               {open && r.status !== 'called' && (!priority || canManageMembers) && (
                 <Hint
                   text={
@@ -672,7 +699,7 @@ export default function CallbacksPage() {
                   </Button>
                 </Hint>
               )}
-              {open && (
+              {open && !r.not_on_whatsapp && (
                 <Hint text="Stop calling this lead. Automatic WhatsApp messages will follow up instead.">
                   <Button variant="ghost" disabled={busy} className={OUTCOME_BTN} onClick={() => void backToNurture(r)}>
                     <Repeat className="h-4 w-4" aria-hidden />
@@ -721,6 +748,37 @@ export default function CallbacksPage() {
         </div>
       </div>
 
+      {/* Tabs: callback requests · numbers not on WhatsApp (call them for their WhatsApp number) */}
+      <div role="tablist" className="flex gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1">
+        {([
+          { id: 'requests' as const, label: 'Callback requests', icon: PhoneCall, count: null as number | null, hint: 'People who asked us to call them.' },
+          { id: 'nowa' as const, label: 'Not on WhatsApp', icon: PhoneOff, count: nowaCount, hint: 'Our WhatsApp messages cannot reach these numbers. Call them and ask for their WhatsApp number.' },
+        ]).map((v) => (
+          <Hint key={v.id} text={v.hint}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === v.id}
+              onClick={() => setView(v.id)}
+              className={cn(
+                'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none',
+                view === v.id ? 'bg-background text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+              )}
+            >
+              <v.icon className="h-4 w-4" aria-hidden />
+              {v.label}
+              {!!v.count && (
+                <span className="rounded-full bg-rose-500 px-1.5 text-xs leading-5 font-semibold text-white tabular-nums">{v.count}</span>
+              )}
+            </button>
+          </Hint>
+        ))}
+      </div>
+
+      {view === 'nowa' ? (
+        <NotOnWhatsappPanel onCount={setNowaCount} />
+      ) : (
+      <>
       {/* Headline numbers (+ 14-day trend for owners/admins) */}
       <div className={cn('grid gap-3', canManageMembers ? 'sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_1.4fr]' : 'grid-cols-3')}>
         {[
@@ -888,6 +946,8 @@ export default function CallbacksPage() {
             </section>
           )}
         </div>
+      )}
+      </>
       )}
       {(() => {
         const open = data?.requests.find((x) => x.id === detailsId) ?? null;

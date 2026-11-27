@@ -50,6 +50,7 @@ import { isUnsubscribeText } from '@/lib/contacts/unsubscribe';
 import { accountHasFeature } from '@/lib/features-server';
 import { resolveTemplateRow, templateContentText } from '@/lib/whatsapp/template-body';
 import { fetchAll } from '@/lib/supabase/fetch-all';
+import { NOT_ON_WHATSAPP_REASON, NOT_ON_WHATSAPP_TAG } from '@/lib/contacts/not-on-whatsapp';
 
 export interface JourneyRow {
   id: string;
@@ -548,6 +549,7 @@ async function stopReason(
       const tag = Array.isArray(row.tags) ? row.tags[0] : row.tags;
       const name = tag?.name?.trim() ?? '';
       if (name.toLowerCase() === 'unsubscribe') return 'Contact opted out (unsubscribe tag)';
+      if (name.toLowerCase() === NOT_ON_WHATSAPP_TAG) return NOT_ON_WHATSAPP_REASON;
     }
     // A paying lead (conversion, migration 104) finished the journey: the
     // run ends 'completed', not 'exited', so every page counts it the same.
@@ -1176,7 +1178,9 @@ export async function moveBookedRuns(
   accountId: string,
   startIso: string,
   deps: JourneyDeps,
-  onProgress?: (moved: number, total: number) => Promise<void>
+  onProgress?: (moved: number, total: number) => Promise<void>,
+  /** Admin's destination (migration 107): 'next' or an exact session's IST ISO; null = default. */
+  target: string | null = null
 ): Promise<{ moved: number; total: number; errors: string[] }> {
   let moved = 0;
   const errors: string[] = [];
@@ -1184,16 +1188,19 @@ export async function moveBookedRuns(
   const work = groups.flatMap(({ journey, runs, entry }) => runs.map((row) => ({ journey, row, entry })));
   await runPool(work, TICK_CONCURRENCY, async ({ journey, row, entry }) => {
     try {
+      // The admin's chosen destination travels with the run to the schedule step.
+      const prevCtx = (row.context ?? {}) as RunContext;
+      const context = { ...prevCtx, vars: { ...(prevCtx.vars ?? {}), move_target: target ?? '' } } as RunContext;
       const { data: claimed } = await db
         .from('journey_enrollments')
-        .update({ status: 'active', locked_at: deps.now().toISOString(), wait_kind: null, current_node_id: entry })
+        .update({ status: 'active', locked_at: deps.now().toISOString(), wait_kind: null, current_node_id: entry, context })
         .eq('id', row.id)
         .eq('status', 'waiting')
         .eq('current_node_id', row.current_node_id)
         .select('id');
       if (!claimed?.length) return;
       await logEvent(db, row, entry, 'session_moved', `Booked session ${startIso} cancelled / moved`);
-      await advanceEnrollment(db, journey, { ...row, status: 'active', wait_kind: null, current_node_id: entry }, deps);
+      await advanceEnrollment(db, journey, { ...row, context, status: 'active', wait_kind: null, current_node_id: entry }, deps);
       moved++;
       if (onProgress && moved % 10 === 0) await onProgress(moved, work.length);
     } catch (err) {
@@ -1296,9 +1303,16 @@ export async function runWebinarMoves(db: SupabaseClient, deps: JourneyDeps): Pr
       let total = 0;
       const errors: string[] = [];
       for (const iso of isos) {
-        const r = await moveBookedRuns(db, job.account_id as string, iso, deps, async (m, t) => {
-          await db.from('webinar_moves').update({ moved: moved + m, total: total + t }).eq('id', job.id);
-        });
+        const r = await moveBookedRuns(
+          db,
+          job.account_id as string,
+          iso,
+          deps,
+          async (m, t) => {
+            await db.from('webinar_moves').update({ moved: moved + m, total: total + t }).eq('id', job.id);
+          },
+          (job.target as string | null | undefined) ?? null
+        );
         moved += r.moved;
         total += r.total;
         errors.push(...r.errors);

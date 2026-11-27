@@ -56,7 +56,7 @@ const NOW = Date.parse($input.now || '') || Date.now();`;
 // A lead who registered again is scheduled from now too.
 export const scheduleCode = (fromNow: boolean) => `${CLOCK}
 const nowIst = new Date(NOW + IST).toISOString().slice(0, 19);
-const added = ${fromNow ? 'nowIst' : "vars.reschedule === 'yes' || (trigger && trigger.reregistered) ? nowIst : String(contact.created_at_ist || nowIst).slice(0, 19)"};
+const added = ${fromNow ? 'nowIst' : "vars.reschedule === 'yes' || vars.queued === 'yes' || (trigger && trigger.reregistered) ? nowIst : String(contact.created_at_ist || nowIst).slice(0, 19)"};
 const base = Date.parse(added.replace(' ', 'T') + 'Z'); // IST clock as plain ms
 const ist = (ms) => new Date(ms).toISOString().slice(0, 19) + '+05:30';
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -64,19 +64,24 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const dateText = (ms) => { const d = new Date(ms); return DAYS[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); };
 const timeText = (ms) => { const d = new Date(ms); const h = d.getUTCHours(), m = d.getUTCMinutes(); return ((h % 12) || 12) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' AM' : ' PM') + ' IST'; };
 const mainLink = (vars && vars.webinar_link) || '';
-// Webinar Schedule page (migration 097): the next scheduled session whose
-// registration cut-off hasn't passed. No session → the built-in rule below.
+// Webinar Schedule page (migration 097). Rules (weekday cut-off 2 PM,
+// weekend 10 AM — from the page's timing rules):
+//   1/2. the first session whose cut-off hasn't passed;
+//   3.   none → today's session if it is still 30+ min away;
+//   4.   none → QUEUED: no message; the journey re-checks every 15 min and
+//        books the first session the admin adds (then the confirmation goes).
+// Moved by an admin change (cancel / new time): any session 30+ min ahead,
+// never earlier than the day they were booked for.
+// No sessions at all → the built-in rule below (accounts not using it).
 const W = $input.webinar || null;
 if (W && W.sessions && W.sessions.length) {
   const R = W.rules;
-  for (const sess of W.sessions) {
-    const st = Date.parse(String(sess.start_iso).slice(0, 19) + 'Z');
+  const moved = vars && vars.moved === 'yes';
+  // (A Sat 3 PM → Sat 8 PM re-time at 3:30 PM Fri moved leads to Fri 8 PM.)
+  const old = moved && nodes && nodes.schedule && nodes.schedule.start_iso ? Date.parse(String(nodes.schedule.start_iso).slice(0, 19) + 'Z') : 0;
+  const book = (sess, st) => {
     const wd = new Date(st).getUTCDay();
     const we = wd === 0 || wd === 6;
-    // Moved by an admin change (cancel / new time): any session at least
-    // 30 min ahead — the booking cut-off is for new registrations only.
-    const moved = vars && vars.moved === 'yes';
-    if (moved ? st < base + 30 * 60e3 : base >= st - (we ? R.weekend_cutoff_min : R.weekday_cutoff_min) * 60e3) continue;
     const m2 = st - (we ? R.weekend_msg2_min : R.weekday_msg2_min) * 60e3;
     const h = new Date(st).getUTCHours();
     const tt = timeText(st);
@@ -92,8 +97,29 @@ if (W && W.sessions && W.sessions.length) {
       checkin_iso: ist(Math.floor(st / DAY) * DAY + DAY + R.checkin_hour * H),
       link: sess.link || mainLink,
       source: 'schedule',
+      queued: 'no',
     };
+  };
+  // Admin's choice on the Webinars page (migration 107): an exact session
+  // ('<IST ISO>') or 'next' (a later day). Unusable → the default rules.
+  const target = moved && vars.move_target ? String(vars.move_target) : '';
+  if (target && target !== 'next') {
+    for (const sess of W.sessions) {
+      const st = Date.parse(String(sess.start_iso).slice(0, 19) + 'Z');
+      if (String(sess.start_iso).slice(0, 16) === target.slice(0, 16) && st >= base + 30 * 60e3) return book(sess, st);
+    }
   }
+  let today = null;
+  for (const sess of W.sessions) {
+    const st = Date.parse(String(sess.start_iso).slice(0, 19) + 'Z');
+    const we = new Date(st).getUTCDay() === 0 || new Date(st).getUTCDay() === 6;
+    if (moved && old && st < Math.floor(old / DAY) * DAY + (target === 'next' ? DAY : 0)) continue;
+    if (moved ? st >= base + 30 * 60e3 : base < st - (we ? R.weekend_cutoff_min : R.weekday_cutoff_min) * 60e3) return book(sess, st);
+    // Rule 3 candidate: today's session, past the cut-off but 30+ min away.
+    if (!moved && !today && Math.floor(st / DAY) === Math.floor(base / DAY) && st >= base + 30 * 60e3) today = { sess, st };
+  }
+  if (today) return book(today.sess, today.st);
+  return { added_ist: added, queued: 'yes', source: 'queue' };
 }
 let day = Math.floor(base / DAY) * DAY;
 let start = 0, msg2 = 0, msg3 = 0, weekend = false;
@@ -212,7 +238,12 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
     ],
   }, { next: 'nurture_days' });
   add('nurture_days', 'code', 'Nurture days (every 2nd day × 8)', { code: 'return [1, 2, 3, 4, 5, 6, 7, 8];' }, { success: 'schedule' });
-  add('schedule', 'code', 'Webinar schedule (IST)', { code: scheduleCode(false) }, { success: 'is_moved' });
+  add('schedule', 'code', 'Webinar schedule (IST)', { code: scheduleCode(false) }, { success: 'is_queued' });
+  // No session to book yet (rule 4 in scheduleCode): wait silently — no
+  // message — and look again every 15 min until the admin adds one.
+  add('is_queued', 'condition', 'Waiting for a session?', isYes(S('queued')), { yes: 'queue_mark', no: 'is_moved' });
+  add('queue_mark', 'set_variable', 'Queued for the next session', { assignments: [{ key: 'queued', value: 'yes' }] }, { next: 'wait_session' });
+  add('wait_session', 'wait', 'Waiting for the next session to be scheduled', { amount: 15, unit: 'minutes' }, { next: 'schedule' });
   // Webinar Schedule page cancelled / moved the lead's session: the API
   // resumes their run at 'session_moved' → next session → "session
   // changed" message → reminders for the new date.
@@ -222,7 +253,7 @@ export function buildJourney(tag: TagIds, ownerUserId: string): JourneyGraph {
   add('is_moved', 'condition', 'Session changed?', isYes('{{ vars.moved }}'), { yes: 't6_changed', no: 'is_reinvite' });
   add('t6_changed', 'send_template', 'Session changed (new date)',
     tpl('sg_webinar_session_changed', [NAME, S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'clear_moved' });
-  add('clear_moved', 'set_variable', 'Clear "moved"', { assignments: [{ key: 'moved', value: 'no' }] }, { next: 'msg2_due' });
+  add('clear_moved', 'set_variable', 'Clear "moved"', { assignments: [{ key: 'moved', value: 'no' }, { key: 'move_target', value: '' }] }, { next: 'msg2_due' });
   add('is_reinvite', 'condition', 'Re-invite?', isYes('{{ vars.reschedule }}'), { yes: 't4_reinvite', no: 't1_confirm' });
   add('t1_confirm', 'send_template', 'Msg 1 Confirmation + webinar link',
     tpl('sg_registration_confirmed', [NAME, S('date_text'), S('time_text'), LINK], S('start_iso')), { next: 'tag_registered' });
@@ -451,7 +482,11 @@ return { route: 'nurture' };`,
     add(`${key}_wait`, 'wait_for_reply', `Stage ${key.toUpperCase()}: wait for 11 AM (or a reply)`,
       { amount: 2, unit: 'days', until: `{{ nodes.${key}_slot.at }}` }, { replied: onReply, timeout: `loop_${key}` });
     add(`loop_${key}`, 'loop', `Stage ${key.toUpperCase()} nurture (${label})`, { items: '{{ nodes.nurture_days }}', max: 8 }, { each: pre ?? `${key}_send`, done: 'tag_lost' });
-    if (pre) add(pre, 'code', 'Next webinar (IST)', { code: scheduleCode(true) }, { success: `${key}_send` });
+    // No session scheduled yet → skip today's nurture send (never advertise a session that doesn't exist).
+    if (pre) {
+      add(pre, 'code', 'Next webinar (IST)', { code: scheduleCode(true) }, { success: `${pre}_q` });
+      add(`${pre}_q`, 'condition', 'Next session scheduled?', isYes(`{{ nodes.${pre}.queued }}`), { yes: `${key}_slot`, no: `${key}_send` });
+    }
     add(`${key}_send`, 'send_template', template, tpl(template, params, `{{ nodes.${key}_slot.retry_until }}`), { next: `${key}_slot` });
   };
   stage('a', 'pre-webinar dropout', 'sg_nurture_prewebinar',

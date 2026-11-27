@@ -2693,6 +2693,7 @@
       "not_in_journey": "여정에 참여한 적이 없어 메시지를 보내지 않았습니다.",
       "not_configured": "여정에 콜백 후속 단계가 없습니다.",
       "opted_out": "수신 거부(STOP) — 메시지를 보내지 않았습니다.",
+      "not_on_whatsapp": "Not on WhatsApp — no message sent. Call them and ask for their WhatsApp number.",
       "closed": "결제 완료/종료로 표시됨 — 메시지를 보내지 않았습니다.",
       "busy": "여정이 지금 실행 중입니다 — 잠시 후 다시 시도하세요.",
       "start_failed": "여정을 다시 시작하지 못했습니다 — 다시 시도하세요."

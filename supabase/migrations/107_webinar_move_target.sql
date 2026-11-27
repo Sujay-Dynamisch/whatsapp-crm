@@ -1,0 +1,11 @@
+-- ============================================================
+-- 107: Where booked leads go when an admin changes / cancels a session.
+--
+-- webinar_moves.target (set from the Webinars page confirmation):
+--   NULL              → default: a re-time keeps them on this session at
+--                       the new time; a cancel → the next session after it
+--   'next'            → the next scheduled session on a LATER day
+--   '<IST ISO start>' → that exact session (admin picked it)
+-- Idempotent.
+-- ============================================================
+ALTER TABLE webinar_moves ADD COLUMN IF NOT EXISTS target TEXT;

@@ -25,8 +25,8 @@ import { toIstIso } from '@/lib/journeys/webinar';
 import {
   istToUtc,
   logWebinarChange,
-  nextScheduledSession,
   requireWebinarAccess,
+  resolveMoveTarget,
   sessionLabel,
   webinarReadiness,
 } from '@/lib/webinars/server';
@@ -45,7 +45,7 @@ export async function POST(request: Request, { params }: Params) {
     const { admin, accountId } = await requireWebinarAccess('edit');
     const { id } = await params;
     if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
-    const body = (await request.json().catch(() => ({}))) as { action?: string; date?: string; time?: string };
+    const body = (await request.json().catch(() => ({}))) as { action?: string; date?: string; time?: string; move_to?: string };
     const s = await loadSession(admin, accountId, id);
     if (!s) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
 
@@ -56,15 +56,21 @@ export async function POST(request: Request, { params }: Params) {
 
     if (Date.parse(s.starts_at) <= Date.now()) blocked = 'This session has already started.';
     else if (body.action === 'cancel') {
-      const next = await nextScheduledSession(admin, accountId, s.id);
-      if (next) goesTo = sessionLabel(next.starts_at);
-      else blocked = 'There is no later session scheduled. Add the next session first — otherwise booked leads would fall back to the default daily time.';
+      // Where the booked leads go — the admin's choice (same helper as PATCH).
+      const t = await resolveMoveTarget(admin, accountId, s, 'cancel', body.move_to, null);
+      if (impact.booked > 0 && t.error) blocked = t.error;
+      goesTo = t.goesTo;
     } else if (body.action === 'time') {
       const utc = istToUtc(String(body.date ?? ''), String(body.time ?? ''));
+      const sameSession = !body.move_to || body.move_to === 'same';
       if (!utc) blocked = 'Enter a valid date and time.';
       else if (Date.parse(utc) <= Date.now()) blocked = 'The new time is in the past.';
-      else if (impact.booked > 0 && Date.parse(utc) < Date.now() + MIN_LEAD_MS) blocked = 'Leads are booked — the new time must be at least 30 minutes from now.';
-      else goesTo = sessionLabel(utc);
+      else if (impact.booked > 0 && sameSession && Date.parse(utc) < Date.now() + MIN_LEAD_MS) blocked = 'Leads are booked — the new time must be at least 30 minutes from now.';
+      else {
+        const t = await resolveMoveTarget(admin, accountId, s, 'time', body.move_to, utc);
+        if (impact.booked > 0 && t.error) blocked = t.error;
+        goesTo = t.goesTo;
+      }
     }
     if (!blocked && impact.booked > 0 && !readiness.ready) blocked = readiness.problems.join(' ');
 
@@ -88,7 +94,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const { admin, accountId, userId } = await requireWebinarAccess('edit');
     const { id } = await params;
     if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
-    const body = (await request.json().catch(() => ({}))) as { date?: unknown; time?: unknown; link?: unknown; note?: unknown; status?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { date?: unknown; time?: unknown; link?: unknown; note?: unknown; status?: unknown; move_to?: unknown };
 
     const s = await loadSession(admin, accountId, id);
     if (!s) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
@@ -132,18 +138,16 @@ export async function PATCH(request: Request, { params }: Params) {
     // Leads move only when a scheduled session is cancelled or re-timed.
     const moves = s.status === 'scheduled' && (cancelling || !!newStart);
     const impact = moves ? await bookedImpact(admin, accountId, oldIso) : { booked: 0, reminder1Sent: 0 };
+    let moveTarget: string | null = null;
     if (moves && impact.booked > 0) {
       const readiness = await webinarReadiness(admin, accountId);
       if (!readiness.ready) {
         return NextResponse.json({ error: `Not changed: ${readiness.problems.join(' ')}`, problems: readiness.problems }, { status: 409 });
       }
-      if (cancelling && !(await nextScheduledSession(admin, accountId, s.id))) {
-        return NextResponse.json(
-          { error: 'Not cancelled: there is no later session. Add the next session first — otherwise booked leads would fall back to the default daily time.' },
-          { status: 409 }
-        );
-      }
-      if (newStart && Date.parse(newStart) < Date.now() + MIN_LEAD_MS) {
+      const t = await resolveMoveTarget(admin, accountId, s, cancelling ? 'cancel' : 'time', body.move_to, newStart);
+      if (t.error) return NextResponse.json({ error: `Not changed: ${t.error}` }, { status: 409 });
+      moveTarget = t.target;
+      if (newStart && !cancelling && moveTarget === null && Date.parse(newStart) < Date.now() + MIN_LEAD_MS) {
         return NextResponse.json({ error: 'Leads are booked — the new time must be at least 30 minutes from now.' }, { status: 400 });
       }
     }
@@ -156,11 +160,13 @@ export async function PATCH(request: Request, { params }: Params) {
 
     let jobId: string | null = null;
     if (moves && impact.booked > 0) {
-      const { data: job } = await admin
-        .from('webinar_moves')
-        .insert({ account_id: accountId, session_id: s.id, from_iso: oldIso, reason: cancelling ? 'cancelled' : 'time_changed', requested_by: userId, total: impact.booked })
-        .select('id')
-        .single();
+      const row = { account_id: accountId, session_id: s.id, from_iso: oldIso, reason: cancelling ? 'cancelled' : 'time_changed', requested_by: userId, total: impact.booked };
+      // target = the admin's destination (migration 107); before it is applied, the default.
+      const first = await admin.from('webinar_moves').insert({ ...row, target: moveTarget }).select('id').single();
+      const job =
+        first.error && /target/.test(first.error.message)
+          ? (await admin.from('webinar_moves').insert(row).select('id').single()).data
+          : first.data;
       jobId = (job?.id as string | undefined) ?? null;
     }
     const linkSynced = linkChanged && s.status === 'scheduled' && !newStart && !cancelling

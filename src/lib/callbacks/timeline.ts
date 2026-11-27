@@ -22,6 +22,7 @@ import { engineSendTemplate, engineSendText } from '@/lib/automations/meta-send'
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write';
 import { ensureConversation } from '@/lib/journeys/engine';
 import { claimPaymentLink } from '@/lib/payments/link-once';
+import { NOT_ON_WHATSAPP_TAG } from '@/lib/contacts/not-on-whatsapp';
 
 export type CallbackEventKind = 'status' | 'note' | 'payment_link';
 
@@ -93,6 +94,14 @@ export async function sendCallbackPaymentLink(
     .maybeSingle();
   if (!req) throw new PaymentLinkError('Request not found', 404);
   const contactId = req.contact_id as string;
+  // A number with no WhatsApp can't get the link (not-on-whatsapp.ts).
+  const { data: noWa } = await db
+    .from('contact_tags')
+    .select('tag_id, tags!inner(name)')
+    .eq('contact_id', contactId)
+    .ilike('tags.name', NOT_ON_WHATSAPP_TAG)
+    .limit(1);
+  if (noWa?.length) throw new PaymentLinkError('This number is not on WhatsApp — call them, or fix their number in Callbacks → Not on WhatsApp.', 409);
   const contact = (Array.isArray(req.contacts) ? req.contacts[0] : req.contacts) as { name?: string | null } | null;
   const name = (contact?.name ?? '').trim() || 'there';
 

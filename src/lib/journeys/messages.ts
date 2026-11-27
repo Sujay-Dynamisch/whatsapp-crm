@@ -16,6 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isUnsubscribeText, UNSUBSCRIBE_TAG_NAME } from '@/lib/contacts/unsubscribe';
+import { markIfNotOnWhatsApp, UNDELIVERABLE_CODE } from '@/lib/contacts/not-on-whatsapp';
 
 /** Meta error codes where sending the same template again later can work. */
 export const RETRYABLE_ERROR_CODES = new Set([
@@ -159,9 +160,9 @@ export async function applyJourneyMessageStatus(
   try {
     const { data: rows } = await db
       .from('journey_messages')
-      .select('id, kind, status, attempt, retry_until')
+      .select('id, kind, status, attempt, retry_until, account_id, contact_id')
       .eq('wa_message_id', waMessageId);
-    for (const row of (rows ?? []) as Pick<JourneyMessageRow, 'id' | 'kind' | 'status' | 'attempt' | 'retry_until'>[]) {
+    for (const row of (rows ?? []) as (Pick<JourneyMessageRow, 'id' | 'kind' | 'status' | 'attempt' | 'retry_until'> & { account_id: string; contact_id: string })[]) {
       if (!isForwardStatus(row.status, status)) continue;
       const patch: Record<string, unknown> = { status };
       if (status === 'failed') {
@@ -172,6 +173,8 @@ export async function applyJourneyMessageStatus(
         patch.next_retry_at = planRetry({ kind: row.kind, attempt: row.attempt, errorCode: code, retryUntil: row.retry_until, now });
       }
       await db.from('journey_messages').update(patch).eq('id', row.id);
+      // 131026 (number not on WhatsApp): after the 2nd one, stop messaging them.
+      if (status === 'failed' && failure?.code === UNDELIVERABLE_CODE) await markIfNotOnWhatsApp(db, row.account_id, row.contact_id, now);
     }
   } catch (err) {
     console.error('[journeys] message status mirror failed:', err instanceof Error ? err.message : err);

@@ -167,6 +167,17 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     <div className="flex h-full w-70 flex-col border-l border-border bg-card">
       <ScrollArea className="flex-1">
         <div className="p-4">
+          {tags.some((t) => t.name.toLowerCase() === "not_on_whatsapp") && (
+            <div className="mb-4 rounded-xl border border-slate-500/30 bg-slate-500/10 p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-300">
+                <Ban className="h-4 w-4 shrink-0" />
+                <span>Not on WhatsApp — call only</span>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground leading-tight">
+                Our WhatsApp messages can&apos;t reach this number, so its journey is paused. Fix it in Callbacks → Not on WhatsApp.
+              </p>
+            </div>
+          )}
           {/* Unsubscribed Banner / Controls */}
           {unsubscribed ? (
             <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center">

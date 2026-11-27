@@ -2693,6 +2693,7 @@
       "not_in_journey": "Nunca estuvo en un recorrido, así que no se envió mensaje.",
       "not_configured": "Su recorrido no tiene paso de seguimiento de llamadas.",
       "opted_out": "Se dio de baja (STOP) — no se envió mensaje.",
+      "not_on_whatsapp": "Not on WhatsApp — no message sent. Call them and ask for their WhatsApp number.",
       "closed": "Marcado como pagado/cerrado — no se envió mensaje.",
       "busy": "Su recorrido está ocupado ahora — inténtalo en un minuto.",
       "start_failed": "No se pudo reiniciar su recorrido — inténtalo de nuevo."
